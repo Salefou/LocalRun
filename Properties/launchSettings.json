@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "LocalRun": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}
