@@ -20,7 +20,6 @@ class Program
     private static readonly string PathToConfig = $"{Path.GetFullPath("..\\..\\..\\")}{"Output\\localrun.config.json"}";
     private static readonly string PathToVisuals = $"{Path.GetFullPath("..\\..\\..\\")}{"Visuals\\"}";
 
-
     static async Task Main()
     {
         Console.Title = "LocalRun";
@@ -31,8 +30,6 @@ class Program
         IConfigBuilder configBuilder = new ConfigBuilder();
         IRepacker repacker = new RepackExecutor();
         IRunProcessor runProcessor = new RunProcessor();
-
-        LocalRunConfig? currentConfig = null;
 
         while (true)
         {
@@ -55,9 +52,7 @@ class Program
 
                 case "repack":
                     RepackOptions repackOptions = RepackOptionsParser.Parse(args);
-                    if (File.Exists(PathToConfig))
-                        currentConfig = JsonSerializer.Deserialize<LocalRunConfig>(await File.ReadAllTextAsync(PathToConfig));
-
+                    LocalRunConfig? currentConfig = await ReadConfigFromFile();
                     if (currentConfig != null)
                         await repacker.RepackAndRebuildAsync(currentConfig, repackOptions);
                     else
@@ -65,21 +60,17 @@ class Program
                     break;
 
                 case "run":
-                    if (File.Exists(PathToConfig))
-                        currentConfig = JsonSerializer.Deserialize<LocalRunConfig>(await File.ReadAllTextAsync(PathToConfig));
-
-                    if (currentConfig != null)
-                        await runProcessor.RunAsync(currentConfig);
+                    LocalRunConfig? runConfig = await ReadConfigFromFile();
+                    if (runConfig != null)
+                        await runProcessor.RunAsync(runConfig);
                     else
                         Console.WriteLine("No config found. Run 'build-config' first.");
                     break;
                 case "visualize":
-                    if (File.Exists(PathToConfig))
-                        currentConfig = JsonSerializer.Deserialize<LocalRunConfig>(await File.ReadAllTextAsync(PathToConfig));
-
-                    if (currentConfig != null)
+                    LocalRunConfig? visualsConfig = await ReadConfigFromFile();
+                    if (visualsConfig != null)
                     {
-                        DependencyGraph graph = DependencyGraph.FromConfig(currentConfig);
+                        DependencyGraph graph = DependencyGraph.FromConfig(visualsConfig);
                         await GraphVisualizer.GenerateAsync(graph, PathToVisuals);
                     }
 
@@ -98,7 +89,14 @@ class Program
         }
     }
 
-    static void PrintWelcome()
+    private static async Task<LocalRunConfig?> ReadConfigFromFile()
+    {
+        if (!File.Exists(PathToConfig))
+            return null;
+        return JsonSerializer.Deserialize<LocalRunConfig>(await File.ReadAllTextAsync(PathToConfig));
+    }
+
+    private static void PrintWelcome()
     {
         Console.WriteLine(Art.LocalRunAsciiFlowerPower);
 
@@ -120,7 +118,7 @@ class Program
         Console.WriteLine();
     }
 
-    static void PrintHelp()
+    private static void PrintHelp()
     {
         Console.WriteLine("──────────────────────────────");
         Console.WriteLine(" LocalRun Command Reference");
