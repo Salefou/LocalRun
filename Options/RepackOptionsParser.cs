@@ -1,28 +1,20 @@
 ﻿namespace LocalRun.Options;
-
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 internal class RepackOptionsParser
 {
     public static RepackOptions Parse(string[] args)
     {
+        BumpType bumpType = BumpType.None;
         string? suffix = null;
-        bool patchBump = false;
         bool remoteAsRef = false;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
                 case "--alpha":
+                    bumpType = BumpType.Patch;
                     suffix = "alpha";
-                    patchBump = true;
                     break;
                 case "--remote":
-                    suffix = "zlocal";
-                    patchBump = true;
                     remoteAsRef = true;
                     break;
             }
@@ -32,8 +24,8 @@ internal class RepackOptionsParser
         {
             BumpOptions = new BumpOptions()
             {
+                BumpType = bumpType,
                 Suffix = suffix,
-                PatchBump = patchBump,
             },
             UseRemoteAsVersionReference = remoteAsRef,
         };

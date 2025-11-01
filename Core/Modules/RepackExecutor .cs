@@ -36,7 +36,7 @@ public class RepackExecutor : IRepacker
                 version = proj.Version;
             }
 
-            var bumpedVersion = repackOptions.BumpOptions?.Bump(version) ?? version;
+            var bumpedVersion = repackOptions.BumpOptions?.Bump(version) ?? version with { };
             logger.Info($"[📦] Packing {proj.Name} ({proj.Version}) to ({bumpedVersion})...");
 
             string pathToCsproj = Path.Combine(config.RootPath, proj.Path);
@@ -74,7 +74,7 @@ public class RepackExecutor : IRepacker
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            UseShellExecute = false
+            UseShellExecute = false,
         };
 
         var proc = Process.Start(psi)!;

@@ -9,11 +9,19 @@ using System.Threading.Tasks;
 
 public static class GraphVisualizer
 {
+    public class Config
+    {
+        public required DependencyGraph Graph { get; init; }
+
+        public required string OutputDirectory { get; init; }
+    }
+
     /// <summary>
     /// Generates both .dot and .svg dependency graph visualizations.
     /// </summary>
-    public static async Task GenerateAsync(DependencyGraph graph, string outputDirectory)
+    public static async Task GenerateAsync(Config config)
     {
+        string outputDirectory = config.OutputDirectory;
         Directory.CreateDirectory(outputDirectory);
         string dotPath = Path.Combine(outputDirectory, "dependencies.dot");
         string svgPath = Path.Combine(outputDirectory, "dependencies.svg");
@@ -21,7 +29,7 @@ public static class GraphVisualizer
         Console.WriteLine("[🧩] Generating dependency graph...");
 
         // Write .dot file
-        string dot = ToDot(graph);
+        string dot = ToDot(config.Graph);
         await File.WriteAllTextAsync(dotPath, dot);
         Console.WriteLine($"[📄] DOT file generated: {dotPath}");
 
@@ -61,23 +69,31 @@ public static class GraphVisualizer
 
         var projs = graph.TopologicalOrder().ToList();
 
-        List<string> solutions = projs.Select(proj => proj.SolutionPath)
+        List<string> solutions = [.. projs.Select(proj => proj.SolutionPath)
              .Where(solution => solution is not null)
-             .Cast<string>()
-             .ToList();
+             .Distinct()
+             .Cast<string>()];
 
-        var solutionToProjects = projs.GroupBy(proj => proj.SolutionPath ?? String.Empty)
-            .ToDictionary(group => group.Key, group => group.ToList());
+        //var solutionToProjects = projs.GroupBy(proj => proj.SolutionPath ?? String.Empty)
+        //    .ToDictionary(group => group.Key, group => group.ToList());
+        var nameToProj = projs.ToDictionary(proj => proj.Name);
+        //string dummy = "Dummy";
+
         foreach (var proj in projs)
         {
             //depths[proj.Name];
             string label = $"{proj.Name}\\n{proj.Version}\\n";
             string color = DepthColor(proj.SolutionPath == null ? 0 : solutions.IndexOf(proj.SolutionPath!));
             sb.AppendLine($"  \"{proj.Name}\" [label=\"{label}\", fillcolor=\"{color}\"];");
+            //sb.AppendLine($"  \"{dummy}\" -> \"{proj.Name}\";");
 
             foreach (var dep in proj.Dependencies)
             {
                 sb.AppendLine($"  \"{dep}\" -> \"{proj.Name}\";");
+                //if (!nameToProj.TryGetValue(dep, out var projNode))/* && !string.IsNullOrEmpty(projNode.SolutionPath)*/
+                //{
+                //    sb.AppendLine($"  \"{dep}\" -> \"{dummy}\";");
+                //}
             }
         }
 

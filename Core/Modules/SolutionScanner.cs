@@ -21,10 +21,11 @@ public static partial class SolutionScanner
                 if (!match.Success) continue;
 
                 var relativeProjPath = match.Groups[1].Value;
-                var absProjPath = Path.GetFullPath(Path.Combine(slnDir, relativeProjPath));
+                string nameWithExtension = relativeProjPath.Split("\\").Last();
+                var projectName = nameWithExtension[..nameWithExtension.IndexOf(".csproj")];
 
-                if (!map.ContainsKey(absProjPath))
-                    map[absProjPath] = slnPath;
+                if (!map.ContainsKey(projectName))
+                    map[projectName] = slnPath;
             }
         }
 

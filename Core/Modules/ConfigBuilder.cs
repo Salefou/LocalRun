@@ -14,7 +14,7 @@ public class ConfigBuilder : IConfigBuilder
 
         string[] csprojs = Directory.GetFiles(rootPath, "*.csproj", SearchOption.AllDirectories);
         // TODO if git repo and stuff
-        var graph = DependencyGraph.FromSource(rootPath, csprojs);
+        var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal);
 
         if (options.RetainDependsOn != null)
             graph.RetainDependsOn(options.RetainDependsOn);

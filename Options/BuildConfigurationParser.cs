@@ -21,6 +21,9 @@ public static class BuildConfigOptionsParser
                 case "--retain-is-dependency-of":
                     options.RetainIsDependencyOf = [.. ReadValues(args, ref i)];
                     break;
+                case "--include-external":
+                    options.IncludeExternal = true;
+                    break;
             }
         }
 

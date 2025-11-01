@@ -9,6 +9,7 @@ using LocalRun.Core.Resources;
 using LocalRun.Options;
 using System;
 using System.IO;
+using System.Net;
 using System.Text.Json;
 
 class Program
@@ -71,7 +72,12 @@ class Program
                     if (visualsConfig != null)
                     {
                         DependencyGraph graph = DependencyGraph.FromConfig(visualsConfig);
-                        await GraphVisualizer.GenerateAsync(graph, PathToVisuals);
+                        GraphVisualizer.Config config = new()
+                        {
+                            Graph = graph,
+                            OutputDirectory = PathToVisuals,
+                        };
+                        await GraphVisualizer.GenerateAsync(config);
                     }
 
                     break;
@@ -130,16 +136,20 @@ class Program
         Console.WriteLine("      Analyze the source tree and build a dependency graph.");
         Console.WriteLine("      Produces a JSON config file that can be edited before repack.");
         Console.WriteLine("      Options:");
-        Console.WriteLine("        --mode <git|all|filter>    Build mode (default: git)");
-        Console.WriteLine("        --filter <names>           Comma-separated list of libs/exes to include");
-        Console.WriteLine("        --root <path>              Override root search path (default: current dir)");
+        Console.WriteLine("        --retain-depends-on <names>               Space-separated list of libs/exes such that only what depends of them is retained");
+        Console.WriteLine("        --retain-is-dependency-of <names>         Space-separated list of libs/exes such that only what is a dependency of them is retained");
+        Console.WriteLine("        --root <path>                             Override root search path (default: current dir)");
         Console.WriteLine("      Example:");
-        Console.WriteLine("        build-config --mode git --filter CoreLib,AppHost");
+        Console.WriteLine("        build-config --retain-depends-on TweetToTradeCore Assembly-Seb --retain-is-dependency-of DLS.Dev AlgoSample");
+        Console.WriteLine();
+        Console.WriteLine("  visualize");
+        Console.WriteLine("      Puts a visual representation of the graph in the config fie into a svg.");
         Console.WriteLine();
         Console.WriteLine("  repack");
         Console.WriteLine("      Repack all solutions in the current config file.");
         Console.WriteLine("      Packages are created in dependency order and pushed to LocalNuGet.");
-        Console.WriteLine();
+        Console.WriteLine("      Options: ");
+        Console.WriteLine("        --remote               Includes full set of checked sources in the nuget manager, local and remote");
         Console.WriteLine("  run");
         Console.WriteLine("      Launch executables defined in the config file, in dependency order.");
         Console.WriteLine();
@@ -152,9 +162,11 @@ class Program
         Console.WriteLine("──────────────────────────────");
         Console.WriteLine("Usage Examples:");
         Console.WriteLine("──────────────────────────────");
-        Console.WriteLine("  LocalRun> build-config");
+        Console.WriteLine("  LocalRun> build-config --include-external");
+        Console.WriteLine("  LocalRun> visualize");
         Console.WriteLine("  LocalRun> build-config --retain-depends-on TweetToTradeCore Assembly-Seb");
-        Console.WriteLine("  LocalRun> repack");
+        Console.WriteLine("  LocalRun> build-config --retain-is-dependency-of AlgoSample DLS.Dev AlgorithmsTest");
+        Console.WriteLine("  LocalRun> visualize");
         Console.WriteLine("  LocalRun> repack --remote");
         Console.WriteLine("  LocalRun> run");
         Console.WriteLine("──────────────────────────────");

@@ -42,7 +42,7 @@ public class DependencyGraph
         }
     }
 
-    public static DependencyGraph FromSource(string rootPath, string[] csprojs)
+    public static DependencyGraph FromSource(string rootPath, string[] csprojs, bool includeProjectsWithoutSolutions)
     {
         var projectToSolution = SolutionScanner.BuildProjectToSolutionMap(rootPath);
         var projects = new List<ProjectNode>();
@@ -62,7 +62,7 @@ public class DependencyGraph
             var versionElem = versions.FirstOrDefault();
             var version = ProjectVersion.Parse(versionElem?.Value);
 
-            if (!projectToSolution.TryGetValue(Path.GetFullPath(csproj), out var solutionPath))
+            if (!projectToSolution.TryGetValue(name, out var solutionPath))
             {
                 Console.BackgroundColor = ConsoleColor.DarkYellow;
                 Console.Write("[WARN]");
@@ -71,9 +71,9 @@ public class DependencyGraph
             }
 
             var deps = doc.Descendants(ns + "ProjectReference")
-                //TODO and exclude those we did not encounter in the full repos pass
                 .Concat(doc.Descendants(ns + "PackageReference"))
                 .Select(e => Path.GetFileNameWithoutExtension(e.Attribute("Include")!.Value))
+                .Where(dep => includeProjectsWithoutSolutions || projectToSolution.TryGetValue(dep, out _))
                 .ToList();
 
             projects.Add(new ProjectNode
@@ -86,7 +86,6 @@ public class DependencyGraph
                 Dependencies = deps
             });
         }
-
         return new DependencyGraph(projects);
     }
 

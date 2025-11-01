@@ -4,19 +4,14 @@ using LocalRun.Core.Model;
 
 public class BumpOptions
 {
-    public bool MajorBump { get; init; }
-
-    public bool MinorBump { get; init; }
-
-    public bool PatchBump { get; init; }
+    public BumpType BumpType { get; init; }
 
     public string? Suffix { get; init; }
 
     internal ProjectVersion Bump(ProjectVersion version)
     {
-        if (MajorBump)
+        if (BumpType == BumpType.Major)
         {
-            if (MinorBump || PatchBump) Console.WriteLine("Bumping major, ignoring other bumps");
             return new ProjectVersion()
             {
                 Major = version.Major + 1,
@@ -25,9 +20,8 @@ public class BumpOptions
             };
         }
 
-        if (MinorBump)
+        if (BumpType == BumpType.Minor)
         {
-            if (PatchBump) Console.WriteLine("Bumping minor, ignoring patch bump");
             return version with
             {
                 Minor = version.Minor + 1,
@@ -35,21 +29,35 @@ public class BumpOptions
             };
         }
 
-        string[] patchPlusSuffix = [.. version.PatchAndSuffix.Split(".", 2).SelectMany(patchOrSuffix => patchOrSuffix.Split('.', 2))];
-        var patch = 0;
-
-        if (patchPlusSuffix[0] != "*" && !int.TryParse(patchPlusSuffix[0], out patch))
+        string[] patchAndSuffix = version.PatchAndSuffix.Split(".", 2);
+        string patchAsString = patchAndSuffix[0];
+        if (!int.TryParse(patchAsString, out var patch))
         {
-            throw new InvalidOperationException($"Cannot handle {string.Join("-", version.PatchAndSuffix)}");
+            if (patchAsString != "*")
+            {
+                throw new InvalidOperationException($"Cannot handle version format of {version.PatchAndSuffix}");
+            }
+            patch = 0;
         }
 
-        string suffixStartingFromPatch = Suffix == null ? string.Empty : $"-{Suffix}";
-        if (PatchBump)
+        if (BumpType == BumpType.Patch)
         {
+            string suffixStartingFromPatch = Suffix == null ? string.Empty : $"-{Suffix}";
             return version with { PatchAndSuffix = $"{patch + 1}{suffixStartingFromPatch}" };
         }
 
-        return version with { PatchAndSuffix = $"{patchPlusSuffix[0]}{suffixStartingFromPatch}" };
+        if (BumpType == BumpType.None)
+        {
+            if (Suffix == null)
+            {
+                string originalSuffix = patchAndSuffix.Length == 0 ? string.Empty : $".{patchAndSuffix[1]}";
+                // patch mapped to 0 if was '*'
+                return version with { PatchAndSuffix = $"{patch}{originalSuffix}" };
+            }
+            return version with { PatchAndSuffix = $"{patch}-{Suffix}" };
+        }
+
+        throw new InvalidOperationException($"Unsupported bumptype: {BumpType}");
     }
 }
 

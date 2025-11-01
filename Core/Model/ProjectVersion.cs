@@ -2,11 +2,11 @@
 
 public readonly record struct ProjectVersion
 {
-    public int Major { get; init; }
+    public required int Major { get; init; }
 
-    public int Minor { get; init; }
+    public required int Minor { get; init; }
 
-    public string PatchAndSuffix { get; init; }
+    public required string PatchAndSuffix { get; init; }
 
     internal static ProjectVersion Parse(string? value)
     {
