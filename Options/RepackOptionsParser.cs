@@ -10,12 +10,26 @@ internal class RepackOptionsParser
         {
             switch (args[i])
             {
-                case "--alpha":
-                    bumpType = BumpType.Patch;
-                    suffix = "alpha";
-                    break;
                 case "--remote":
                     remoteAsRef = true;
+                    break;
+
+                case "--suffix":
+                    suffix = args[i + 1];
+                    break;
+                case "--patch":
+                    bumpType = BumpType.Patch;
+                    break;
+                case "--minor":
+                    bumpType = BumpType.Minor;
+                    break;
+                case "--major":
+                    bumpType = BumpType.Major;
+                    break;
+                case "--alpha":
+                    // convenience
+                    bumpType = BumpType.Patch;
+                    suffix = "alpha";
                     break;
             }
         }
