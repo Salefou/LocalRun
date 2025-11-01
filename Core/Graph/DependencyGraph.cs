@@ -16,6 +16,11 @@ public class DependencyGraph
         public HashSet<Node> Dependents { get; } = new();
 
         public Node(ProjectNode project) => Project = project;
+
+        public override string ToString()
+        {
+            return Project.ToString();
+        }
     }
 
     private readonly Dictionary<string, Node> _nodesPerName = new(StringComparer.OrdinalIgnoreCase);
