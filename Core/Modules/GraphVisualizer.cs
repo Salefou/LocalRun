@@ -16,9 +16,6 @@ public static class GraphVisualizer
         public required string OutputDirectory { get; init; }
     }
 
-    /// <summary>
-    /// Generates both .dot and .svg dependency graph visualizations.
-    /// </summary>
     public static async Task GenerateAsync(Config config)
     {
         string outputDirectory = config.OutputDirectory;
@@ -28,12 +25,10 @@ public static class GraphVisualizer
 
         Console.WriteLine("[🧩] Generating dependency graph...");
 
-        // Write .dot file
         string dot = ToDot(config.Graph);
         await File.WriteAllTextAsync(dotPath, dot);
         Console.WriteLine($"[📄] DOT file generated: {dotPath}");
 
-        // Try generating SVG
         try
         {
             await RunDotAsync(dotPath, svgPath);
@@ -83,7 +78,7 @@ public static class GraphVisualizer
         {
             //depths[proj.Name];
             string label = $"{proj.Name}\\n{proj.Version}\\n";
-            string color = DepthColor(proj.SolutionPath == null ? 0 : solutions.IndexOf(proj.SolutionPath!));
+            string color = DepthColor(depths[proj.Name]);
             sb.AppendLine($"  \"{proj.Name}\" [label=\"{label}\", fillcolor=\"{color}\"];");
             //sb.AppendLine($"  \"{dummy}\" -> \"{proj.Name}\";");
 
@@ -101,33 +96,21 @@ public static class GraphVisualizer
         return sb.ToString();
     }
 
-    // Compute depth for each node: root = 0, children = root + 1, etc.
     private static Dictionary<string, int> ComputeDepths(DependencyGraph graph)
     {
-        var depths = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var visited = new HashSet<string>();
-
-        void Visit(string name, int depth)
+        var depths = new Dictionary<string, int>();
+        foreach (var subTreeTopo in graph.TopologicalClassOrderPerSubtree())
         {
-            if (depths.TryGetValue(name, out var existing))
+            int depth = 0;
+            foreach (var topologicalClass in subTreeTopo)
             {
-                if (depth <= existing) return; // already visited with deeper or same depth
-                depths[name] = depth;
-            }
-            else
-            {
-                depths[name] = depth;
-            }
-            if (graph.TryGetFromName(name, out var node))
-            {
-                foreach (var dep in node?.Dependencies ?? [])
-                    Visit(dep, depth + 1);
+                foreach (var projectInClass in topologicalClass)
+                {
+                    depths[projectInClass.Name] = depth;
+                }
+                depth++;
             }
         }
-
-        foreach (var root in graph.Roots)
-            Visit(root.Name, 0);
-
         return depths;
     }
 
@@ -164,6 +147,7 @@ public static class GraphVisualizer
 
     private static async Task RunDotAsync(string dotPath, string svgPath)
     {
+        // TODO don't pull from the path
         var dotExePath = Path.Combine("C:", "Program Files", "Graphviz", "bin", "dot.exe");
         var psi = new ProcessStartInfo(dotExePath)
         {
@@ -179,6 +163,8 @@ public static class GraphVisualizer
         await proc.WaitForExitAsync();
 
         if (proc.ExitCode != 0)
+        {
             throw new InvalidOperationException($"Graphviz failed: {error}");
+        }
     }
 }

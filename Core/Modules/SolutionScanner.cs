@@ -21,8 +21,7 @@ public static partial class SolutionScanner
                 if (!match.Success) continue;
 
                 var relativeProjPath = match.Groups[1].Value;
-                string nameWithExtension = relativeProjPath.Split("\\").Last();
-                var projectName = nameWithExtension[..nameWithExtension.IndexOf(".csproj")];
+                string projectName = Path.GetFileNameWithoutExtension(relativeProjPath);
 
                 if (!map.ContainsKey(projectName))
                     map[projectName] = slnPath;
@@ -32,7 +31,7 @@ public static partial class SolutionScanner
         return map;
     }
 
-    [GeneratedRegex(@"Project\(""\{[^}]+\}""\)\s*=\s*""[^""]+"",\s*""([^""]+\.csproj)""", RegexOptions.IgnoreCase | RegexOptions.Compiled, "en-US")]
+    [GeneratedRegex(@"Project\(""\{[^}]+\}""\)\s*=\s*""[^""]+"",\s*""([^""]+\.(csproj|esproj))""", RegexOptions.IgnoreCase | RegexOptions.Compiled, "en-US")]
     private static partial Regex ProjectLineRegex();
 }
 

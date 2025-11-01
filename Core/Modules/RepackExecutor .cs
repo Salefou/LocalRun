@@ -27,8 +27,8 @@ public class RepackExecutor : IRepacker
             ProjectVersion version;
             if (repackOptions.UseRemoteAsVersionReference)
             {
-                var nugetVersion = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name);
                 //var nugetVersion = await nugetVersionChecker.GetLatestVersionAsync(proj.Name);
+                var nugetVersion = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name);
                 version = ProjectVersion.Parse(nugetVersion?.Version.ToString());
             }
             else

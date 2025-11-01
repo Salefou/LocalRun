@@ -50,7 +50,7 @@ public class BumpOptions
         {
             if (Suffix == null)
             {
-                string originalSuffix = patchAndSuffix.Length == 0 ? string.Empty : $".{patchAndSuffix[1]}";
+                string originalSuffix = patchAndSuffix.Length <= 1 ? string.Empty : $".{patchAndSuffix[1]}";
                 // patch mapped to 0 if was '*'
                 return version with { PatchAndSuffix = $"{patch}{originalSuffix}" };
             }

@@ -9,10 +9,9 @@ using LocalRun.Core.Resources;
 using LocalRun.Options;
 using System;
 using System.IO;
-using System.Net;
 using System.Text.Json;
 
-class Program
+public class Program
 {
     private static readonly string UserDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
@@ -21,7 +20,7 @@ class Program
     private static readonly string PathToConfig = $"{Path.GetFullPath("..\\..\\..\\")}{"Output\\localrun.config.json"}";
     private static readonly string PathToVisuals = $"{Path.GetFullPath("..\\..\\..\\")}{"Visuals\\"}";
 
-    static async Task Main()
+    public static async Task Main()
     {
         Console.Title = "LocalRun";
         Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -46,7 +45,7 @@ class Program
             {
                 case "build-config":
                     BuildConfigOptions configOptions = BuildConfigOptionsParser.Parse(args);
-                    LocalRunConfig localRunConfig = configBuilder.BuildConfig(ReposRootPath, configOptions);
+                    LocalRunConfig localRunConfig = configBuilder.BuildConfig(ReposRootPath, configOptions, localNugetPath);
                     await File.WriteAllTextAsync(PathToConfig, JsonSerializer.Serialize(localRunConfig, new JsonSerializerOptions { WriteIndented = true }));
                     Console.WriteLine($"[✔ ] Configuration written to {PathToConfig}");
                     break;
@@ -54,10 +53,12 @@ class Program
                 case "repack":
                     RepackOptions repackOptions = RepackOptionsParser.Parse(args);
                     LocalRunConfig? currentConfig = await ReadConfigFromFile();
-                    if (currentConfig != null)
-                        await repacker.RepackAndRebuildAsync(currentConfig, repackOptions);
-                    else
+                    if (currentConfig == null)
+                    {
                         Console.WriteLine("No config found. Run 'build-config' first.");
+                        continue;
+                    }
+                    await repacker.RepackAndRebuildAsync(currentConfig, repackOptions);
                     break;
 
                 case "run":

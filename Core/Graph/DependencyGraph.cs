@@ -2,6 +2,7 @@
 
 using LocalRun.Core.Model;
 using LocalRun.Core.Modules;
+using System.Collections.Generic;
 using System.Xml.Linq;
 
 public class DependencyGraph
@@ -9,7 +10,9 @@ public class DependencyGraph
     private class Node
     {
         public ProjectNode Project { get; }
+
         public HashSet<Node> DependsOn { get; } = new();
+
         public HashSet<Node> Dependents { get; } = new();
 
         public Node(ProjectNode project) => Project = project;
@@ -17,9 +20,9 @@ public class DependencyGraph
 
     private readonly Dictionary<string, Node> _nodesPerName = new(StringComparer.OrdinalIgnoreCase);
 
-    public List<ProjectNode> Roots => [.. _nodesPerName.Values
-        .Where(n => n.DependsOn.Count == 0)
-        .Select(n => n.Project)];
+    private IEnumerable<Node> RootsNodes => _nodesPerName.Values.Where(n => n.DependsOn.Count == 0);
+
+    public IEnumerable<ProjectNode> Roots => [.. RootsNodes.Select(n => n.Project)];
 
     private DependencyGraph(List<ProjectNode> projects)
     {
@@ -46,7 +49,7 @@ public class DependencyGraph
     {
         var projectToSolution = SolutionScanner.BuildProjectToSolutionMap(rootPath);
         var projects = new List<ProjectNode>();
-        foreach (var csproj in csprojs)
+        foreach (var csproj in csprojs.Order())
         {
             var doc = XDocument.Load(csproj);
             var ns = doc.Root!.Name.Namespace;
@@ -70,9 +73,12 @@ public class DependencyGraph
                 Console.WriteLine($": Did not find any solution referencing project {csproj}");
             }
 
-            var deps = doc.Descendants(ns + "ProjectReference")
-                .Concat(doc.Descendants(ns + "PackageReference"))
+            var allDependencies = doc.Descendants(ns + "ProjectReference")
                 .Select(e => Path.GetFileNameWithoutExtension(e.Attribute("Include")!.Value))
+                .Concat(doc.Descendants(ns + "PackageReference")
+                .Select(e => e.Attribute("Include")!.Value))
+                .ToList();
+            var deps = allDependencies
                 .Where(dep => includeProjectsWithoutSolutions || projectToSolution.TryGetValue(dep, out _))
                 .ToList();
 
@@ -100,7 +106,9 @@ public class DependencyGraph
         foreach (var name in names)
         {
             if (_nodesPerName.TryGetValue(name, out var target))
-                CollectDependentsRecursive(target, toKeep);
+            {
+                CollectDependentsIterative(target, toKeep);
+            }
         }
         Prune(toKeep);
     }
@@ -111,23 +119,47 @@ public class DependencyGraph
         foreach (var name in names)
         {
             if (_nodesPerName.TryGetValue(name, out var target))
-                CollectDependenciesRecursive(target, toKeep);
+            {
+                CollectDependenciesIterative(target, toKeep);
+            }
         }
         Prune(toKeep);
     }
 
-    private void CollectDependenciesRecursive(Node node, HashSet<Node> visited)
+    private void CollectDependenciesIterative(Node node, HashSet<Node> visited)
     {
-        if (!visited.Add(node)) return;
-        foreach (var dep in node.DependsOn)
-            CollectDependenciesRecursive(dep, visited);
+        var toVisit = new Queue<Node>();
+
+        toVisit.Enqueue(node);
+        while (toVisit.Count != 0)
+        {
+            Node next = toVisit.Dequeue();
+            if (visited.Add(next))
+            {
+                foreach (var neighbour in next.DependsOn)
+                {
+                    toVisit.Enqueue(neighbour);
+                }
+            }
+        }
     }
 
-    private void CollectDependentsRecursive(Node node, HashSet<Node> visited)
+    private void CollectDependentsIterative(Node node, HashSet<Node> visited)
     {
-        if (!visited.Add(node)) return;
-        foreach (var dep in node.Dependents)
-            CollectDependentsRecursive(dep, visited);
+        var toVisit = new Queue<Node>();
+
+        toVisit.Enqueue(node);
+        while (toVisit.Count != 0)
+        {
+            Node next = toVisit.Dequeue();
+            if (visited.Add(next))
+            {
+                foreach (var neighbour in next.Dependents)
+                {
+                    toVisit.Enqueue(neighbour);
+                }
+            }
+        }
     }
 
     private void Prune(HashSet<Node> keep)
@@ -147,10 +179,48 @@ public class DependencyGraph
         }
     }
 
-    //public IEnumerable<IEsnumerable<ProjectNode>> TopologicalClassOrder()
-    //{
+    public IEnumerable<IEnumerable<IEnumerable<ProjectNode>>> TopologicalClassOrderPerSubtree()
+    {
+        return RootsNodes.Select(rootNode =>
+            TopologicalClassOrder(rootNode).Select(depth =>
+                depth.Select(node => node.Project)));
+    }
 
-    //}
+
+    private List<List<Node>> TopologicalClassOrder(Node subTreeRoot)
+    {
+        List<List<Node>> topologicalClassOrder = [[]];
+        HashSet<Node> visited = new();
+
+        var toVisitThisLevel = new Queue<Node>();
+        var toVisitNextLevel = new Queue<Node>();
+
+        toVisitThisLevel.Enqueue(subTreeRoot);
+        while (true)
+        {
+            while (toVisitThisLevel.Count != 0)
+            {
+                Node next = toVisitThisLevel.Dequeue();
+                topologicalClassOrder.Last().Add(next);
+                if (visited.Add(next))
+                {
+                    foreach (var neighbour in next.Dependents)
+                    {
+                        toVisitNextLevel.Enqueue(neighbour);
+                    }
+                }
+            }
+            if (toVisitNextLevel.Count == 0)
+            {
+                break;
+            }
+            (toVisitNextLevel, toVisitThisLevel) = (toVisitThisLevel, toVisitNextLevel);
+            toVisitNextLevel.Clear();
+            topologicalClassOrder.Add([]);
+        }
+
+        return topologicalClassOrder;
+    }
 
     public IEnumerable<ProjectNode> TopologicalOrder()
     {

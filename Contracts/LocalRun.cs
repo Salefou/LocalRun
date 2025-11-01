@@ -5,7 +5,7 @@ using LocalRun.Options;
 
 public interface IConfigBuilder
 {
-    LocalRunConfig BuildConfig(string rootPath, BuildConfigOptions options);
+    LocalRunConfig BuildConfig(string rootPath, BuildConfigOptions options, string localNugetRepoPath);
 }
 
 public interface IRepacker

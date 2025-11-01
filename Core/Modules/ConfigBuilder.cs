@@ -8,7 +8,7 @@ using System;
 
 public class ConfigBuilder : IConfigBuilder
 {
-    public LocalRunConfig BuildConfig(string rootPath, BuildConfigOptions options)
+    public LocalRunConfig BuildConfig(string rootPath, BuildConfigOptions options, string localNugetRepoPath)
     {
         Console.WriteLine($"[⚙ ] Building dependency graph from {rootPath}...");
 
@@ -24,7 +24,7 @@ public class ConfigBuilder : IConfigBuilder
         var config = new LocalRunConfig
         {
             RootPath = rootPath,
-            LocalNugetPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".localnuget"),
+            LocalNugetPath = localNugetRepoPath,
             Projects = [.. graph.TopologicalOrder()]
         };
         return config;
