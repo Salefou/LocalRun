@@ -69,6 +69,7 @@ public class Program
                     RepackConfig? readRepackConfig = await ReadRepackConfigFromFile();
                     if (readRepackConfig != null)
                     {
+                        Console.WriteLine("No repack config found. Run 'repack-preview' first.");
                         await repacker.RepackAndRebuildAsync(readRepackConfig);
                     }
                     break;
@@ -166,22 +167,22 @@ public class Program
     private static void PrintWelcome()
     {
         Console.WriteLine(Art.LocalRunAsciiFlowerPower);
-
         Console.WriteLine("──────────────────────────────────────────────────────────────");
-        Console.WriteLine(" Welcome to LocalRun — your local .NET build and deploy manager");
+        Console.WriteLine(" Welcome to LocalRun — your local .NET dependency orchestrator");
         Console.WriteLine("──────────────────────────────────────────────────────────────");
         Console.WriteLine();
-        Console.WriteLine("LocalRun helps you rebuild and run only what matters in your local environment.");
-        Console.WriteLine("It analyzes your repository tree, detects Git changes, and maps dependency");
-        Console.WriteLine("relationships between libraries and executables.");
+        Console.WriteLine("LocalRun lets you rebuild and run only what matters locally —");
+        Console.WriteLine("analyzing repositories, tracking dependency graphs, and");
+        Console.WriteLine("selectively repacking components to a local NuGet source.");
         Console.WriteLine();
-        Console.WriteLine("From there, you can:");
+        Console.WriteLine("Use it to:");
+        Console.WriteLine(" • Scan repositories and detect changed or relevant projects.");
         Console.WriteLine(" • Build a dependency graph and save it as a config file.");
-        Console.WriteLine(" • Filter projects by type of change or dependency.");
-        Console.WriteLine(" • Repack changed libraries to your LocalNuGet cache.");
-        Console.WriteLine(" • Rebuild and start executables in proper dependency order.");
+        Console.WriteLine(" • Preview version bumps before repackaging.");
+        Console.WriteLine(" • Repack projects to your LocalNuGet cache.");
+        Console.WriteLine(" • Rebuild or run executables in dependency order.");
         Console.WriteLine();
-        Console.WriteLine("Type 'help' to list all available commands.");
+        Console.WriteLine("Type 'help' for a list of available commands.");
         Console.WriteLine();
     }
 
@@ -193,42 +194,62 @@ public class Program
         Console.WriteLine();
         Console.WriteLine("Commands:");
         Console.WriteLine();
+
         Console.WriteLine("  build-config [options]");
-        Console.WriteLine("      Analyze the source tree and build a dependency graph.");
-        Console.WriteLine("      Produces a JSON config file that can be edited before repack.");
+        Console.WriteLine("      Analyze the repository tree and build a dependency graph.");
+        Console.WriteLine("      Produces 'localrun.config.json' under /Output.");
         Console.WriteLine("      Options:");
-        Console.WriteLine("        --retain-depends-on <names>               Space-separated list of libs/exes such that only what depends of them is retained");
-        Console.WriteLine("        --retain-is-dependency-of <names>         Space-separated list of libs/exes such that only what is a dependency of them is retained");
-        Console.WriteLine("        --root <path>                             Override root search path (default: current dir)");
+        Console.WriteLine("        --retain-depends-on <names>          Keep projects that depend (directly or indirectly) on given libs/exes");
+        Console.WriteLine("        --retain-is-dependency-of <names>    Keep projects that are dependencies (direct or indirect) of given executables");
+        Console.WriteLine("        --root <path>                        Override default root search path (default: ~/source/repos)");
         Console.WriteLine("      Example:");
-        Console.WriteLine("        build-config --retain-depends-on TweetToTradeCore Assembly-Seb --retain-is-dependency-of DLS.Dev AlgoSample");
+        Console.WriteLine("        build-config --retain-depends-on Shared.Core Utils --retain-is-dependency-of WebApp DataProcessor");
         Console.WriteLine();
+
         Console.WriteLine("  visualize");
-        Console.WriteLine("      Puts a visual representation of the graph in the config fie into a svg.");
+        Console.WriteLine("      Generate a visual graph of the dependencies in the current config.");
+        Console.WriteLine("      Outputs an SVG to /Visuals/dependencies.svg and opens it automatically.");
         Console.WriteLine();
-        Console.WriteLine("  repack");
-        Console.WriteLine("      Repack all solutions in the current config file.");
-        Console.WriteLine("      Packages are created in dependency order and pushed to LocalNuGet.");
-        Console.WriteLine("      Options: ");
-        Console.WriteLine("        --remote               Includes full set of checked sources in the nuget manager, local and remote");
+
+        Console.WriteLine("  repack-preview [options]");
+        Console.WriteLine("      Create 'repack.config.json' previewing what will be repacked and to which versions.");
+        Console.WriteLine("      Options:");
+        Console.WriteLine("        --major                 Increment major version (resets minor/patch)");
+        Console.WriteLine("        --minor                 Increment minor version (resets patch)");
+        Console.WriteLine("        --patch                 Increment patch version");
+        Console.WriteLine("        --suffix <text>         Add or replace version suffix (e.g., '-local', '-beta')");
+        Console.WriteLine("        --remote                Query both local and remote NuGet sources for version info");
+        Console.WriteLine("      Example:");
+        Console.WriteLine("        repack-preview --patch --suffix dev");
+        Console.WriteLine();
+
+        Console.WriteLine("  repack-go");
+        Console.WriteLine("      Execute the repack based on 'repack.config.json'.");
+        Console.WriteLine("      Packages are created in dependency order and pushed to your LocalNuGet feed.");
+        Console.WriteLine();
+
         Console.WriteLine("  run");
-        Console.WriteLine("      Launch executables defined in the config file, in dependency order.");
+        Console.WriteLine("      Launch executables listed in the config, in dependency order.");
+        Console.WriteLine("      Ideal for partial local deployment of a microservice ecosystem.");
         Console.WriteLine();
+
         Console.WriteLine("  help");
-        Console.WriteLine("      Print this help message.");
+        Console.WriteLine("      Show this help message.");
         Console.WriteLine();
+
         Console.WriteLine("  exit");
         Console.WriteLine("      Quit LocalRun interactive mode.");
         Console.WriteLine();
+
         Console.WriteLine("──────────────────────────────");
-        Console.WriteLine("Usage Examples:");
+        Console.WriteLine(" Example session:");
         Console.WriteLine("──────────────────────────────");
-        Console.WriteLine("  LocalRun> build-config --include-external");
-        Console.WriteLine("  LocalRun> visualize");
         Console.WriteLine("  LocalRun> build-config --retain-depends-on TweetToTradeCore Assembly-Seb");
         Console.WriteLine("  LocalRun> build-config --retain-is-dependency-of AlgoSample DLS.Dev AlgorithmsTest");
         Console.WriteLine("  LocalRun> visualize");
-        Console.WriteLine("  LocalRun> repack --remote");
+        Console.WriteLine("  LocalRun> repack-preview --patch --suffix dev");
+        Console.WriteLine("  LocalRun> repack-preview --remote --alpha");
+        Console.WriteLine("  LocalRun> repack-go");
         Console.WriteLine("  LocalRun> run");
         Console.WriteLine("──────────────────────────────");
     }
