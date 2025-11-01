@@ -4,7 +4,6 @@ using LocalRun.Core.Graph;
 using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -14,15 +13,15 @@ public static class GraphVisualizer
     {
         public required DependencyGraph Graph { get; init; }
 
-        public required string OutputDirectory { get; init; }
+        public required string OutputFilePath { get; init; }
     }
 
     public static async Task GenerateAsync(Config config)
     {
-        string outputDirectory = config.OutputDirectory;
-        Directory.CreateDirectory(outputDirectory);
-        string dotPath = Path.Combine(outputDirectory, "dependencies.dot");
-        string svgPath = Path.Combine(outputDirectory, "dependencies.svg");
+        string outputFilePath = config.OutputFilePath;
+        Directory.CreateDirectory(outputFilePath);
+        string dotPath = Path.Combine(outputFilePath, $"{outputFilePath}.dot");
+        string svgPath = Path.Combine(outputFilePath, $"{outputFilePath}.svg");
 
         Console.WriteLine("[🧩] Generating dependency graph...");
 
@@ -34,7 +33,6 @@ public static class GraphVisualizer
         {
             await RunDotAsync(dotPath, svgPath);
             Console.WriteLine($"[🖼️] SVG graph generated: {svgPath}");
-            OpenWithDefaultApp(svgPath);
         }
         catch (Exception ex)
         {
@@ -167,43 +165,6 @@ public static class GraphVisualizer
         if (proc.ExitCode != 0)
         {
             throw new InvalidOperationException($"Graphviz failed: {error}");
-        }
-    }
-
-    public static void OpenWithDefaultApp(string filePath)
-    {
-        try
-        {
-            if (!File.Exists(filePath))
-            {
-                Console.WriteLine($"[⚠] File not found: {filePath}");
-                return;
-            }
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = filePath,
-                    UseShellExecute = true
-                });
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                Process.Start("open", filePath);
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                Process.Start("xdg-open", filePath);
-            }
-            else
-            {
-                Console.WriteLine($"[⚠] Unsupported platform: cannot open {filePath}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[⚠] Could not open SVG: {ex.Message}");
         }
     }
 }

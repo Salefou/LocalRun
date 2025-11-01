@@ -1,12 +1,11 @@
 ﻿namespace LocalRun.Core.Modules;
 
-using LocalRun.Contracts;
 using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
 using LocalRun.Options;
 using System;
 
-public class ConfigBuilder : IConfigBuilder
+public class ConfigBuilder
 {
     public LocalRunConfig BuildConfig(string rootPath, BuildConfigOptions options, string localNugetRepoPath)
     {

@@ -1,70 +1,30 @@
 ﻿namespace LocalRun.Core.Modules;
-
-using LocalRun.Contracts;
-using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
 using LocalRun.Logger;
-using LocalRun.Options;
-using System;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading.Tasks;
 
-public class RepackExecutor : IRepacker
+public class RepackExecutor
 {
     private static readonly ILoggerShishe<RepackExecutor> logger = LoggerFactory.Create<RepackExecutor>();
 
-    private readonly NugetVersionChecker nugetVersionChecker = new();
-
-    public async Task RepackAndRebuildAsync(LocalRunConfig config, RepackOptions repackOptions)
+    public async Task RepackAndRebuildAsync(RepackConfig repackConfig)
     {
         logger.Info("[⚙ ] Starting repack in dependency order...");
-
-        var dependencyGraph = DependencyGraph.FromConfig(config);
-        foreach (var proj in dependencyGraph.TopologicalOrder())
+        foreach (var proj in repackConfig.Projects)
         {
-            if (proj.SkipRepack) continue;
-            ProjectVersion version;
-            if (repackOptions.UseRemoteAsVersionReference)
-            {
-                //var nugetVersion = await nugetVersionChecker.GetLatestVersionAsync(proj.Name);
-                var nugetVersion = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name);
-                version = ProjectVersion.Parse(nugetVersion?.Version.ToString());
-            }
-            else
-            {
-                version = proj.Version;
-            }
-
-            var bumpedVersion = repackOptions.BumpOptions?.Bump(version) ?? version with { };
-            logger.Info($"[📦] Packing {proj.Name} ({proj.Version}) to ({bumpedVersion})...");
-
-            string pathToCsproj = Path.Combine(config.RootPath, proj.Path);
-            await RunProcessAsync("dotnet", $"pack \"{pathToCsproj}\" -o \"{config.LocalNugetPath}\" -p:PackageVersion=\"{bumpedVersion.ToVersionString()}\"");
-            /*--no-build*/
+            await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" -o \"{repackConfig.LocalNugetPath}\" -p:PackageVersion=\"{proj.ToVersion.ToVersionString()}\"");
         }
 
-        logger.Info("[🔁] Cleaning and restoring dependent solutions...");
-        var allSolutions = config.Projects
-            .Where(project => project != null)
-            .Select(project => project!.SolutionPath)
-            .Where(solutionPath => solutionPath != null)
-            .ToHashSet()!;
+        logger.Info("[🔁] Cleaning and restoring dependent projects...");
 
-        var solutionsFound = allSolutions.Where(File.Exists).ToList();
-        var solutionsNotFound = allSolutions.Except(solutionsFound);
-        foreach (var solutionNotFound in solutionsNotFound)
+        foreach (var proj in repackConfig.Projects)
         {
-            logger.Error($": Did not find solution file at {solutionNotFound}");
+            string pathToCsproj = proj.PathToCsproj;
+            await RunProcessAsync("dotnet", $"clean \"{pathToCsproj}\" --verbosity minimal");
+            await RunProcessAsync("dotnet", $"restore \"{pathToCsproj}\" --source \"{repackConfig.LocalNugetPath}\" --verbosity minimal");
         }
 
-        foreach (var solutionPath in solutionsFound)
-        {
-            await RunProcessAsync("dotnet", $"clean \"{solutionPath}\" --verbosity minimal");
-            await RunProcessAsync("dotnet", $"restore \"{solutionPath}\" --source \"{config.LocalNugetPath}\" --verbosity minimal");
-        }
-
-        logger.Info($"[🔁] Cleaned and restored the following solutions: \n\t{string.Join("\n\t", solutionsFound.Select(path => path == null ? "UNKNOWN" : Path.GetRelativePath(config.RootPath, path)))}");
         logger.Info("[🚀] Repack complete.");
     }
 

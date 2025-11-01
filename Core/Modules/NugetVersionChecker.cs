@@ -100,8 +100,8 @@ public class NugetVersionChecker
                 Console.WriteLine($"[WARN] Failed to query source '{source.Source}': {ex.Message}");
             }
         }
-        Console.WriteLine($"Fetched latest version accross sources for {packageId} in {stopwatch.ElapsedMilliseconds}ms");
         stopwatch.Stop();
+        Console.WriteLine($"Fetched latest version accross sources for {packageId} in {stopwatch.ElapsedMilliseconds}ms");
         return highest;
     }
 

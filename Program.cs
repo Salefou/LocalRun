@@ -1,6 +1,5 @@
 ﻿namespace LocalRun;
 
-using LocalRun.Contracts;
 using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
 using LocalRun.Core.Modules;
@@ -8,7 +7,9 @@ using LocalRun.Core.Processing;
 using LocalRun.Core.Resources;
 using LocalRun.Options;
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 public class Program
@@ -18,7 +19,8 @@ public class Program
     private static readonly string localNugetPath = Path.Combine(UserDir, ".localnuget");
     private static readonly string ReposRootPath = Path.Combine(UserDir, "source", "repos");
     private static readonly string PathToConfig = $"{Path.GetFullPath("..\\..\\..\\")}{"Output\\localrun.config.json"}";
-    private static readonly string PathToVisuals = $"{Path.GetFullPath("..\\..\\..\\")}{"Visuals\\"}";
+    private static readonly string PathToRepackConfig = $"{Path.GetFullPath("..\\..\\..\\")}{"Output\\repack.config.json"}";
+    private static readonly string PathToVisuals = $"{Path.GetFullPath("..\\..\\..\\")}{"Visuals\\dependencies"}";
 
     public static async Task Main()
     {
@@ -27,9 +29,10 @@ public class Program
 
         PrintWelcome();
 
-        IConfigBuilder configBuilder = new ConfigBuilder();
-        IRepacker repacker = new RepackExecutor();
-        IRunProcessor runProcessor = new RunProcessor();
+        var configBuilder = new ConfigBuilder();
+        var repacker = new RepackExecutor();
+        var runProcessor = new RunProcessor();
+        var repackConfigBuilder = new RepackConfigBuilder();
 
         while (true)
         {
@@ -50,7 +53,7 @@ public class Program
                     Console.WriteLine($"[✔ ] Configuration written to {PathToConfig}");
                     break;
 
-                case "repack":
+                case "repack-preview":
                     RepackOptions repackOptions = RepackOptionsParser.Parse(args);
                     LocalRunConfig? currentConfig = await ReadConfigFromFile();
                     if (currentConfig == null)
@@ -58,7 +61,16 @@ public class Program
                         Console.WriteLine("No config found. Run 'build-config' first.");
                         continue;
                     }
-                    await repacker.RepackAndRebuildAsync(currentConfig, repackOptions);
+                    RepackConfig writeRepackConfig = await repackConfigBuilder.BuildRepackConfig(currentConfig, repackOptions);
+                    await File.WriteAllTextAsync(PathToRepackConfig, JsonSerializer.Serialize(writeRepackConfig, new JsonSerializerOptions { WriteIndented = true }));
+                    break;
+
+                case "repack-go":
+                    RepackConfig? readRepackConfig = await ReadRepackConfigFromFile();
+                    if (readRepackConfig != null)
+                    {
+                        await repacker.RepackAndRebuildAsync(readRepackConfig);
+                    }
                     break;
 
                 case "run":
@@ -76,9 +88,10 @@ public class Program
                         GraphVisualizer.Config config = new()
                         {
                             Graph = graph,
-                            OutputDirectory = PathToVisuals,
+                            OutputFilePath = PathToVisuals,
                         };
                         await GraphVisualizer.GenerateAsync(config);
+                        OpenWithDefaultApp($"{PathToVisuals}.svg");
                     }
 
                     break;
@@ -95,12 +108,59 @@ public class Program
             }
         }
     }
+    private static async Task<T?> ReadFromFile<T>(string pathToFile)
+        where T : class
+    {
+        if (!File.Exists(pathToFile))
+            return null;
+        return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(pathToFile));
+    }
 
     private static async Task<LocalRunConfig?> ReadConfigFromFile()
     {
-        if (!File.Exists(PathToConfig))
-            return null;
-        return JsonSerializer.Deserialize<LocalRunConfig>(await File.ReadAllTextAsync(PathToConfig));
+        return await ReadFromFile<LocalRunConfig>(PathToConfig);
+    }
+
+    private static async Task<RepackConfig?> ReadRepackConfigFromFile()
+    {
+        return await ReadFromFile<RepackConfig>(PathToRepackConfig);
+    }
+
+    public static void OpenWithDefaultApp(string filePath)
+    {
+        try
+        {
+            if (!File.Exists(filePath))
+            {
+                Console.WriteLine($"[⚠] File not found: {filePath}");
+                return;
+            }
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = filePath,
+                    UseShellExecute = true
+                });
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                Process.Start("open", filePath);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                Process.Start("xdg-open", filePath);
+            }
+            else
+            {
+                Console.WriteLine($"[⚠] Unsupported platform: cannot open {filePath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[⚠] Could not open SVG: {ex.Message}");
+        }
     }
 
     private static void PrintWelcome()
