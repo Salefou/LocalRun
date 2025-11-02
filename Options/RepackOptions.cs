@@ -4,7 +4,9 @@ namespace LocalRun.Options;
 
 public class RepackOptions
 {
-    public bool UseRemoteAsVersionReference { get; init; }
+    public required bool CleanBeforeRestore { get; init; }
 
-    public BumpOptions? BumpOptions { get; init; }
+    public required bool UseRemoteAsVersionReference { get; init; }
+
+    public required BumpOptions? BumpOptions { get; init; }
 }

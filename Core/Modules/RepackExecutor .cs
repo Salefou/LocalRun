@@ -1,6 +1,8 @@
 ﻿namespace LocalRun.Core.Modules;
 using LocalRun.Core.Model;
 using LocalRun.Logger;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
@@ -11,33 +13,56 @@ public class RepackExecutor
     public async Task RepackAndRebuildAsync(RepackConfig repackConfig)
     {
         logger.Info("[⚙ ] Starting repack in dependency order...");
-        IEnumerable<Task> independentTreePackingTasks = repackConfig.RepackTrees.Select(async projTree =>
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        var independentTreePackingTasks = repackConfig.RepackTrees.Select(async projTree =>
         {
             var depthToProjects = projTree.Projects.GroupBy(proj => proj.Depth)
                 .ToDictionary(group => group.Key, group => group.ToList());
 
-            foreach (var depthAndProjects in depthToProjects.OrderBy(p => p.Key))
+            foreach (var (depth, projects) in depthToProjects.OrderBy(p => p.Key))
             {
-                int currentDepth = depthAndProjects.Key;
-                IEnumerable<Task> levelPackingTasks = depthAndProjects.Value.Select(async proj =>
+                if (repackConfig.Clean)
                 {
-                    logger.Info($"[📦] Packing {proj.Name} ({proj.FromVersion}) to ({proj.ToVersion})...");
-                    await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" -o \"{repackConfig.LocalNugetPath}\" -p:PackageVersion=\"{proj.ToVersion.AsVersionString()}\"");
-                });
-                await Task.WhenAll(levelPackingTasks);
+                    await CleanAllAsync(projects, repackConfig.LocalNugetPath, depth);
+                }
+                await RestoreAllAsync(projects, repackConfig.LocalNugetPath, depth);
+                await PackAllAsync(projects, repackConfig.LocalNugetPath, depth);
             }
         });
         await Task.WhenAll(independentTreePackingTasks);
+        stopwatch.Stop();
+        logger.Info($"[🚀] Repack complete. Took {stopwatch.ElapsedMilliseconds}ms");
+    }
 
-        logger.Info("[🔁] Cleaning and restoring dependent projects...");
-        foreach (var proj in repackConfig.RepackTrees.SelectMany(tree => tree.Projects))
+    private async Task PackAllAsync(List<ProjectRepack> projects, string nugetRepoPath, int depth)
+    {
+        var levelPackingTasks = projects.Select(async proj =>
         {
-            string pathToCsproj = proj.PathToCsproj;
-            await RunProcessAsync("dotnet", $"clean \"{pathToCsproj}\" --verbosity minimal");
-            await RunProcessAsync("dotnet", $"restore \"{pathToCsproj}\" --source \"{repackConfig.LocalNugetPath}\" --verbosity minimal");
-        }
+            logger.Info($"[📦] [Depth {depth}] Packing {proj.Name} ({proj.FromVersion}) to ({proj.ToVersion})...");
+            await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{nugetRepoPath}\" -p:PackageVersion=\"{proj.ToVersion.AsVersionString()}\"");
+        });
+        await Task.WhenAll(levelPackingTasks);
+    }
 
-        logger.Info("[🚀] Repack complete.");
+    private async Task CleanAllAsync(List<ProjectRepack> projects, string nugetRepoPath, int depth)
+    {
+        var levelCleanAndRestoreTasks = projects.Select(async proj =>
+        {
+            logger.Info($"[🔁] [Depth {depth}] Cleaning {proj.Name}...");
+            await RunProcessAsync("dotnet", $"clean \"{proj.PathToCsproj}\" --verbosity minimal");
+        });
+        await Task.WhenAll(levelCleanAndRestoreTasks);
+    }
+
+    private async Task RestoreAllAsync(List<ProjectRepack> projects, string nugetRepoPath, int depth)
+    {
+        var levelCleanAndRestoreTasks = projects.Select(async proj =>
+        {
+            logger.Info($"[🔁] [Depth {depth}] Restoring {proj.Name}...");
+            // TODO source = everything in nuget manager
+            await RunProcessAsync("dotnet", $"restore \"{proj.PathToCsproj}\" --source \"{nugetRepoPath}\" --verbosity minimal");
+        });
+        await Task.WhenAll(levelCleanAndRestoreTasks);
     }
 
     private static async Task RunProcessAsync(string fileName, string args)

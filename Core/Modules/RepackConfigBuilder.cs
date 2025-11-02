@@ -68,6 +68,7 @@ internal class RepackConfigBuilder
         {
             LocalNugetPath = config.LocalNugetPath,
             RepackTrees = repackTrees,
+            Clean = repackOptions.CleanBeforeRestore
         };
     }
 }

@@ -6,12 +6,16 @@ internal class RepackOptionsParser
         BumpType bumpType = BumpType.None;
         string? suffix = null;
         bool remoteAsRef = false;
+        bool clean = false;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
                 case "--remote":
                     remoteAsRef = true;
+                    break;
+                case "--clean":
+                    clean = true;
                     break;
 
                 case "--suffix":
@@ -42,6 +46,7 @@ internal class RepackOptionsParser
                 Suffix = suffix,
             },
             UseRemoteAsVersionReference = remoteAsRef,
+            CleanBeforeRestore = clean,
         };
     }
 }
