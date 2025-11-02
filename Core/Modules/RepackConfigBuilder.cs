@@ -20,34 +20,54 @@ internal class RepackConfigBuilder
     public async Task<RepackConfig> BuildRepackConfig(LocalRunConfig config, RepackOptions repackOptions)
     {
         logger.Info("[⚙ ] Building repack config in dependency order...");
-        List<ProjectRepack> projectRepacks = [];
-
         var dependencyGraph = DependencyGraph.FromConfig(config);
-        foreach (var proj in dependencyGraph.TopologicalOrder())
+
+        List<RepackTree> repackTrees = [];
+        Dictionary<string, int> nameToDepth = dependencyGraph.ComputeNameToDepth();
+        foreach (var projTree in dependencyGraph.ConnectedComponents)
         {
-            if (proj.SkipRepack) continue;
-            ProjectVersion version;
-            if (repackOptions.UseRemoteAsVersionReference)
-            {
-                //var nugetVersion = await nugetVersionChecker.GetLatestVersionAsync(proj.Name);
-                var nugetVersion = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name);
-                version = ProjectVersion.Parse(nugetVersion?.Version.ToString());
-            }
-            else
-            {
-                version = proj.Version;
-            }
+            List<ProjectRepack> projectRepacks = [];
 
-            var bumpedVersion = repackOptions.BumpOptions?.Bump(version) ?? version with { };
-            logger.Info($"[📦] Packing {proj.Name} ({proj.Version}) to ({bumpedVersion})...");
+            foreach (var proj in projTree)
+            {
+                if (proj.SkipRepack) continue;
+                ProjectVersion version;
+                if (repackOptions.UseRemoteAsVersionReference)
+                {
+                    //var nugetVersion = await nugetVersionChecker.GetLatestVersionAsync(proj.Name);
+                    var nugetVersion = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name);
+                    version = ProjectVersion.Parse(nugetVersion?.Version.ToString());
+                }
+                else
+                {
+                    version = proj.Version;
+                }
 
-            string pathToCsproj = Path.Combine(config.RootPath, proj.Path);
-            projectRepacks.Add(new() { PathToCsproj = pathToCsproj, FromVersion = version, ToVersion = bumpedVersion });
+                var bumpedVersion = repackOptions.BumpOptions?.Bump(version) ?? version with { };
+                logger.Info($"[📦] Writing repack config of {proj.Name} ({proj.Version}) to ({bumpedVersion})...");
+
+                string pathToCsproj = Path.Combine(config.RootPath, proj.Path);
+                int depth = nameToDepth[proj.Name];
+                projectRepacks.Add(new()
+                {
+                    Name = proj.Name,
+                    PathToCsproj = pathToCsproj,
+                    FromVersion = version,
+                    ToVersion = bumpedVersion,
+                    Depth = depth,
+                });
+            }
+            repackTrees.Add(new()
+            {
+                Projects = [.. projectRepacks
+                    .OrderBy(proj => proj.Depth)
+                    .ThenBy(proj => proj.PathToCsproj)]
+            });
         }
         return new RepackConfig()
         {
             LocalNugetPath = config.LocalNugetPath,
-            Projects = projectRepacks,
+            RepackTrees = repackTrees,
         };
     }
 }

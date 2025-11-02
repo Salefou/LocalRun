@@ -29,7 +29,9 @@ public class BumpOptions
             };
         }
 
-        string[] patchAndSuffix = version.PatchAndSuffix.Split(".", 2);
+        string[] patchAndSuffix = [.. version.PatchAndSuffix.Split(".", 2)
+            .SelectMany(patchOrSuffix => patchOrSuffix.Split('-', 2))];
+
         string patchAsString = patchAndSuffix[0];
         if (!int.TryParse(patchAsString, out var patch))
         {

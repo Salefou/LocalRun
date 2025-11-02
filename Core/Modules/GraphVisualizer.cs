@@ -60,7 +60,7 @@ public static class GraphVisualizer
         //var nodes = graph.AllProjects.ToDictionary(p => p.Name, p => p);
 
         // Compute depth for each node (max distance from a root)
-        var depths = ComputeDepths(graph);
+        var nameToDepth = graph.ComputeNameToDepth();
 
         var projs = graph.TopologicalOrder().ToList();
 
@@ -76,9 +76,8 @@ public static class GraphVisualizer
 
         foreach (var proj in projs)
         {
-            //depths[proj.Name];
             string label = $"{proj.Name}\\n{proj.Version}\\n";
-            string color = DepthColor(depths[proj.Name]);
+            string color = DepthColor(nameToDepth[proj.Name]);
             sb.AppendLine($"  \"{proj.Name}\" [label=\"{label}\", fillcolor=\"{color}\"];");
             //sb.AppendLine($"  \"{dummy}\" -> \"{proj.Name}\";");
 
@@ -94,24 +93,6 @@ public static class GraphVisualizer
 
         sb.AppendLine("}");
         return sb.ToString();
-    }
-
-    private static Dictionary<string, int> ComputeDepths(DependencyGraph graph)
-    {
-        var depths = new Dictionary<string, int>();
-        foreach (var subTreeTopo in graph.TopologicalClassOrderPerSubtree())
-        {
-            int depth = 0;
-            foreach (var topologicalClass in subTreeTopo)
-            {
-                foreach (var projectInClass in topologicalClass)
-                {
-                    depths[projectInClass.Name] = depth;
-                }
-                depth++;
-            }
-        }
-        return depths;
     }
 
     // Compute color based on depth (HSV -> RGB)

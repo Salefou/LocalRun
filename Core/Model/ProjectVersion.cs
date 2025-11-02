@@ -25,14 +25,14 @@ public readonly record struct ProjectVersion
         return new() { Major = majorInt, Minor = minorInt, PatchAndSuffix = versionNumbers[2] };
     }
 
-    public string ToVersionString()
+    public string AsVersionString()
     {
         return $"{Major}.{Minor}.{PatchAndSuffix}";
     }
 
     public override string ToString()
     {
-        return ToVersionString();
+        return AsVersionString();
     }
 }
 

@@ -11,14 +11,26 @@ public class RepackExecutor
     public async Task RepackAndRebuildAsync(RepackConfig repackConfig)
     {
         logger.Info("[⚙ ] Starting repack in dependency order...");
-        foreach (var proj in repackConfig.Projects)
+        IEnumerable<Task> independentTreePackingTasks = repackConfig.RepackTrees.Select(async projTree =>
         {
-            await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" -o \"{repackConfig.LocalNugetPath}\" -p:PackageVersion=\"{proj.ToVersion.ToVersionString()}\"");
-        }
+            var depthToProjects = projTree.Projects.GroupBy(proj => proj.Depth)
+                .ToDictionary(group => group.Key, group => group.ToList());
+
+            foreach (var depthAndProjects in depthToProjects.OrderBy(p => p.Key))
+            {
+                int currentDepth = depthAndProjects.Key;
+                IEnumerable<Task> levelPackingTasks = depthAndProjects.Value.Select(async proj =>
+                {
+                    logger.Info($"[📦] Packing {proj.Name} ({proj.FromVersion}) to ({proj.ToVersion})...");
+                    await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" -o \"{repackConfig.LocalNugetPath}\" -p:PackageVersion=\"{proj.ToVersion.AsVersionString()}\"");
+                });
+                await Task.WhenAll(levelPackingTasks);
+            }
+        });
+        await Task.WhenAll(independentTreePackingTasks);
 
         logger.Info("[🔁] Cleaning and restoring dependent projects...");
-
-        foreach (var proj in repackConfig.Projects)
+        foreach (var proj in repackConfig.RepackTrees.SelectMany(tree => tree.Projects))
         {
             string pathToCsproj = proj.PathToCsproj;
             await RunProcessAsync("dotnet", $"clean \"{pathToCsproj}\" --verbosity minimal");

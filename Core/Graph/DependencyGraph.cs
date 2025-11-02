@@ -112,7 +112,7 @@ public class DependencyGraph
         {
             if (_nodesPerName.TryGetValue(name, out var target))
             {
-                CollectDependentsIterative(target, toKeep);
+                CollectDependents(target, toKeep);
             }
         }
         Prune(toKeep);
@@ -125,47 +125,36 @@ public class DependencyGraph
         {
             if (_nodesPerName.TryGetValue(name, out var target))
             {
-                CollectDependenciesIterative(target, toKeep);
+                CollectDependencies(target, toKeep);
             }
         }
         Prune(toKeep);
     }
 
-    private void CollectDependenciesIterative(Node node, HashSet<Node> visited)
+    private void Traverse(Node start, Func<Node, IEnumerable<Node>> neighborSelector, HashSet<Node> visited)
     {
-        var toVisit = new Queue<Node>();
-
-        toVisit.Enqueue(node);
-        while (toVisit.Count != 0)
+        var queue = new Queue<Node>();
+        queue.Enqueue(start);
+        while (queue.Count > 0)
         {
-            Node next = toVisit.Dequeue();
-            if (visited.Add(next))
+            var current = queue.Dequeue();
+            if (!visited.Add(current))
             {
-                foreach (var neighbour in next.DependsOn)
-                {
-                    toVisit.Enqueue(neighbour);
-                }
+                continue;
+            }
+
+            foreach (var neighbor in neighborSelector(current))
+            {
+                queue.Enqueue(neighbor);
             }
         }
     }
 
-    private void CollectDependentsIterative(Node node, HashSet<Node> visited)
-    {
-        var toVisit = new Queue<Node>();
+    private void CollectDependencies(Node node, HashSet<Node> visited)
+        => Traverse(node, n => n.DependsOn, visited);
 
-        toVisit.Enqueue(node);
-        while (toVisit.Count != 0)
-        {
-            Node next = toVisit.Dequeue();
-            if (visited.Add(next))
-            {
-                foreach (var neighbour in next.Dependents)
-                {
-                    toVisit.Enqueue(neighbour);
-                }
-            }
-        }
-    }
+    private void CollectDependents(Node node, HashSet<Node> visited)
+        => Traverse(node, n => n.Dependents, visited);
 
     private void Prune(HashSet<Node> keep)
     {
@@ -184,44 +173,91 @@ public class DependencyGraph
         }
     }
 
-    public IEnumerable<IEnumerable<IEnumerable<ProjectNode>>> TopologicalClassOrderPerSubtree()
+    public Dictionary<string, int> ComputeNameToDepth()
     {
-        return RootsNodes.Select(rootNode =>
-            TopologicalClassOrder(rootNode).Select(depth =>
-                depth.Select(node => node.Project)));
+        Dictionary<string, int> nameToDepth = new();
+        int depth = 0;
+        List<List<Node>> projectsClasses = TopologicalClassOrder(RootsNodes);
+        foreach (var projectsClass in projectsClasses)
+        {
+            foreach (var proj in projectsClass)
+            {
+                nameToDepth[proj.Project.Name] = depth;
+            }
+            depth++;
+        }
+
+        return nameToDepth;
     }
 
+    public IEnumerable<IEnumerable<ProjectNode>> ConnectedComponents => GetConnectedComponents().Select(component => component.Select(node => node.Project));
 
-    private List<List<Node>> TopologicalClassOrder(Node subTreeRoot)
+    private List<HashSet<Node>> GetConnectedComponents()
     {
-        List<List<Node>> topologicalClassOrder = [[]];
+        var components = new List<HashSet<Node>>();
+        var visited = new HashSet<Node>();
+
+        foreach (var node in _nodesPerName.Values)
+        {
+            if (visited.Contains(node))
+                continue;
+
+            var component = new HashSet<Node>();
+            var queue = new Queue<Node>();
+            queue.Enqueue(node);
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (!visited.Add(current))
+                    continue;
+
+                component.Add(current);
+
+                foreach (var neighbor in current.Dependents.Concat(current.DependsOn))
+                {
+                    if (!visited.Contains(neighbor))
+                        queue.Enqueue(neighbor);
+                }
+            }
+
+            components.Add(component);
+        }
+
+        return components;
+    }
+
+    private List<List<Node>> TopologicalClassOrder(IEnumerable<Node> roots)
+    {
+        List<List<Node>> topologicalClassOrder = [];
         HashSet<Node> visited = new();
 
-        var toVisitThisLevel = new Queue<Node>();
-        var toVisitNextLevel = new Queue<Node>();
+        Queue<Node> toVisitThisLevel = new();
+        Queue<Node> toVisitNextLevel = new(roots);
 
-        toVisitThisLevel.Enqueue(subTreeRoot);
-        while (true)
+        while (toVisitNextLevel.Count != 0)
         {
+            (toVisitNextLevel, toVisitThisLevel) = (toVisitThisLevel, toVisitNextLevel);
+            toVisitNextLevel.Clear();
+
+            List<Node> currentClass = [];
+            topologicalClassOrder.Add(currentClass);
+
             while (toVisitThisLevel.Count != 0)
             {
                 Node next = toVisitThisLevel.Dequeue();
-                topologicalClassOrder.Last().Add(next);
                 if (visited.Add(next))
                 {
+                    //topologicalClassOrder[..(topologicalClassOrder.Count - 2)]
+                    //    .ForEach(previousClass => previousClass.Remove(next));
+                    currentClass.Add(next);
+
                     foreach (var neighbour in next.Dependents)
                     {
                         toVisitNextLevel.Enqueue(neighbour);
                     }
                 }
             }
-            if (toVisitNextLevel.Count == 0)
-            {
-                break;
-            }
-            (toVisitNextLevel, toVisitThisLevel) = (toVisitThisLevel, toVisitNextLevel);
-            toVisitNextLevel.Clear();
-            topologicalClassOrder.Add([]);
         }
 
         return topologicalClassOrder;
@@ -229,21 +265,7 @@ public class DependencyGraph
 
     public IEnumerable<ProjectNode> TopologicalOrder()
     {
-        var visited = new HashSet<Node>();
-        var result = new List<Node>();
-
-        void Visit(Node n)
-        {
-            if (!visited.Add(n)) return;
-            foreach (var dep in n.Dependents)
-                Visit(dep);
-            result.Add(n);
-        }
-
-        foreach (var root in _nodesPerName.Values.Where(n => n.DependsOn.Count == 0))
-            Visit(root);
-
-        return result.Select(n => n.Project);
+        return TopologicalClassOrder(RootsNodes).SelectMany(level => level.Select(node => node.Project));
     }
 
     public IEnumerable<ProjectNode> AllProjects => _nodesPerName.Values.Select(n => n.Project);

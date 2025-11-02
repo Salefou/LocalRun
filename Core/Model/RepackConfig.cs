@@ -4,5 +4,5 @@ public class RepackConfig
 {
     public required string LocalNugetPath { get; init; }
 
-    public required List<ProjectRepack> Projects { get; init; }
+    public required List<RepackTree> RepackTrees { get; init; }
 }

@@ -14,8 +14,6 @@ public class ProjectNode
 
     public required ProjectVersion Version { get; init; }
 
-    // TODO public required ProjectVersion TargetVersion { get; init; }
-
     public required List<string> Dependencies { get; init; }
 
     public bool SkipRepack { get; init; }
