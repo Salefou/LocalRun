@@ -4,11 +4,12 @@ using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
 using LocalRun.Logger;
 using LocalRun.Options;
+using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 
 internal class RepackConfigBuilder
 {
-    private static readonly ILoggerShishe<RepackConfigBuilder> logger = LoggerFactory.Create<RepackConfigBuilder>();
+    private static readonly ILogger<RepackConfigBuilder> logger = Log.For<RepackConfigBuilder>();
 
     private readonly NugetVersionChecker nugetVersionChecker;
 
@@ -19,7 +20,7 @@ internal class RepackConfigBuilder
 
     public async Task<RepackConfig> BuildRepackConfig(LocalRunConfig config, RepackOptions repackOptions)
     {
-        logger.Info("[⚙ ] Building repack config in dependency order...");
+        logger.LogInformation("[⚙ ] Building repack config in dependency order...");
         var dependencyGraph = DependencyGraph.FromConfig(config);
 
         List<RepackTree> repackTrees = [];
@@ -44,7 +45,7 @@ internal class RepackConfigBuilder
                 }
 
                 var bumpedVersion = repackOptions.BumpOptions?.Bump(version) ?? version with { };
-                logger.Info($"[📦] Writing repack config of {proj.Name} ({proj.Version}) to ({bumpedVersion})...");
+                logger.LogInformation("[📦] Writing repack config of {Project} ({FromVersion}) to ({ToVersion})...", proj.Name, proj.Version, bumpedVersion);
 
                 string pathToCsproj = Path.Combine(config.RootPath, proj.Path);
                 int depth = nameToDepth[proj.Name];

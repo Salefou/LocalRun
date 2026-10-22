@@ -7,6 +7,7 @@ using LocalRun.Core.Processing;
 using LocalRun.Core.Resources;
 using LocalRun.Logger;
 using LocalRun.Options;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -15,7 +16,7 @@ using System.Text.Json;
 
 public class Program
 {
-    private static readonly ILoggerShishe<Program> logger = LoggerFactory.Create<Program>();
+    private static readonly ILogger<Program> logger = Log.For<Program>();
 
     private static readonly string UserDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
@@ -26,6 +27,18 @@ public class Program
     private static readonly string PathToVisuals = $"{Path.GetFullPath("..\\..\\..\\")}{"Visuals\\dependencies"}";
 
     public static async Task Main()
+    {
+        try
+        {
+            await RunReplAsync();
+        }
+        finally
+        {
+            Log.Shutdown();
+        }
+    }
+
+    private static async Task RunReplAsync()
     {
         Console.Title = "LocalRun";
         Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -55,7 +68,7 @@ public class Program
                         BuildConfigOptions configOptions = BuildConfigOptionsParser.Parse(args);
                         LocalRunConfig localRunConfig = configBuilder.BuildConfig(ReposRootPath, configOptions, localNugetPath);
                         await File.WriteAllTextAsync(PathToConfig, JsonSerializer.Serialize(localRunConfig, new JsonSerializerOptions { WriteIndented = true }));
-                        Console.WriteLine($"[✔ ] Configuration written to {PathToConfig}");
+                        logger.LogInformation("[✔ ] Configuration written to {Path}", PathToConfig);
                         break;
 
                     case "repack-preview":
@@ -63,7 +76,7 @@ public class Program
                         LocalRunConfig? currentConfig = await ReadConfigFromFile();
                         if (currentConfig == null)
                         {
-                            Console.WriteLine("No config found. Run 'build-config' first.");
+                            logger.LogWarning("No config found. Run 'build-config' first.");
                             continue;
                         }
                         RepackConfig writeRepackConfig = await repackConfigBuilder.BuildRepackConfig(currentConfig, repackOptions);
@@ -74,7 +87,7 @@ public class Program
                         RepackConfig? readRepackConfig = await ReadRepackConfigFromFile();
                         if (readRepackConfig == null)
                         {
-                            Console.WriteLine("No repack config found. Run 'repack-preview' first.");
+                            logger.LogWarning("No repack config found. Run 'repack-preview' first.");
                             continue;
                         }
                         await repacker.RepackAndRebuildAsync(readRepackConfig);
@@ -85,7 +98,7 @@ public class Program
                         if (runConfig != null)
                             await runProcessor.RunAsync(runConfig);
                         else
-                            Console.WriteLine("No config found. Run 'build-config' first.");
+                            logger.LogWarning("No config found. Run 'build-config' first.");
                         break;
                     case "visualize":
                         LocalRunConfig? visualsConfig = await ReadConfigFromFile();
@@ -110,13 +123,14 @@ public class Program
                         return;
 
                     default:
-                        Console.WriteLine("Unknown command. Type 'help' for available commands.");
+                        logger.LogWarning("Unknown command '{Command}'. Type 'help' for available commands.", cmd);
                         break;
                 }
             }
             catch (Exception ex)
             {
-                logger.Error($"Command '{cmd}' failed: {ex.Message}", ex);
+                logger.LogError("Command '{Command}' failed: {Error}", cmd, ex.Message);
+                logger.LogDebug(ex, "Command '{Command}' failure details", cmd);
             }
         }
     }
@@ -145,7 +159,7 @@ public class Program
         {
             if (!File.Exists(filePath))
             {
-                Console.WriteLine($"[⚠] File not found: {filePath}");
+                logger.LogWarning("File not found: {Path}", filePath);
                 return;
             }
 
@@ -167,12 +181,12 @@ public class Program
             }
             else
             {
-                Console.WriteLine($"[⚠] Unsupported platform: cannot open {filePath}");
+                logger.LogWarning("Unsupported platform: cannot open {Path}", filePath);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[⚠] Could not open SVG: {ex.Message}");
+            logger.LogWarning("Could not open SVG: {Error}", ex.Message);
         }
     }
 

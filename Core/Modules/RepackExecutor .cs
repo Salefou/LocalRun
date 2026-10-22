@@ -1,6 +1,7 @@
 ﻿namespace LocalRun.Core.Modules;
 using LocalRun.Core.Model;
 using LocalRun.Logger;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -8,11 +9,11 @@ using System.Threading.Tasks;
 
 public class RepackExecutor
 {
-    private static readonly ILoggerShishe<RepackExecutor> logger = LoggerFactory.Create<RepackExecutor>();
+    private static readonly ILogger<RepackExecutor> logger = Log.For<RepackExecutor>();
 
     public async Task RepackAndRebuildAsync(RepackConfig repackConfig)
     {
-        logger.Info("[⚙ ] Starting repack in dependency order...");
+        logger.LogInformation("[⚙ ] Starting repack in dependency order...");
         Stopwatch stopwatch = Stopwatch.StartNew();
         var independentTreePackingTasks = repackConfig.RepackTrees.Select(async projTree =>
         {
@@ -31,14 +32,14 @@ public class RepackExecutor
         });
         await Task.WhenAll(independentTreePackingTasks);
         stopwatch.Stop();
-        logger.Info($"[🚀] Repack complete. Took {stopwatch.ElapsedMilliseconds}ms");
+        logger.LogInformation("[🚀] Repack complete. Took {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
     }
 
     private async Task PackAllAsync(List<ProjectRepack> projects, string nugetRepoPath, int depth)
     {
         var levelPackingTasks = projects.Select(async proj =>
         {
-            logger.Info($"[📦] [Depth {depth}] Packing {proj.Name} ({proj.FromVersion}) to ({proj.ToVersion})...");
+            logger.LogInformation("[📦] [Depth {Depth}] Packing {Project} ({FromVersion}) to ({ToVersion})...", depth, proj.Name, proj.FromVersion, proj.ToVersion);
             await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{nugetRepoPath}\" -p:PackageVersion=\"{proj.ToVersion.AsVersionString()}\"");
         });
         await Task.WhenAll(levelPackingTasks);
@@ -48,7 +49,7 @@ public class RepackExecutor
     {
         var levelCleanAndRestoreTasks = projects.Select(async proj =>
         {
-            logger.Info($"[🔁] [Depth {depth}] Cleaning {proj.Name}...");
+            logger.LogInformation("[🔁] [Depth {Depth}] Cleaning {Project}...", depth, proj.Name);
             await RunProcessAsync("dotnet", $"clean \"{proj.PathToCsproj}\" --verbosity minimal");
         });
         await Task.WhenAll(levelCleanAndRestoreTasks);
@@ -58,7 +59,7 @@ public class RepackExecutor
     {
         var levelCleanAndRestoreTasks = projects.Select(async proj =>
         {
-            logger.Info($"[🔁] [Depth {depth}] Restoring {proj.Name}...");
+            logger.LogInformation("[🔁] [Depth {Depth}] Restoring {Project}...", depth, proj.Name);
             // TODO source = everything in nuget manager
             await RunProcessAsync("dotnet", $"restore \"{proj.PathToCsproj}\" --source \"{nugetRepoPath}\" --verbosity minimal");
         });
@@ -75,8 +76,8 @@ public class RepackExecutor
         };
 
         var proc = Process.Start(psi)!;
-        proc.OutputDataReceived += (_, e) => { if (e.Data != null) logger.Info(e.Data); };
-        proc.ErrorDataReceived += (_, e) => { if (e.Data != null) logger.Info(e.Data); };
+        proc.OutputDataReceived += (_, e) => { if (e.Data != null) logger.LogInformation("{Line}", e.Data); };
+        proc.ErrorDataReceived += (_, e) => { if (e.Data != null) logger.LogWarning("{Line}", e.Data); };
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
         await proc.WaitForExitAsync();

@@ -1,6 +1,8 @@
 ﻿namespace LocalRun.Core.Modules;
 
 using LocalRun.Core.Graph;
+using LocalRun.Logger;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 using System.Linq;
@@ -9,6 +11,8 @@ using System.Threading.Tasks;
 
 public static class GraphVisualizer
 {
+    private static readonly ILogger logger = Log.For(typeof(GraphVisualizer).FullName!);
+
     public class Config
     {
         public required DependencyGraph Graph { get; init; }
@@ -23,21 +27,20 @@ public static class GraphVisualizer
         string dotPath = Path.Combine(outputFilePath, $"{outputFilePath}.dot");
         string svgPath = Path.Combine(outputFilePath, $"{outputFilePath}.svg");
 
-        Console.WriteLine("[🧩] Generating dependency graph...");
+        logger.LogInformation("[🧩] Generating dependency graph...");
 
         string dot = ToDot(config.Graph);
         await File.WriteAllTextAsync(dotPath, dot);
-        Console.WriteLine($"[📄] DOT file generated: {dotPath}");
+        logger.LogInformation("[📄] DOT file generated: {Path}", dotPath);
 
         try
         {
             await RunDotAsync(dotPath, svgPath);
-            Console.WriteLine($"[🖼️] SVG graph generated: {svgPath}");
+            logger.LogInformation("[🖼️] SVG graph generated: {Path}", svgPath);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[⚠️] Could not generate SVG: {ex.Message}");
-            Console.WriteLine("      Did you install Graphviz (https://graphviz.org/download/) ?");
+            logger.LogWarning("Could not generate SVG: {Error}. Did you install Graphviz (https://graphviz.org/download/)?", ex.Message);
         }
     }
 

@@ -1,6 +1,7 @@
 ﻿namespace LocalRun.Core.Modules;
 
 using LocalRun.Logger;
+using Microsoft.Extensions.Logging;
 using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Protocol;
@@ -11,7 +12,7 @@ using System.Text.Json;
 
 public class NugetVersionChecker
 {
-    private static readonly ILoggerShishe<NugetVersionChecker> logger = LoggerFactory.Create<NugetVersionChecker>();
+    private static readonly ILogger<NugetVersionChecker> logger = Log.For<NugetVersionChecker>();
 
     private readonly Lazy<HttpClient> Http = new Lazy<HttpClient>(() => new());
 
@@ -48,14 +49,12 @@ public class NugetVersionChecker
         }
         catch (HttpRequestException ex)
         {
-            Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.Write("[WARN]"); Console.ResetColor(); Console.WriteLine($" Unable to query NuGet feed for '{packageName}': {ex.Message}");
+            logger.LogWarning("Unable to query NuGet feed for '{PackageId}': {Error}", packageName, ex.Message);
             return null;
         }
         catch (Exception ex)
         {
-            Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.Write("[WARN]"); Console.ResetColor(); Console.WriteLine($"Failed to parse NuGet versions for '{packageName}': {ex.Message}");
+            logger.LogWarning("Failed to parse NuGet versions for '{PackageId}': {Error}", packageName, ex.Message);
             return null;
         }
     }
@@ -70,7 +69,7 @@ public class NugetVersionChecker
             .Where(s => s.IsEnabled)
             .ToList();
 
-        var logger = NullLogger.Instance;
+        var nugetLogger = NullLogger.Instance;
         NuGetVersion? highest = null;
 
         foreach (var source in sources)
@@ -84,7 +83,7 @@ public class NugetVersionChecker
                     includePrerelease: true,
                     includeUnlisted: false,
                     sourceCacheContext: new SourceCacheContext(),
-                    log: logger,
+                    log: nugetLogger,
                     token: CancellationToken.None);
 
                 var latestVer = versions
@@ -97,11 +96,11 @@ public class NugetVersionChecker
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[WARN] Failed to query source '{source.Source}': {ex.Message}");
+                logger.LogWarning("Failed to query source '{Source}': {Error}", source.Source, ex.Message);
             }
         }
         stopwatch.Stop();
-        Console.WriteLine($"Fetched latest version accross sources for {packageId} in {stopwatch.ElapsedMilliseconds}ms");
+        logger.LogDebug("Fetched latest version across sources for {PackageId} in {ElapsedMs}ms", packageId, stopwatch.ElapsedMilliseconds);
         return highest;
     }
 
@@ -131,7 +130,7 @@ public class NugetVersionChecker
         var remote = await GetLatestVersionAsync(packageName, feedBase);
         if (remote == null)
         {
-            Console.WriteLine($"[ℹ] No remote version found for {packageName} — assuming local version is newer.");
+            logger.LogInformation("[ℹ] No remote version found for {PackageId} — assuming local version is newer.", packageName);
             return true;
         }
 
