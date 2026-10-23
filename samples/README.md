@@ -137,9 +137,9 @@ lrun build --root edge-cases/slnx-only --config edge.json
 
 | Case | What happens |
 |---|---|
-| `cycle/`: A → B → C → A | Fails, exit code 1: `Dependency cycle detected, cannot order: LrEdge.A, LrEdge.B, LrEdge.C` |
+| `cycle/`: A → B → C → A, with A → Base and Top → A | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `LrEdge.Top` kept without its dependency on it. The config holds Base and Top |
 | `name-collision/`: two `LrEdge.Shared` | Known limitation: only `repo-two`'s (2.0.0) is kept, `repo-one`'s silently disappears |
-| `slnx-only/`: project in a `.slnx` | Known limitation: `.slnx` is not read, so the project counts as in no solution (warning) |
+| `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Known limitation: `.slnx` is not read, so Modern is reported as in no solution (`Did not find any solution referencing project …`) although it is in one. That warning *is* the limitation on show: Modern is not meant to be an orphan |
 
 ## Changing the samples
 

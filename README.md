@@ -79,8 +79,10 @@ so you can **inspect or hand-edit** the plan between steps.
 - Projects are ordered with a **layered Kahn's algorithm**. A project's **depth** is the length of
   the longest path from a root (a project with no dependencies), so every dependency sits at a strictly
   lower depth than its dependents. Within a depth, projects are sorted by name so output is deterministic.
-- A **dependency cycle** is an error: LocalRun names the projects it could not order instead of
-  silently dropping them.
+- A **dependency cycle** cannot be ordered, so `build` leaves its projects out of the config, with a
+  warning naming them, and carries on with the rest. Projects that depended on the cycle are kept
+  without that dependency, and named in a second warning: packing or running them may fail.
+  (A cycle written into a config by hand still fails the command that reads it.)
 - Independent sub-graphs (**connected components**) are repacked in parallel; within a component,
   all projects of the same depth are packed in parallel, depth by depth.
 
@@ -600,8 +602,9 @@ stale caches. Re-packing the **same** version number is the usual culprit: the N
 folder keeps the first copy, so bump the version (e.g. a new suffix) or run
 `dotnet nuget locals global-packages --clear`.
 
-**`Dependency cycle detected, cannot order: A, B`** — the listed projects reference each other
-(possibly through packages). Break the cycle, or filter it out with `--users-of` / `--deps-of`.
+**`Dependency cycle left out of the config: A, B`** — the listed projects reference each other, possibly
+through packages, so `build` dropped them. Break the cycle to get them back. `Dependency cycle
+detected, cannot order` comes instead from a command reading a config whose cycle was added by hand.
 
 **Build fails with "file is locked by LocalRun"** — a LocalRun process (often a REPL) is still running
 from `bin/`. Exit it, or build to another folder: `dotnet build --artifacts-path <dir>`. To stop it

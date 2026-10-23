@@ -120,6 +120,50 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void RemoveCycles_LeavesTheRestOrderable()
+    {
+        var graph = Graph(
+            Project("Root"),
+            Project("A", "Root", "B"),
+            Project("B", "C"),
+            Project("C", "A"),
+            Project("Downstream", "B", "Root"));
+
+        var cycle = Assert.Single(graph.RemoveCycles());
+
+        Assert.Equal(["A", "B", "C"], cycle.Projects);
+        Assert.Equal(["Downstream"], cycle.Dependents);
+        Assert.Equal(["Root", "Downstream"], graph.TopologicalOrder().Select(p => p.Name));
+        Assert.Equal(1, graph.ComputeNameToDepth()["Downstream"]);
+    }
+
+    [Fact]
+    public void RemoveCycles_ReportsEachCycleAndSelfReferenceSeparately()
+    {
+        var graph = Graph(
+            Project("A", "B"),
+            Project("B", "A"),
+            Project("Self", "Self"),
+            Project("X", "Y"),
+            Project("Y", "X"),
+            Project("Free"));
+
+        var cycles = graph.RemoveCycles();
+
+        Assert.Equal([["A", "B"], ["Self"], ["X", "Y"]], cycles.Select(c => c.Projects));
+        Assert.Equal(["Free"], graph.TopologicalOrder().Select(p => p.Name));
+    }
+
+    [Fact]
+    public void RemoveCycles_WithoutCycles_ChangesNothing()
+    {
+        var graph = Graph(Project("A"), Project("B", "A"), Project("C", "A", "B"));
+
+        Assert.Empty(graph.RemoveCycles());
+        Assert.Equal(["A", "B", "C"], graph.TopologicalOrder().Select(p => p.Name));
+    }
+
+    [Fact]
     public void ConnectedComponents_SplitsIndependentTrees()
     {
         var graph = Graph(

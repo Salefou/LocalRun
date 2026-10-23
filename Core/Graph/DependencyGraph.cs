@@ -174,6 +174,84 @@ public class DependencyGraph
         }
     }
 
+    /// <summary>A dependency cycle that was left out of the graph, and the projects that depended on it.</summary>
+    public sealed record DependencyCycle(IReadOnlyList<string> Projects, IReadOnlyList<string> Dependents);
+
+    /// <summary>
+    /// Removes every project that is part of a dependency cycle, so the rest of the graph can still be
+    /// ordered. Projects depending on a cycle are kept, without those dependencies.
+    /// </summary>
+    public List<DependencyCycle> RemoveCycles()
+    {
+        // A cycle is a strongly connected component of more than one project, or a project referencing itself
+        List<HashSet<Node>> cycles = [.. FindStronglyConnectedComponents()
+            .Where(component => component.Count > 1 || component.Single().DependsOn.Contains(component.Single()))];
+        if (cycles.Count == 0)
+            return [];
+
+        var inCycle = cycles.SelectMany(cycle => cycle).ToHashSet();
+        var removed = cycles
+            .Select(cycle => new DependencyCycle(
+                [.. cycle.Select(node => node.Project.Name).Order(StringComparer.OrdinalIgnoreCase)],
+                [.. cycle.SelectMany(node => node.Dependents).Where(node => !inCycle.Contains(node))
+                    .Select(node => node.Project.Name).Distinct().Order(StringComparer.OrdinalIgnoreCase)]))
+            .OrderBy(cycle => cycle.Projects[0], StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        Prune([.. _nodesPerName.Values.Where(node => !inCycle.Contains(node))]);
+        return removed;
+    }
+
+    /// <summary>Tarjan's algorithm over the DependsOn edges.</summary>
+    private List<HashSet<Node>> FindStronglyConnectedComponents()
+    {
+        var index = new Dictionary<Node, int>();
+        var lowLink = new Dictionary<Node, int>();
+        var stack = new Stack<Node>();
+        var onStack = new HashSet<Node>();
+        var components = new List<HashSet<Node>>();
+
+        void Visit(Node node)
+        {
+            index[node] = lowLink[node] = index.Count;
+            stack.Push(node);
+            onStack.Add(node);
+
+            foreach (var dependency in node.DependsOn)
+            {
+                if (!index.ContainsKey(dependency))
+                {
+                    Visit(dependency);
+                    lowLink[node] = Math.Min(lowLink[node], lowLink[dependency]);
+                }
+                else if (onStack.Contains(dependency))
+                {
+                    lowLink[node] = Math.Min(lowLink[node], index[dependency]);
+                }
+            }
+
+            if (lowLink[node] == index[node])
+            {
+                var component = new HashSet<Node>();
+                Node member;
+                do
+                {
+                    member = stack.Pop();
+                    onStack.Remove(member);
+                    component.Add(member);
+                }
+                while (member != node);
+                components.Add(component);
+            }
+        }
+
+        foreach (var node in _nodesPerName.Values)
+        {
+            if (!index.ContainsKey(node))
+                Visit(node);
+        }
+        return components;
+    }
+
     public Dictionary<string, int> ComputeNameToDepth()
     {
         Dictionary<string, int> nameToDepth = new();

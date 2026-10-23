@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../LrEdge.B/LrEdge.B.csproj" />
+    <ProjectReference Include="../LrEdge.Base/LrEdge.Base.csproj" />
   </ItemGroup>
 </Project>

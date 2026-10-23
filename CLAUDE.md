@@ -69,7 +69,9 @@ shell escaping.
   unless asked by a flag (`visualize --open`). Interactive behaviour belongs in `LocalRun.Repl`.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
 - Dependency graph semantics (layered Kahn, depth = longest path from a root, name-sorted layers,
-  cycles throw) are covered by `LocalRun.Tests/Graph/DependencyGraphTests.cs`.
+  cycles throw) are covered by `LocalRun.Tests/Graph/DependencyGraphTests.cs`. `build` calls
+  `RemoveCycles()` (Tarjan SCC) after the filters, so cycles are left out with a warning instead of
+  failing; the throw in `TopologicalClassOrder` stays as the safety net for hand-edited configs.
 - Version bump rules (a bump resets lower components and replaces the prerelease label; no bump
   keeps the version and only `--suffix` replaces the label) are the README "Versioning rules" table,
   mirrored case by case in `LocalRun.Tests/Options/BumpOptionsTests.cs`. Change both together.

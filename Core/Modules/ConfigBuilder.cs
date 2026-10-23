@@ -24,6 +24,17 @@ public class ConfigBuilder
         if (options.RetainIsDependencyOf != null)
             graph.RetainIsDependencyOf(options.RetainIsDependencyOf);
 
+        // After the filters, so they still see the real graph; a cycle cannot be ordered, so it is left out
+        foreach (var cycle in graph.RemoveCycles())
+        {
+            logger.LogWarning("Dependency cycle left out of the config: {Projects}", string.Join(", ", cycle.Projects));
+            if (cycle.Dependents.Count != 0)
+            {
+                logger.LogWarning("  Kept without their dependency on it (packing or running them may fail): {Dependents}",
+                    string.Join(", ", cycle.Dependents));
+            }
+        }
+
         var config = new LocalRunConfig
         {
             RootPath = rootPath,
