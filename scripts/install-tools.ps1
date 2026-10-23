@@ -45,7 +45,9 @@ function Invoke-Dotnet {
 
 if (Test-Path $packageDir) { Remove-Item -Recurse -Force $packageDir }
 
-$scope = if ($ToolPath) { @('--tool-path', $ToolPath) } else { @('--global') }
+# Typed as an array: an 'if' returning a one-element array unrolls it to a plain string, and
+# splatting a string passes its characters one by one ('-', '-', 'g', ...)
+[string[]] $scope = if ($ToolPath) { @('--tool-path', $ToolPath) } else { @('--global') }
 
 foreach ($tool in $tools) {
     Write-Host "Packing $($tool.Id)..."
@@ -63,7 +65,7 @@ foreach ($tool in $tools) {
     # 'update' also installs a tool that is not installed yet
     & dotnet tool update $tool.Id @scope --add-source $packageDir --version $version --ignore-failed-sources
     if ($LASTEXITCODE -ne 0) {
-        throw "Could not install $($tool.Id). If '$($tool.Command)' is running, exit it and retry."
+        throw "Could not install $($tool.Id) (dotnet exit code $LASTEXITCODE, see its output above). If '$($tool.Command)' is running, exit it and retry."
     }
 }
 
