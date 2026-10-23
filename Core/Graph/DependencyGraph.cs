@@ -2,11 +2,15 @@
 
 using LocalRun.Core.Model;
 using LocalRun.Core.Modules;
+using LocalRun.Logger;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Xml.Linq;
 
 public class DependencyGraph
 {
+    private static readonly ILogger<DependencyGraph> logger = Log.For<DependencyGraph>();
+
     private class Node
     {
         public ProjectNode Project { get; }
@@ -72,10 +76,7 @@ public class DependencyGraph
 
             if (!projectToSolution.TryGetValue(name, out var solutionPath))
             {
-                Console.BackgroundColor = ConsoleColor.DarkYellow;
-                Console.Write("[WARN]");
-                Console.ResetColor();
-                Console.WriteLine($": Did not find any solution referencing project {csproj}");
+                logger.LogWarning("Did not find any solution referencing project {Project}", csproj);
             }
 
             var allDependencies = doc.Descendants(ns + "ProjectReference")

@@ -2,6 +2,8 @@
 
 using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
+using LocalRun.Logger;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 using System.Linq;
@@ -9,6 +11,8 @@ using System.Threading.Tasks;
 
 public class RunProcessor : IRunProcessor
 {
+    private static readonly ILogger<RunProcessor> logger = Log.For<RunProcessor>();
+
     public async Task RunAsync(LocalRunConfig config)
     {
         var orderedProjects = DependencyGraph.FromConfig(config).TopologicalOrder();
@@ -20,7 +24,7 @@ public class RunProcessor : IRunProcessor
 
     private static async Task StartExecutableAsync(ProjectNode project)
     {
-        Console.WriteLine($"[▶] Starting {project.Name}");
+        logger.LogInformation("[▶] Starting {Project}", project.Name);
         await RunCommandAsync("dotnet", $"run --project \"{project.Path}\"");
     }
 
@@ -52,8 +56,8 @@ public class RunProcessor : IRunProcessor
             //CreateNoWindow = false,
         })!;
 
-        proc.OutputDataReceived += (_, e) => { if (e.Data != null) Console.WriteLine(e.Data); };
-        proc.ErrorDataReceived += (_, e) => { if (e.Data != null) Console.WriteLine(e.Data); };
+        proc.OutputDataReceived += (_, e) => { if (e.Data != null) logger.LogInformation("{Line}", e.Data); };
+        proc.ErrorDataReceived += (_, e) => { if (e.Data != null) logger.LogWarning("{Line}", e.Data); };
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
 

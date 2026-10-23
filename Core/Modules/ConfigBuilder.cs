@@ -2,14 +2,18 @@
 
 using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
+using LocalRun.Logger;
 using LocalRun.Options;
+using Microsoft.Extensions.Logging;
 using System;
 
 public class ConfigBuilder
 {
+    private static readonly ILogger<ConfigBuilder> logger = Log.For<ConfigBuilder>();
+
     public LocalRunConfig BuildConfig(string rootPath, BuildConfigOptions options, string localNugetRepoPath)
     {
-        Console.WriteLine($"[⚙ ] Building dependency graph from {rootPath}...");
+        logger.LogInformation("[⚙ ] Building dependency graph from {RootPath}...", rootPath);
 
         string[] csprojs = Directory.GetFiles(rootPath, "*.csproj", SearchOption.AllDirectories);
         // TODO if git repo and stuff

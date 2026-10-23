@@ -1,14 +1,18 @@
 ﻿namespace LocalRun.Core.Modules;
 
 using LocalRun.Core.Graph;
+using LocalRun.Logger;
+using Microsoft.Extensions.Logging;
+using Rubjerg.Graphviz;
 using System;
-using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 public static class GraphVisualizer
 {
+    private static readonly ILogger logger = Log.For(typeof(GraphVisualizer).FullName!);
+
     public class Config
     {
         public required DependencyGraph Graph { get; init; }
@@ -23,21 +27,20 @@ public static class GraphVisualizer
         string dotPath = Path.Combine(outputFilePath, $"{outputFilePath}.dot");
         string svgPath = Path.Combine(outputFilePath, $"{outputFilePath}.svg");
 
-        Console.WriteLine("[🧩] Generating dependency graph...");
+        logger.LogInformation("[🧩] Generating dependency graph...");
 
         string dot = ToDot(config.Graph);
         await File.WriteAllTextAsync(dotPath, dot);
-        Console.WriteLine($"[📄] DOT file generated: {dotPath}");
+        logger.LogInformation("[📄] DOT file generated: {Path}", dotPath);
 
         try
         {
-            await RunDotAsync(dotPath, svgPath);
-            Console.WriteLine($"[🖼️] SVG graph generated: {svgPath}");
+            RenderSvg(dotPath, svgPath);
+            logger.LogInformation("[🖼️] SVG graph generated: {Path}", svgPath);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[⚠️] Could not generate SVG: {ex.Message}");
-            Console.WriteLine("      Did you install Graphviz (https://graphviz.org/download/) ?");
+            logger.LogWarning("Could not generate SVG: {Error}", ex.Message);
         }
     }
 
@@ -126,26 +129,10 @@ public static class GraphVisualizer
         return $"#{R:X2}{G:X2}{B:X2}";
     }
 
-    private static async Task RunDotAsync(string dotPath, string svgPath)
+    // Graphviz native binaries ship with the Rubjerg.Graphviz package, no local install needed
+    private static void RenderSvg(string dotPath, string svgPath)
     {
-        // TODO don't pull from the path
-        var dotExePath = Path.Combine("C:", "Program Files", "Graphviz", "bin", "dot.exe");
-        var psi = new ProcessStartInfo(dotExePath)
-        {
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-            Arguments = $"-Tsvg \"{dotPath}\" -o \"{svgPath}\"",
-        };
-
-        var proc = Process.Start(psi)!;
-        string? error = await proc.StandardError.ReadToEndAsync();
-        string? output = await proc.StandardOutput.ReadToEndAsync();
-        await proc.WaitForExitAsync();
-
-        if (proc.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"Graphviz failed: {error}");
-        }
+        RootGraph root = RootGraph.FromDotFile(dotPath);
+        root.ToSvgFile(svgPath);
     }
 }
