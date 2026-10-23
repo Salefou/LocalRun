@@ -66,6 +66,9 @@ function Get-NextBuildNumber {
 }
 
 function Get-CommitLabel {
+    # Windows PowerShell turns any native stderr line into a terminating error under 'Stop', even with
+    # 2>$null, and git warns on stderr (e.g. CRLF conversion): rely on exit codes here instead.
+    $ErrorActionPreference = 'Continue'
     $hash = & git -C $repoRoot rev-parse --short=7 HEAD 2>$null
     if ($LASTEXITCODE -ne 0 -or -not $hash) { return 'nogit' }
     & git -C $repoRoot diff --quiet HEAD 2>$null
