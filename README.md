@@ -171,7 +171,7 @@ Say your repositories are checked out under `~/work/repos`, and you changed `Sha
 cd ~/work
 
 # 1. Graph everything that depends on the library you changed
-lrun build --root ./repos --retain-depends-on Shared.Pricing
+lrun build --root ./repos --users-of Shared.Pricing
 
 # 2. Look at it
 lrun visualize --open
@@ -201,7 +201,8 @@ dotnet nuget add source ~/.localnuget --name local
 General form: `lrun <command> [options]`.
 
 > Renamed on 2026-10-24: the tool was `localrun` (now `lrun`, and `localrun-repl` is now `lrun-repl`),
-> and `build-config`, `repack-preview` and `repack-go` are now `build`, `pack` and `go`. The old names
+> and `build-config`, `repack-preview` and `repack-go` are now `build`, `pack` and `go`. The `build` filters
+> `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`. The old names
 > are gone: update scripts that call them. Config file names are unchanged.
 
 - Options are `--name` followed by zero or more values; values run until the next `--option`.
@@ -220,16 +221,16 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--root <dir>` | current directory | Directory scanned recursively for `*.csproj` and `*.sln`. |
 | `--local-nuget <dir>` | `~/.localnuget` | Local NuGet feed that `go` will pack into. Stored in the config. |
 | `--config <file>` | `localrun.config.json` | Config file to write. Parent directories are created. |
-| `--retain-depends-on <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
-| `--retain-is-dependency-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
+| `--users-of <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
+| `--deps-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 
-Both `--retain-*` filters can be combined; they are applied one after the other (depends-on first).
+Both filters can be combined; they are applied one after the other (`--users-of` first).
 Unknown names are ignored, so double-check the spelling against the generated config if the result is empty.
 
 ```sh
-lrun build --root ./repos --retain-is-dependency-of OrderGateway RiskService
-lrun build --root ./repos --config ./plans/pricing.json --retain-depends-on Shared.Pricing
+lrun build --root ./repos --deps-of OrderGateway RiskService
+lrun build --root ./repos --config ./plans/pricing.json --users-of Shared.Pricing
 ```
 
 ### `visualize`
@@ -421,7 +422,7 @@ static async Task<int> LocalRunAsync(params string[] args)
 
 string config = Path.Combine(workDir, "localrun.config.json");
 if (await LocalRunAsync("build", "--root", reposDir, "--config", config,
-                        "--retain-depends-on", "Shared.Pricing") != 0)
+                        "--users-of", "Shared.Pricing") != 0)
     throw new InvalidOperationException("build failed");
 
 var graph = JsonDocument.Parse(await File.ReadAllTextAsync(config));
@@ -438,7 +439,7 @@ Prefer the process boundary from unrelated code: the engine's types are not a st
 ### From PowerShell
 
 ```powershell
-lrun build --root C:\work\repos --retain-is-dependency-of OrderGateway
+lrun build --root C:\work\repos --deps-of OrderGateway
 if ($LASTEXITCODE -ne 0) { throw "build failed ($LASTEXITCODE)" }
 
 lrun pack --patch --suffix "ci$env:BUILD_NUMBER"
@@ -470,7 +471,7 @@ dotnet run --project LocalRun.Repl                 # from source (locks bin/ whi
 
 ```
 LocalRun> cd ~/work
-LocalRun> build --root ./repos --retain-is-dependency-of OrderGateway
+LocalRun> build --root ./repos --deps-of OrderGateway
 LocalRun> visualize --open
 LocalRun> pack --patch --suffix dev
 LocalRun> go
@@ -584,7 +585,7 @@ folder keeps the first copy, so bump the version (e.g. a new suffix) or run
 `dotnet nuget locals global-packages --clear`.
 
 **`Dependency cycle detected, cannot order: A, B`** — the listed projects reference each other
-(possibly through packages). Break the cycle, or filter it out with `--retain-*`.
+(possibly through packages). Break the cycle, or filter it out with `--users-of` / `--deps-of`.
 
 **Build fails with "file is locked by LocalRun"** — a LocalRun process (often a REPL) is still running
 from `bin/`. Exit it, or build to another folder: `dotnet build --artifacts-path <dir>`. To stop it

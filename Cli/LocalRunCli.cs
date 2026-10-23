@@ -220,12 +220,12 @@ public static class LocalRunCli
         Console.WriteLine("  build [options]");
         Console.WriteLine("      Scan a directory tree for projects and write their dependency graph to a config file.");
         Console.WriteLine("      Options:");
-        Console.WriteLine("        --root <dir>                         Directory to scan (default: current directory)");
-        Console.WriteLine("        --local-nuget <dir>                  Local NuGet feed to repack into (default: ~/.localnuget)");
-        Console.WriteLine($"        --config <file>                      Config file to write (default: {DefaultConfigPath})");
-        Console.WriteLine("        --retain-depends-on <names>          Keep projects that depend (directly or indirectly) on given libs/exes");
-        Console.WriteLine("        --retain-is-dependency-of <names>    Keep projects that are dependencies (direct or indirect) of given executables");
-        Console.WriteLine("        --include-external                   Keep dependencies on projects that no solution references");
+        Console.WriteLine("        --root <dir>            Directory to scan (default: current directory)");
+        Console.WriteLine("        --local-nuget <dir>     Local NuGet feed to repack into (default: ~/.localnuget)");
+        Console.WriteLine($"        --config <file>         Config file to write (default: {DefaultConfigPath})");
+        Console.WriteLine("        --users-of <names>      Keep the given projects and all that depend on them, transitively");
+        Console.WriteLine("        --deps-of <names>       Keep the given projects and all they depend on, transitively");
+        Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
         Console.WriteLine();
 
         Console.WriteLine("  visualize [options]");
@@ -268,7 +268,7 @@ public static class LocalRunCli
         Console.WriteLine();
 
         Console.WriteLine("Example:");
-        Console.WriteLine($"  {CommandName} build --root ./repos --retain-is-dependency-of WebApp");
+        Console.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp");
         Console.WriteLine($"  {CommandName} visualize --open");
         Console.WriteLine($"  {CommandName} pack --patch --suffix dev       (review repack.config.json, then:)");
         Console.WriteLine($"  {CommandName} go");

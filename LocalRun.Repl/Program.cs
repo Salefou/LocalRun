@@ -138,7 +138,7 @@ public class Program
         Console.WriteLine();
         Console.WriteLine("Example session:");
         Console.WriteLine("  LocalRun> cd ~/work");
-        Console.WriteLine("  LocalRun> build --root ./repos --retain-is-dependency-of WebApp");
+        Console.WriteLine("  LocalRun> build --root ./repos --deps-of WebApp");
         Console.WriteLine("  LocalRun> visualize --open");
         Console.WriteLine("  LocalRun> pack --patch --suffix dev");
         Console.WriteLine("  LocalRun> go");

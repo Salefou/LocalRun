@@ -96,7 +96,8 @@ shell escaping.
   tool too and added `scripts/install-tools.ps1` so running LocalRun no longer locks `bin/`.
 - 2026-10-24: shortened the CLI. Tool `localrun` → `lrun` (`LocalRunCli.CommandName`), `localrun-repl` →
   `lrun-repl`; commands `build-config` / `repack-preview` / `repack-go` → `build` / `pack` / `go`, with
-  `pack --go` doing both steps. Old names were dropped, not aliased. Package ids (`LocalRun`,
+  `pack --go` doing both steps. `build` filters `--retain-depends-on` / `--retain-is-dependency-of` →
+  `--users-of` / `--deps-of`. Old names were dropped, not aliased. Package ids (`LocalRun`,
   `LocalRun.Repl`), assembly names and config file names are unchanged.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
