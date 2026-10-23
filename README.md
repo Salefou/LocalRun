@@ -64,7 +64,7 @@ so you can **inspect or hand-edit** the plan between steps.
 3. **`pack`** decides, for every project, its current version (from the csproj, or from
    your NuGet sources with `--remote`) and the bumped version it will be packed as. Nothing is built
    yet: the plan is written to `repack.config.json` for you to review.
-4. **`go`** executes the plan: `dotnet restore` against the local feed, then
+4. **`go`** executes the plan: `dotnet restore` with the local feed added to your sources, then
    `dotnet pack --no-restore -o <feed> -p:PackageVersion=<new version>`.
    `pack --go` does steps 3 and 4 in one command, when you don't need to review the plan.
 5. **`run`** starts the executables of the config with `dotnet run`, dependencies first.
@@ -274,7 +274,10 @@ Execute a repack config. For each connected component in parallel, depth by dept
 a depth in parallel:
 
 1. `dotnet clean <csproj> --verbosity minimal` (only if the plan was made with `--clean`)
-2. `dotnet restore <csproj> --source <local feed> --verbosity minimal`
+2. `dotnet restore <csproj> -p:RestoreAdditionalProjectSources=<local feed> --verbosity minimal`:
+   the local feed is used **in addition to** the sources of your `NuGet.config`, so packages of earlier
+   depths come from the feed and third-party packages from your usual sources. The feed folder is
+   created if it doesn't exist yet.
 3. `dotnet pack <csproj> --no-restore -o <local feed> -p:PackageVersion=<to version>`
 
 | Option | Default | Description |
@@ -574,9 +577,9 @@ Harmless: the SVG is still produced, using Graphviz's built-in text rendering.
 **`'…localrun.config.json' not found. Run 'lrun build' first.`** — the path is resolved against the
 current directory. Run from the directory where you ran `build`, or pass `--config`.
 
-**`go` fails restoring third-party packages** — restore uses the local feed as its *only*
-source. Packages that are not in the feed must already be in your NuGet global packages folder
-(`~/.nuget/packages`), which is the case once the project has been restored normally at least once.
+**`go` fails restoring a package (`NU1101`)** — restore uses your `NuGet.config` sources plus the
+local feed. Check that the package's source is configured for that project (`dotnet nuget list source`),
+and, for a LocalRun-packed dependency, that its project sits at a lower depth in the same plan.
 
 **Consumers keep the old version** — check that the local feed is a NuGet source for them, that the
 bumped version is higher than what they reference (or that they use a floating version), and clear
