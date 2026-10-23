@@ -16,21 +16,27 @@ using System.Text.Json;
 
 public class Program
 {
+    public const int ExitSuccess = 0;
+    public const int ExitFailure = 1;
+    public const int ExitUsage = 2;
+
+    private const string DefaultConfigPath = "localrun.config.json";
+    private const string DefaultRepackConfigPath = "repack.config.json";
+    private const string DefaultVisualsPath = "dependencies";
+
     private static readonly ILogger<Program> logger = Log.For<Program>();
 
-    private static readonly string UserDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
-    private static readonly string localNugetPath = Path.Combine(UserDir, ".localnuget");
-    private static readonly string ReposRootPath = Path.Combine(UserDir, "source", "repos");
-    private static readonly string PathToConfig = $"{Path.GetFullPath("..\\..\\..\\")}{"Output\\localrun.config.json"}";
-    private static readonly string PathToRepackConfig = $"{Path.GetFullPath("..\\..\\..\\")}{"Output\\repack.config.json"}";
-    private static readonly string PathToVisuals = $"{Path.GetFullPath("..\\..\\..\\")}{"Visuals\\dependencies"}";
+    private static string DefaultLocalNugetPath =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".localnuget");
 
-    public static async Task Main()
+    public static async Task<int> Main(string[] args)
     {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
         try
         {
-            await RunReplAsync();
+            return await RunAsync(args);
         }
         finally
         {
@@ -38,131 +44,140 @@ public class Program
         }
     }
 
-    private static async Task RunReplAsync()
+    private static async Task<int> RunAsync(string[] args)
     {
-        Console.Title = "LocalRun";
-        Console.OutputEncoding = System.Text.Encoding.UTF8;
-
-        PrintWelcome();
-
-        var configBuilder = new ConfigBuilder();
-        var repacker = new RepackExecutor();
-        var runProcessor = new RunProcessor();
-        var repackConfigBuilder = new RepackConfigBuilder();
-
-        while (true)
+        if (args.Length == 0)
         {
-            Console.Write("LocalRun> ");
-            var input = Console.ReadLine()?.Trim();
-            if (string.IsNullOrEmpty(input)) continue;
+            PrintHelp();
+            return ExitUsage;
+        }
 
-            var parts = input.Split(' ', 2);
-            var cmd = parts[0].ToLowerInvariant();
-            var args = parts.Length > 1 ? parts[1].Split(' ') : [];
-
-            try
+        string cmd = args[0].ToLowerInvariant();
+        try
+        {
+            var options = new CommandLineArgs(args.Skip(1));
+            switch (cmd)
             {
-                switch (cmd)
-                {
-                    case "build-config":
-                        BuildConfigOptions configOptions = BuildConfigOptionsParser.Parse(args);
-                        LocalRunConfig localRunConfig = configBuilder.BuildConfig(ReposRootPath, configOptions, localNugetPath);
-                        await File.WriteAllTextAsync(PathToConfig, JsonSerializer.Serialize(localRunConfig, new JsonSerializerOptions { WriteIndented = true }));
-                        logger.LogInformation("[✔ ] Configuration written to {Path}", PathToConfig);
-                        break;
-
-                    case "repack-preview":
-                        RepackOptions repackOptions = RepackOptionsParser.Parse(args);
-                        LocalRunConfig? currentConfig = await ReadConfigFromFile();
-                        if (currentConfig == null)
-                        {
-                            logger.LogWarning("No config found. Run 'build-config' first.");
-                            continue;
-                        }
-                        RepackConfig writeRepackConfig = await repackConfigBuilder.BuildRepackConfig(currentConfig, repackOptions);
-                        await File.WriteAllTextAsync(PathToRepackConfig, JsonSerializer.Serialize(writeRepackConfig, new JsonSerializerOptions { WriteIndented = true }));
-                        break;
-
-                    case "repack-go":
-                        RepackConfig? readRepackConfig = await ReadRepackConfigFromFile();
-                        if (readRepackConfig == null)
-                        {
-                            logger.LogWarning("No repack config found. Run 'repack-preview' first.");
-                            continue;
-                        }
-                        await repacker.RepackAndRebuildAsync(readRepackConfig);
-                        break;
-
-                    case "run":
-                        LocalRunConfig? runConfig = await ReadConfigFromFile();
-                        if (runConfig != null)
-                            await runProcessor.RunAsync(runConfig);
-                        else
-                            logger.LogWarning("No config found. Run 'build-config' first.");
-                        break;
-                    case "visualize":
-                        LocalRunConfig? visualsConfig = await ReadConfigFromFile();
-                        if (visualsConfig != null)
-                        {
-                            DependencyGraph graph = DependencyGraph.FromConfig(visualsConfig);
-                            GraphVisualizer.Config config = new()
-                            {
-                                Graph = graph,
-                                OutputFilePath = PathToVisuals,
-                            };
-                            await GraphVisualizer.GenerateAsync(config);
-                            OpenWithDefaultApp($"{PathToVisuals}.svg");
-                        }
-
-                        break;
-                    case "help":
-                        PrintHelp();
-                        break;
-
-                    case "exit":
-                        return;
-
-                    default:
-                        logger.LogWarning("Unknown command '{Command}'. Type 'help' for available commands.", cmd);
-                        break;
-                }
+                case "build-config":
+                    await BuildConfigAsync(options);
+                    break;
+                case "visualize":
+                    await VisualizeAsync(options);
+                    break;
+                case "repack-preview":
+                    await RepackPreviewAsync(options);
+                    break;
+                case "repack-go":
+                    await RepackGoAsync(options);
+                    break;
+                case "run":
+                    await RunExecutablesAsync(options);
+                    break;
+                case "help" or "--help" or "-h":
+                    PrintHelp();
+                    break;
+                default:
+                    throw new UsageException($"Unknown command '{cmd}'.");
             }
-            catch (Exception ex)
-            {
-                logger.LogError("Command '{Command}' failed: {Error}", cmd, ex.Message);
-                logger.LogDebug(ex, "Command '{Command}' failure details", cmd);
-            }
+            return ExitSuccess;
+        }
+        catch (UsageException ex)
+        {
+            logger.LogError("{Error} Run 'localrun help' for usage.", ex.Message);
+            return ExitUsage;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError("Command '{Command}' failed: {Error}", cmd, ex.Message);
+            logger.LogDebug(ex, "Command '{Command}' failure details", cmd);
+            return ExitFailure;
         }
     }
 
-    private static async Task<T?> ReadFromFile<T>(string pathToFile)
+    private static async Task BuildConfigAsync(CommandLineArgs args)
+    {
+        string rootPath = Path.GetFullPath(args.Value("--root") ?? Directory.GetCurrentDirectory());
+        string localNugetPath = Path.GetFullPath(args.Value("--local-nuget") ?? DefaultLocalNugetPath);
+        string configPath = Path.GetFullPath(args.Value("--config") ?? DefaultConfigPath);
+        BuildConfigOptions configOptions = BuildConfigOptionsParser.Parse(args);
+        args.EnsureAllConsumed();
+
+        if (!Directory.Exists(rootPath))
+            throw new DirectoryNotFoundException($"Root directory not found: {rootPath}");
+
+        LocalRunConfig localRunConfig = new ConfigBuilder().BuildConfig(rootPath, configOptions, localNugetPath);
+        await WriteToFile(configPath, localRunConfig);
+        logger.LogInformation("[✔ ] Configuration written to {Path}", configPath);
+    }
+
+    private static async Task VisualizeAsync(CommandLineArgs args)
+    {
+        string configPath = args.Value("--config") ?? DefaultConfigPath;
+        string outputPath = args.Value("--output") ?? DefaultVisualsPath;
+        bool open = args.Flag("--open");
+        args.EnsureAllConsumed();
+
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build-config");
+        string svgPath = await GraphVisualizer.GenerateAsync(new GraphVisualizer.Config
+        {
+            Graph = DependencyGraph.FromConfig(config),
+            OutputFilePath = outputPath,
+        });
+        if (open)
+            OpenWithDefaultApp(svgPath);
+    }
+
+    private static async Task RepackPreviewAsync(CommandLineArgs args)
+    {
+        string configPath = args.Value("--config") ?? DefaultConfigPath;
+        string repackConfigPath = Path.GetFullPath(args.Value("--repack-config") ?? DefaultRepackConfigPath);
+        RepackOptions repackOptions = RepackOptionsParser.Parse(args);
+        args.EnsureAllConsumed();
+
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build-config");
+        RepackConfig repackConfig = await new RepackConfigBuilder().BuildRepackConfig(config, repackOptions);
+        await WriteToFile(repackConfigPath, repackConfig);
+        logger.LogInformation("[✔ ] Repack configuration written to {Path}", repackConfigPath);
+    }
+
+    private static async Task RepackGoAsync(CommandLineArgs args)
+    {
+        string repackConfigPath = args.Value("--repack-config") ?? DefaultRepackConfigPath;
+        args.EnsureAllConsumed();
+
+        RepackConfig repackConfig = await ReadFromFile<RepackConfig>(repackConfigPath, "repack-preview");
+        await new RepackExecutor().RepackAndRebuildAsync(repackConfig);
+    }
+
+    private static async Task RunExecutablesAsync(CommandLineArgs args)
+    {
+        string configPath = args.Value("--config") ?? DefaultConfigPath;
+        args.EnsureAllConsumed();
+
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build-config");
+        await new RunProcessor().RunAsync(config);
+    }
+
+    private static async Task<T> ReadFromFile<T>(string pathToFile, string producingCommand)
         where T : class
     {
-        if (!File.Exists(pathToFile))
-            return null;
-        return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(pathToFile));
+        string fullPath = Path.GetFullPath(pathToFile);
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException($"'{fullPath}' not found. Run '{producingCommand}' first.");
+        return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(fullPath))
+            ?? throw new InvalidDataException($"'{fullPath}' is empty.");
     }
 
-    private static async Task<LocalRunConfig?> ReadConfigFromFile()
+    private static async Task WriteToFile<T>(string fullPath, T content)
     {
-        return await ReadFromFile<LocalRunConfig>(PathToConfig);
-    }
-
-    private static async Task<RepackConfig?> ReadRepackConfigFromFile()
-    {
-        return await ReadFromFile<RepackConfig>(PathToRepackConfig);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        await File.WriteAllTextAsync(fullPath, JsonSerializer.Serialize(content, WriteOptions));
     }
 
     public static void OpenWithDefaultApp(string filePath)
     {
         try
         {
-            if (!File.Exists(filePath))
-            {
-                logger.LogWarning("File not found: {Path}", filePath);
-                return;
-            }
-
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 Process.Start(new ProcessStartInfo
@@ -190,93 +205,74 @@ public class Program
         }
     }
 
-    private static void PrintWelcome()
-    {
-        Console.WriteLine(Art.LocalRunAsciiFlowerPower);
-        Console.WriteLine("──────────────────────────────────────────────────────────────");
-        Console.WriteLine(" Welcome to LocalRun — your local .NET dependency orchestrator");
-        Console.WriteLine("──────────────────────────────────────────────────────────────");
-        Console.WriteLine();
-        Console.WriteLine("LocalRun lets you rebuild and run only what matters locally —");
-        Console.WriteLine("analyzing repositories, tracking dependency graphs, and");
-        Console.WriteLine("selectively repacking components to a local NuGet source.");
-        Console.WriteLine();
-        Console.WriteLine("Use it to:");
-        Console.WriteLine(" • Scan repositories and detect changed or relevant projects.");
-        Console.WriteLine(" • Build a dependency graph and save it as a config file.");
-        Console.WriteLine(" • Preview version bumps before repackaging.");
-        Console.WriteLine(" • Repack projects to your LocalNuGet cache.");
-        Console.WriteLine(" • Rebuild or run executables in dependency order.");
-        Console.WriteLine();
-        Console.WriteLine("Type 'help' for a list of available commands.");
-        Console.WriteLine();
-    }
-
     private static void PrintHelp()
     {
-        Console.WriteLine("──────────────────────────────");
-        Console.WriteLine(" LocalRun Command Reference");
-        Console.WriteLine("──────────────────────────────");
+        Console.WriteLine(Art.LocalRunAsciiFlowerPower);
+        Console.WriteLine("LocalRun — rebuild and run only what matters locally: scan repositories,");
+        Console.WriteLine("track dependency graphs and repack components to a local NuGet source.");
+        Console.WriteLine();
+        Console.WriteLine("Usage: localrun <command> [options]");
+        Console.WriteLine();
+        Console.WriteLine("Relative paths are resolved against the current directory.");
+        Console.WriteLine("Exit codes: 0 success, 1 command failed, 2 invalid command line.");
         Console.WriteLine();
         Console.WriteLine("Commands:");
         Console.WriteLine();
 
         Console.WriteLine("  build-config [options]");
-        Console.WriteLine("      Analyze the repository tree and build a dependency graph.");
-        Console.WriteLine("      Produces 'localrun.config.json' under /Output.");
+        Console.WriteLine("      Scan a directory tree for projects and write their dependency graph to a config file.");
         Console.WriteLine("      Options:");
+        Console.WriteLine("        --root <dir>                         Directory to scan (default: current directory)");
+        Console.WriteLine("        --local-nuget <dir>                  Local NuGet feed to repack into (default: ~/.localnuget)");
+        Console.WriteLine($"        --config <file>                      Config file to write (default: {DefaultConfigPath})");
         Console.WriteLine("        --retain-depends-on <names>          Keep projects that depend (directly or indirectly) on given libs/exes");
         Console.WriteLine("        --retain-is-dependency-of <names>    Keep projects that are dependencies (direct or indirect) of given executables");
-        Console.WriteLine("        --root <path>                        Override default root search path (default: ~/source/repos)");
-        Console.WriteLine("      Example:");
-        Console.WriteLine("        build-config --retain-depends-on Shared.Core Utils --retain-is-dependency-of WebApp DataProcessor");
+        Console.WriteLine("        --include-external                   Keep dependencies on projects that no solution references");
         Console.WriteLine();
 
-        Console.WriteLine("  visualize");
-        Console.WriteLine("      Generate a visual graph of the dependencies in the current config.");
-        Console.WriteLine("      Outputs an SVG to /Visuals/dependencies.svg and opens it automatically.");
+        Console.WriteLine("  visualize [options]");
+        Console.WriteLine("      Render the dependency graph of a config file as DOT and SVG.");
+        Console.WriteLine("      Options:");
+        Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
+        Console.WriteLine($"        --output <path>         Output path without extension (default: {DefaultVisualsPath})");
+        Console.WriteLine("        --open                  Open the SVG with the default application");
         Console.WriteLine();
 
         Console.WriteLine("  repack-preview [options]");
-        Console.WriteLine("      Create 'repack.config.json' previewing what will be repacked and to which versions.");
+        Console.WriteLine("      Write a repack config previewing what will be repacked and to which versions.");
         Console.WriteLine("      Options:");
+        Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
+        Console.WriteLine($"        --repack-config <file>  Repack config file to write (default: {DefaultRepackConfigPath})");
         Console.WriteLine("        --major                 Increment major version (resets minor/patch)");
         Console.WriteLine("        --minor                 Increment minor version (resets patch)");
         Console.WriteLine("        --patch                 Increment patch version");
-        Console.WriteLine("        --suffix <text>         Add or replace version suffix (e.g., '-local', '-beta')");
-        Console.WriteLine("        --remote                Query both local and remote NuGet sources for version info");
-        Console.WriteLine("      Example:");
-        Console.WriteLine("        repack-preview --patch --suffix dev");
+        Console.WriteLine("        --alpha                 Shorthand for --patch --suffix alpha");
+        Console.WriteLine("        --suffix <text>         Add or replace version suffix (e.g., 'local', 'beta')");
+        Console.WriteLine("        --remote                Query the configured NuGet sources for version info");
+        Console.WriteLine("        --clean                 Clean projects before restoring them");
         Console.WriteLine();
 
-        Console.WriteLine("  repack-go");
-        Console.WriteLine("      Execute the repack based on 'repack.config.json'.");
-        Console.WriteLine("      Packages are created in dependency order and pushed to your LocalNuGet feed.");
+        Console.WriteLine("  repack-go [options]");
+        Console.WriteLine("      Pack projects in dependency order into the local NuGet feed, following a repack config.");
+        Console.WriteLine("      Options:");
+        Console.WriteLine($"        --repack-config <file>  Repack config file to read (default: {DefaultRepackConfigPath})");
         Console.WriteLine();
 
-        Console.WriteLine("  run");
-        Console.WriteLine("      Launch executables listed in the config, in dependency order.");
-        Console.WriteLine("      Ideal for partial local deployment of a microservice ecosystem.");
+        Console.WriteLine("  run [options]");
+        Console.WriteLine("      Launch the executables of a config file, in dependency order.");
+        Console.WriteLine("      Options:");
+        Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
         Console.WriteLine();
 
         Console.WriteLine("  help");
         Console.WriteLine("      Show this help message.");
         Console.WriteLine();
 
-        Console.WriteLine("  exit");
-        Console.WriteLine("      Quit LocalRun interactive mode.");
-        Console.WriteLine();
-
-        Console.WriteLine("──────────────────────────────");
-        Console.WriteLine(" Example session:");
-        Console.WriteLine("──────────────────────────────");
-        Console.WriteLine("  LocalRun> build-config --retain-depends-on TweetToTradeCore Assembly-Seb");
-        Console.WriteLine("  LocalRun> build-config --retain-is-dependency-of AlgoSample DLS.Dev AlgorithmsTest");
-        Console.WriteLine("  LocalRun> visualize");
-        Console.WriteLine("  LocalRun> repack-preview --patch --suffix dev");
-        Console.WriteLine("  LocalRun> repack-preview --remote --alpha");
-        Console.WriteLine("  LocalRun> repack-go");
-        Console.WriteLine("  LocalRun> run");
-        Console.WriteLine("──────────────────────────────");
+        Console.WriteLine("Example:");
+        Console.WriteLine("  localrun build-config --root ./repos --retain-is-dependency-of WebApp");
+        Console.WriteLine("  localrun visualize --open");
+        Console.WriteLine("  localrun repack-preview --patch --suffix dev");
+        Console.WriteLine("  localrun repack-go");
+        Console.WriteLine("  localrun run");
     }
 }

@@ -17,15 +17,17 @@ public static class GraphVisualizer
     {
         public required DependencyGraph Graph { get; init; }
 
+        /// <summary>Output path without extension: '.dot' and '.svg' files are written next to each other.</summary>
         public required string OutputFilePath { get; init; }
     }
 
-    public static async Task GenerateAsync(Config config)
+    /// <returns>The path of the generated SVG file.</returns>
+    public static async Task<string> GenerateAsync(Config config)
     {
-        string outputFilePath = config.OutputFilePath;
-        Directory.CreateDirectory(outputFilePath);
-        string dotPath = Path.Combine(outputFilePath, $"{outputFilePath}.dot");
-        string svgPath = Path.Combine(outputFilePath, $"{outputFilePath}.svg");
+        string outputFilePath = Path.GetFullPath(config.OutputFilePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath)!);
+        string dotPath = $"{outputFilePath}.dot";
+        string svgPath = $"{outputFilePath}.svg";
 
         logger.LogInformation("[🧩] Generating dependency graph...");
 
@@ -33,15 +35,9 @@ public static class GraphVisualizer
         await File.WriteAllTextAsync(dotPath, dot);
         logger.LogInformation("[📄] DOT file generated: {Path}", dotPath);
 
-        try
-        {
-            RenderSvg(dotPath, svgPath);
-            logger.LogInformation("[🖼️] SVG graph generated: {Path}", svgPath);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning("Could not generate SVG: {Error}", ex.Message);
-        }
+        RenderSvg(dotPath, svgPath);
+        logger.LogInformation("[🖼️] SVG graph generated: {Path}", svgPath);
+        return svgPath;
     }
 
     private static string ToDot(DependencyGraph graph)

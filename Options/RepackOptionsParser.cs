@@ -1,42 +1,38 @@
 ﻿namespace LocalRun.Options;
 internal class RepackOptionsParser
 {
-    public static RepackOptions Parse(string[] args)
+    public static RepackOptions Parse(CommandLineArgs args)
     {
         BumpType bumpType = BumpType.None;
-        string? suffix = null;
-        bool remoteAsRef = false;
-        bool clean = false;
-        for (int i = 0; i < args.Length; i++)
-        {
-            switch (args[i])
-            {
-                case "--remote":
-                    remoteAsRef = true;
-                    break;
-                case "--clean":
-                    clean = true;
-                    break;
+        string? suffix = args.Value("--suffix");
 
-                case "--suffix":
-                    suffix = args[i + 1];
-                    break;
-                case "--patch":
-                    bumpType = BumpType.Patch;
-                    break;
-                case "--minor":
-                    bumpType = BumpType.Minor;
-                    break;
-                case "--major":
-                    bumpType = BumpType.Major;
-                    break;
-                case "--alpha":
-                    // convenience
-                    bumpType = BumpType.Patch;
-                    suffix = "alpha";
-                    break;
-            }
+        List<string> bumpFlags = [];
+        if (args.Flag("--patch"))
+        {
+            bumpType = BumpType.Patch;
+            bumpFlags.Add("--patch");
         }
+        if (args.Flag("--minor"))
+        {
+            bumpType = BumpType.Minor;
+            bumpFlags.Add("--minor");
+        }
+        if (args.Flag("--major"))
+        {
+            bumpType = BumpType.Major;
+            bumpFlags.Add("--major");
+        }
+        if (args.Flag("--alpha"))
+        {
+            // convenience
+            if (suffix != null)
+                throw new UsageException("'--alpha' cannot be combined with '--suffix'.");
+            bumpType = BumpType.Patch;
+            suffix = "alpha";
+            bumpFlags.Add("--alpha");
+        }
+        if (bumpFlags.Count > 1)
+            throw new UsageException($"Only one version bump can be given, got {string.Join(", ", bumpFlags)}.");
 
         return new RepackOptions()
         {
@@ -45,8 +41,8 @@ internal class RepackOptionsParser
                 BumpType = bumpType,
                 Suffix = suffix,
             },
-            UseRemoteAsVersionReference = remoteAsRef,
-            CleanBeforeRestore = clean,
+            UseRemoteAsVersionReference = args.Flag("--remote"),
+            CleanBeforeRestore = args.Flag("--clean"),
         };
     }
 }
