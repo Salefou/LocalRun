@@ -6,7 +6,7 @@ using System;
 using System.IO;
 
 /// <summary>
-/// Interactive shell over <see cref="LocalRunCli"/>: every line is run as a <c>localrun</c> command,
+/// Interactive shell over <see cref="LocalRunCli"/>: every line is run as an <c>lrun</c> command,
 /// in-process, plus a few shell built-ins (cd, pwd, exit).
 /// </summary>
 public class Program
@@ -50,6 +50,9 @@ public class Program
                 Console.WriteLine(ex.Message);
                 continue;
             }
+            // Accept "lrun build" as well as "build": messages and docs show the prefixed form
+            if (args.Length > 0 && args[0].Equals(LocalRunCli.CommandName, StringComparison.OrdinalIgnoreCase))
+                args = args[1..];
             if (args.Length == 0) continue;
 
             switch (args[0].ToLowerInvariant())
@@ -126,7 +129,7 @@ public class Program
     {
         Console.WriteLine();
         Console.WriteLine("REPL:");
-        Console.WriteLine("  Type commands without the 'localrun' prefix. Quote values containing spaces.");
+        Console.WriteLine("  Type commands with or without the 'lrun' prefix. Quote values containing spaces.");
         Console.WriteLine("  Config files are read and written relative to the working directory.");
         Console.WriteLine();
         Console.WriteLine("  cd <dir>    Change the working directory");
@@ -135,10 +138,10 @@ public class Program
         Console.WriteLine();
         Console.WriteLine("Example session:");
         Console.WriteLine("  LocalRun> cd ~/work");
-        Console.WriteLine("  LocalRun> build-config --root ./repos --retain-is-dependency-of WebApp");
+        Console.WriteLine("  LocalRun> build --root ./repos --retain-is-dependency-of WebApp");
         Console.WriteLine("  LocalRun> visualize --open");
-        Console.WriteLine("  LocalRun> repack-preview --patch --suffix dev");
-        Console.WriteLine("  LocalRun> repack-go");
+        Console.WriteLine("  LocalRun> pack --patch --suffix dev");
+        Console.WriteLine("  LocalRun> go");
         Console.WriteLine("  LocalRun> run");
     }
 }

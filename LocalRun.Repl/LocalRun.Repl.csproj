@@ -10,7 +10,7 @@
 	<PropertyGroup>
 		<!-- Installed with scripts/install-tools.ps1 -->
 		<PackAsTool>true</PackAsTool>
-		<ToolCommandName>localrun-repl</ToolCommandName>
+		<ToolCommandName>lrun-repl</ToolCommandName>
 	</PropertyGroup>
 
 	<ItemGroup>

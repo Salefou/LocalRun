@@ -14,7 +14,7 @@
 	<PropertyGroup>
 		<!-- Installable as a .NET tool: pack it, then install the package with 'dotnet tool install' -->
 		<PackAsTool>true</PackAsTool>
-		<ToolCommandName>localrun</ToolCommandName>
+		<ToolCommandName>lrun</ToolCommandName>
 	</PropertyGroup>
 
 	<ItemGroup>
