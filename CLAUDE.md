@@ -123,6 +123,5 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
   referenced for it.
 - Projects are keyed by file name: same-named projects in different repos collide, and one silently
   disappears (`DependencyGraph` dictionary overwrite; `samples/edge-cases/name-collision`).
-- `SolutionScanner` only reads `*.sln`, not `.slnx` (the .NET 10 SDK default; `samples/edge-cases/slnx-only`).
 - `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
   `IsNewerThanRemoteAsync`).

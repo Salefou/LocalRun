@@ -39,6 +39,10 @@ What each part is there to exercise:
 `edge-cases/` holds graphs that are *meant* to misbehave. It sits outside `workspace/` so it never
 breaks a normal run.
 
+`lrun build` run from the repository root scans `samples/` too. Its only expected warnings are the
+intended ones: `LrSample.Orphan` in no solution, and the `LrEdge.A, LrEdge.B, LrEdge.C` cycle with
+`LrEdge.Top` kept without it. Any other warning is a regression.
+
 ## Setup
 
 Use the installed `lrun` (`scripts\install-tools.cmd` at the repo root), or `dotnet run --project ..\LocalRun.csproj --`
@@ -139,12 +143,12 @@ lrun build --root edge-cases/slnx-only --config edge.json
 |---|---|
 | `cycle/`: A → B → C → A, with A → Base and Top → A | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `LrEdge.Top` kept without its dependency on it. The config holds Base and Top |
 | `name-collision/`: two `LrEdge.Shared` | Known limitation: only `repo-two`'s (2.0.0) is kept, `repo-one`'s silently disappears |
-| `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Known limitation: `.slnx` is not read, so Modern is reported as in no solution (`Did not find any solution referencing project …`) although it is in one. That warning *is* the limitation on show: Modern is not meant to be an orphan |
+| `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Succeeds with no warning: `.slnx` solutions (the .NET 10 SDK default) are read like `.sln` ones. A `Did not find any solution referencing …LrEdge.Modern` warning means `.slnx` support regressed |
 
 ## Changing the samples
 
 - Versions, `OutputType` and references go in each `.csproj` (LocalRun reads the XML). Shared settings go in
   `Directory.Build.props`.
-- Solutions must be classic `.sln`: with the .NET 10 SDK use `dotnet new sln --format sln`, and
-  `dotnet sln add --include-references false` (otherwise referenced projects such as Orphan are added too).
+- `.sln` and `.slnx` both work. With the .NET 10 SDK, `dotnet sln add` adds referenced projects too:
+  pass `--include-references false` (otherwise Orphan, for example, would land in `Reporting.sln`).
 - The root `LocalRun.csproj` excludes `samples\**` from its globs, so nothing here is compiled into `lrun`.

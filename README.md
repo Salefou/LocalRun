@@ -57,7 +57,7 @@ so you can **inspect or hand-edit** the plan between steps.
 ```
 
 1. **`build`** finds every `*.csproj` under the root, reads its name, `OutputType`,
-   `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` files
+   `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
    that reference them. Optional filters keep only the part of the graph you care about. The result
    is written in topological order to `localrun.config.json`.
 2. **`visualize`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
@@ -635,5 +635,3 @@ Exit it and re-run the script.
   at a time.
 - Dependencies are matched **by name**: two projects with the same file name in different repos collide,
   and one of them silently disappears from the graph (no warning yet).
-- **`.slnx` solutions are not read** (the default format of `dotnet new sln` since the .NET 10 SDK):
-  their projects count as being in no solution. Use `dotnet new sln --format sln`, or `--include-external`.
