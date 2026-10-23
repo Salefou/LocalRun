@@ -177,7 +177,7 @@ public class DependencyGraph
     {
         Dictionary<string, int> nameToDepth = new();
         int depth = 0;
-        List<List<Node>> projectsClasses = TopologicalClassOrder(RootsNodes);
+        List<List<Node>> projectsClasses = TopologicalClassOrder();
         foreach (var projectsClass in projectsClasses)
         {
             foreach (var proj in projectsClass)
@@ -227,37 +227,40 @@ public class DependencyGraph
         return components;
     }
 
-    private List<List<Node>> TopologicalClassOrder(IEnumerable<Node> roots)
+    /// <summary>
+    /// Kahn's algorithm, layered: a node lands in the layer right after its deepest dependency,
+    /// so its depth is the longest path from a root and every dependency sits in a strictly lower layer.
+    /// Layers are sorted by name to keep the output deterministic.
+    /// </summary>
+    private List<List<Node>> TopologicalClassOrder()
     {
+        var remainingDependencies = _nodesPerName.Values.ToDictionary(node => node, node => node.DependsOn.Count);
         List<List<Node>> topologicalClassOrder = [];
-        HashSet<Node> visited = new();
 
-        Queue<Node> toVisitThisLevel = new();
-        Queue<Node> toVisitNextLevel = new(roots);
-
-        while (toVisitNextLevel.Count != 0)
+        List<Node> currentClass = [.. RootsNodes];
+        while (currentClass.Count != 0)
         {
-            (toVisitNextLevel, toVisitThisLevel) = (toVisitThisLevel, toVisitNextLevel);
-            toVisitNextLevel.Clear();
-
-            List<Node> currentClass = [];
+            currentClass.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Project.Name, b.Project.Name));
             topologicalClassOrder.Add(currentClass);
 
-            while (toVisitThisLevel.Count != 0)
+            List<Node> nextClass = [];
+            foreach (var node in currentClass)
             {
-                Node next = toVisitThisLevel.Dequeue();
-                if (visited.Add(next))
+                foreach (var dependent in node.Dependents)
                 {
-                    //topologicalClassOrder[..(topologicalClassOrder.Count - 2)]
-                    //    .ForEach(previousClass => previousClass.Remove(next));
-                    currentClass.Add(next);
-
-                    foreach (var neighbour in next.Dependents)
+                    if (--remainingDependencies[dependent] == 0)
                     {
-                        toVisitNextLevel.Enqueue(neighbour);
+                        nextClass.Add(dependent);
                     }
                 }
             }
+            currentClass = nextClass;
+        }
+
+        var unordered = remainingDependencies.Where(kv => kv.Value > 0).Select(kv => kv.Key.Project.Name).Order().ToList();
+        if (unordered.Count != 0)
+        {
+            throw new InvalidOperationException($"Dependency cycle detected, cannot order: {string.Join(", ", unordered)}");
         }
 
         return topologicalClassOrder;
@@ -265,7 +268,7 @@ public class DependencyGraph
 
     public IEnumerable<ProjectNode> TopologicalOrder()
     {
-        return TopologicalClassOrder(RootsNodes).SelectMany(level => level.Select(node => node.Project));
+        return TopologicalClassOrder().SelectMany(level => level.Select(node => node.Project));
     }
 
     public IEnumerable<ProjectNode> AllProjects => _nodesPerName.Values.Select(n => n.Project);

@@ -80,5 +80,10 @@ public class RepackExecutor
         proc.BeginOutputReadLine();
         proc.BeginErrorReadLine();
         await proc.WaitForExitAsync();
+
+        if (proc.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Command `{fileName} {args}` failed with exit code {proc.ExitCode}");
+        }
     }
 }

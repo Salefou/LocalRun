@@ -5,6 +5,7 @@ using LocalRun.Core.Model;
 using LocalRun.Core.Modules;
 using LocalRun.Core.Processing;
 using LocalRun.Core.Resources;
+using LocalRun.Logger;
 using LocalRun.Options;
 using System;
 using System.Diagnostics;
@@ -14,6 +15,8 @@ using System.Text.Json;
 
 public class Program
 {
+    private static readonly ILoggerShishe<Program> logger = LoggerFactory.Create<Program>();
+
     private static readonly string UserDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     private static readonly string localNugetPath = Path.Combine(UserDir, ".localnuget");
@@ -44,71 +47,80 @@ public class Program
             var cmd = parts[0].ToLowerInvariant();
             var args = parts.Length > 1 ? parts[1].Split(' ') : [];
 
-            switch (cmd)
+            try
             {
-                case "build-config":
-                    BuildConfigOptions configOptions = BuildConfigOptionsParser.Parse(args);
-                    LocalRunConfig localRunConfig = configBuilder.BuildConfig(ReposRootPath, configOptions, localNugetPath);
-                    await File.WriteAllTextAsync(PathToConfig, JsonSerializer.Serialize(localRunConfig, new JsonSerializerOptions { WriteIndented = true }));
-                    Console.WriteLine($"[✔ ] Configuration written to {PathToConfig}");
-                    break;
+                switch (cmd)
+                {
+                    case "build-config":
+                        BuildConfigOptions configOptions = BuildConfigOptionsParser.Parse(args);
+                        LocalRunConfig localRunConfig = configBuilder.BuildConfig(ReposRootPath, configOptions, localNugetPath);
+                        await File.WriteAllTextAsync(PathToConfig, JsonSerializer.Serialize(localRunConfig, new JsonSerializerOptions { WriteIndented = true }));
+                        Console.WriteLine($"[✔ ] Configuration written to {PathToConfig}");
+                        break;
 
-                case "repack-preview":
-                    RepackOptions repackOptions = RepackOptionsParser.Parse(args);
-                    LocalRunConfig? currentConfig = await ReadConfigFromFile();
-                    if (currentConfig == null)
-                    {
-                        Console.WriteLine("No config found. Run 'build-config' first.");
-                        continue;
-                    }
-                    RepackConfig writeRepackConfig = await repackConfigBuilder.BuildRepackConfig(currentConfig, repackOptions);
-                    await File.WriteAllTextAsync(PathToRepackConfig, JsonSerializer.Serialize(writeRepackConfig, new JsonSerializerOptions { WriteIndented = true }));
-                    break;
-
-                case "repack-go":
-                    RepackConfig? readRepackConfig = await ReadRepackConfigFromFile();
-                    if (readRepackConfig != null)
-                    {
-                        Console.WriteLine("No repack config found. Run 'repack-preview' first.");
-                        await repacker.RepackAndRebuildAsync(readRepackConfig);
-                    }
-                    break;
-
-                case "run":
-                    LocalRunConfig? runConfig = await ReadConfigFromFile();
-                    if (runConfig != null)
-                        await runProcessor.RunAsync(runConfig);
-                    else
-                        Console.WriteLine("No config found. Run 'build-config' first.");
-                    break;
-                case "visualize":
-                    LocalRunConfig? visualsConfig = await ReadConfigFromFile();
-                    if (visualsConfig != null)
-                    {
-                        DependencyGraph graph = DependencyGraph.FromConfig(visualsConfig);
-                        GraphVisualizer.Config config = new()
+                    case "repack-preview":
+                        RepackOptions repackOptions = RepackOptionsParser.Parse(args);
+                        LocalRunConfig? currentConfig = await ReadConfigFromFile();
+                        if (currentConfig == null)
                         {
-                            Graph = graph,
-                            OutputFilePath = PathToVisuals,
-                        };
-                        await GraphVisualizer.GenerateAsync(config);
-                        OpenWithDefaultApp($"{PathToVisuals}.svg");
-                    }
+                            Console.WriteLine("No config found. Run 'build-config' first.");
+                            continue;
+                        }
+                        RepackConfig writeRepackConfig = await repackConfigBuilder.BuildRepackConfig(currentConfig, repackOptions);
+                        await File.WriteAllTextAsync(PathToRepackConfig, JsonSerializer.Serialize(writeRepackConfig, new JsonSerializerOptions { WriteIndented = true }));
+                        break;
 
-                    break;
-                case "help":
-                    PrintHelp();
-                    break;
+                    case "repack-go":
+                        RepackConfig? readRepackConfig = await ReadRepackConfigFromFile();
+                        if (readRepackConfig == null)
+                        {
+                            Console.WriteLine("No repack config found. Run 'repack-preview' first.");
+                            continue;
+                        }
+                        await repacker.RepackAndRebuildAsync(readRepackConfig);
+                        break;
 
-                case "exit":
-                    return;
+                    case "run":
+                        LocalRunConfig? runConfig = await ReadConfigFromFile();
+                        if (runConfig != null)
+                            await runProcessor.RunAsync(runConfig);
+                        else
+                            Console.WriteLine("No config found. Run 'build-config' first.");
+                        break;
+                    case "visualize":
+                        LocalRunConfig? visualsConfig = await ReadConfigFromFile();
+                        if (visualsConfig != null)
+                        {
+                            DependencyGraph graph = DependencyGraph.FromConfig(visualsConfig);
+                            GraphVisualizer.Config config = new()
+                            {
+                                Graph = graph,
+                                OutputFilePath = PathToVisuals,
+                            };
+                            await GraphVisualizer.GenerateAsync(config);
+                            OpenWithDefaultApp($"{PathToVisuals}.svg");
+                        }
 
-                default:
-                    Console.WriteLine("Unknown command. Type 'help' for available commands.");
-                    break;
+                        break;
+                    case "help":
+                        PrintHelp();
+                        break;
+
+                    case "exit":
+                        return;
+
+                    default:
+                        Console.WriteLine("Unknown command. Type 'help' for available commands.");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Error($"Command '{cmd}' failed: {ex.Message}", ex);
             }
         }
     }
+
     private static async Task<T?> ReadFromFile<T>(string pathToFile)
         where T : class
     {

@@ -12,6 +12,13 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<!-- The test project lives under the repo root; keep it out of this project's default globs. -->
+		<Compile Remove="LocalRun.Tests\**" />
+		<None Remove="LocalRun.Tests\**" />
+		<EmbeddedResource Remove="LocalRun.Tests\**" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="LibGit2Sharp" Version="0.31.0" />
 		<PackageReference Include="NuGet.Configuration" Version="6.14.0" />
 		<PackageReference Include="NuGet.Protocol" Version="6.14.0" />
