@@ -112,15 +112,20 @@ Note the `--`: everything after it is passed to LocalRun rather than to `dotnet 
 Both entry points are packaged as .NET tools: `localrun` (the CLI) and `localrun-repl` (the REPL).
 One script builds, packs and installs or updates both:
 
-```powershell
-./scripts/install-tools.ps1                      # global install: localrun, localrun-repl on the PATH
-./scripts/install-tools.ps1 -ToolPath C:\tools   # or into a folder of your choice
+```bat
+scripts\install-tools.cmd                        :: global install: localrun, localrun-repl on the PATH
+scripts\install-tools.cmd -ToolPath C:\tools     :: or into a folder of your choice
 localrun help
 localrun-repl
 ```
 
-Re-run the script after pulling or changing code to update the tools. It needs PowerShell
-(Windows PowerShell 5.1 or PowerShell 7 `pwsh`, which also runs on Linux and macOS).
+Re-run it after pulling or changing code to update the tools. On Windows, use **`install-tools.cmd`**:
+it works from cmd, any terminal or a double-click in Explorer, and runs the PowerShell script with
+`-ExecutionPolicy Bypass` for that one process, so you don't have to change your machine's execution
+policy. From a PowerShell prompt, `./scripts/install-tools.ps1` also works if your policy allows
+scripts. On Linux/macOS, run `pwsh ./scripts/install-tools.ps1` (PowerShell 7).
+From automation, call `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install-tools.ps1`
+directly: the `.cmd` waits for a key press when it thinks it was double-clicked.
 
 **Why use the installed tools rather than `bin/`?** The tools run from the .NET tool store
 (`~/.dotnet/tools`), and the script builds in `artifacts/` rather than `bin/`. So the LocalRun you
@@ -498,6 +503,7 @@ LocalRun.csproj               CLI project (packed as the `localrun` .NET tool); 
 LocalRun.Repl/                Interactive REPL over LocalRunCli (packed as the `localrun-repl` tool)
 LocalRun.Tests/               xUnit tests (graph, options, REPL tokenizer, log formatter)
 scripts/install-tools.ps1     Build, pack and install/update both tools
+scripts/install-tools.cmd     Windows launcher for it (no execution-policy change needed)
 artifacts/                    (ignored) build output of the install script
 CLAUDE.md                     Context for AI coding assistants working on this repo
 ```
@@ -555,7 +561,16 @@ folder keeps the first copy, so bump the version (e.g. a new suffix) or run
 
 **Build fails with "file is locked by LocalRun"** — a LocalRun process (often a REPL) is still running
 from `bin/`. Exit it, or build to another folder: `dotnet build --artifacts-path <dir>`. To stop it
-happening, run the installed tools instead of `bin/` (`./scripts/install-tools.ps1`).
+happening, run the installed tools instead of `bin/` (`scripts\install-tools.cmd`).
+
+**"…install-tools.ps1 cannot be loaded because running scripts is disabled on this system"** — the
+PowerShell execution policy blocks `.ps1` files. Use `scripts\install-tools.cmd` instead, which
+bypasses it for its own process only. (If the policy is enforced by Group Policy, even that is
+refused: ask your IT department.)
+
+**"There should be an app associated with this file" / the script opens in Notepad** — a `.ps1` was
+started outside PowerShell (cmd, Explorer, the Visual Studio terminal), so Windows tried to *open* it
+like a document. Use `scripts\install-tools.cmd`.
 
 **`install-tools.ps1`: "Could not install …"** — the installed `localrun` or `localrun-repl` is running.
 Exit it and re-run the script.

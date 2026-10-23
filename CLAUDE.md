@@ -29,6 +29,12 @@ dotnet run --project LocalRun.Repl [-- <start dir>]
 ./scripts/install-tools.ps1 [-ToolPath <dir>]   # pack + install/update `localrun` and `localrun-repl`
 ```
 
+On Windows the user runs `scripts\install-tools.cmd`, which calls the `.ps1` with
+`-ExecutionPolicy Bypass`: script execution is disabled on their machine by default, and `.ps1` files
+have no app association outside PowerShell. Keep the `.cmd` a thin pass-through; logic goes in the
+`.ps1`. When you run the script yourself, call
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-tools.ps1 -ToolPath <scratch>`.
+
 The user runs LocalRun day to day through the installed tools, so `bin/` should normally be free.
 If a build still fails with "file is locked by LocalRun (pid)", a LocalRun/REPL is running from `bin/`
 (e.g. a VS debug session). Do not kill it; build and test elsewhere:
