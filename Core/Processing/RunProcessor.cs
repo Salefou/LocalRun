@@ -18,14 +18,15 @@ public class RunProcessor : IRunProcessor
         var orderedProjects = DependencyGraph.FromConfig(config).TopologicalOrder();
         foreach (var exe in orderedProjects.Where(p => p.Type == "executable"))
         {
-            await StartExecutableAsync(exe);
+            await StartExecutableAsync(config.RootPath, exe);
         }
     }
 
-    private static async Task StartExecutableAsync(ProjectNode project)
+    private static async Task StartExecutableAsync(string rootPath, ProjectNode project)
     {
         logger.LogInformation("[▶] Starting {Project}", project.Name);
-        await RunCommandAsync("dotnet", $"run --project \"{project.Path}\"");
+        // Project paths are relative to the scanned root, not to the current directory
+        await RunCommandAsync("dotnet", $"run --project \"{Path.Combine(rootPath, project.Path)}\"");
     }
 
 
