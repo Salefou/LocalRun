@@ -78,6 +78,11 @@ public class NugetVersionChecker
             {
                 var repository = Repository.Factory.GetCoreV3(source.Source);
                 var metadata = await repository.GetResourceAsync<PackageMetadataResource>();
+                if (metadata == null)
+                {
+                    logger.LogDebug("Source '{Source}' does not provide package metadata, skipped", source.Source);
+                    continue;
+                }
                 var versions = await metadata.GetMetadataAsync(
                     packageId,
                     includePrerelease: true,
