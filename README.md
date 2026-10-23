@@ -247,7 +247,7 @@ Builds nothing.
 | `--config <file>` | `localrun.config.json` | Config file to read. |
 | `--repack-config <file>` | `repack.config.json` | Repack config file to write. |
 | `--patch` / `--minor` / `--major` | no bump | Version component to increment. At most one. |
-| `--suffix <text>` | — | Prerelease suffix to set, without the dash: `--suffix dev` → `1.4.3-dev`. |
+| `--suffix <text>` | — | Prerelease label to set, without the dash: `--suffix dev` → `1.4.3-dev`. Letters, digits, `-` and `.`-separated parts. |
 | `--alpha` | — | Shorthand for `--patch --suffix alpha`. Cannot be combined with another bump or `--suffix`. |
 | `--remote` | off | Take the current version from the highest version found across your enabled NuGet sources instead of the csproj. |
 | `--clean` | off | Make `repack-go` run `dotnet clean` before restoring. |
@@ -348,21 +348,25 @@ Graphviz tooling.
 ## Versioning rules
 
 A version is stored as `Major`, `Minor` and `PatchAndSuffix` (everything after the second dot, e.g.
-`3`, `3-beta`, `*`). The reference version is the csproj `<Version>` (or `1.0.0` when absent), or the
-highest version on your NuGet sources with `--remote` (`1.0.0` when the package is not found).
+`3`, `3-beta`, `3.7`, `*`). The reference version is the csproj `<Version>` (or `1.0.0` when absent;
+short versions are completed with zeros, `1.4` → `1.4.0`), or the highest version on your NuGet
+sources with `--remote`, prerelease label included (`1.0.0` when the package is not found).
 
-| Options | `1.4.2` becomes | `1.4.2-beta` becomes |
-|---|---|---|
-| *(none)* | `1.4.2` | `1.4.2.beta` ⚠ see [Known limitations](#known-limitations) |
-| `--suffix dev` | `1.4.2-dev` | `1.4.2-dev` |
-| `--patch` | `1.4.3` | `1.4.3` (suffix dropped) |
-| `--patch --suffix dev` | `1.4.3-dev` | `1.4.3-dev` |
-| `--alpha` | `1.4.3-alpha` | `1.4.3-alpha` |
-| `--minor --suffix dev` | `1.5.0-dev` | `1.5.0-dev` |
-| `--major --suffix dev` | `2.0.0-dev` | `2.0.0-dev` |
+The rules: **a bump resets the lower components and replaces the prerelease label** with `--suffix`,
+or drops it. **Without a bump, the version is kept**, and only a given `--suffix` replaces its label.
 
-A floating patch (`1.4.*`) is treated as `0`. Always pass `--suffix` with `--minor` and `--major`
-(see [Known limitations](#known-limitations)).
+| Options | `1.4.2` becomes | `1.4.2-beta` becomes | `1.4.2.7` becomes |
+|---|---|---|---|
+| *(none)* | `1.4.2` | `1.4.2-beta` | `1.4.2.7` |
+| `--suffix dev` | `1.4.2-dev` | `1.4.2-dev` | `1.4.2.7-dev` |
+| `--patch` | `1.4.3` | `1.4.3` | `1.4.3` |
+| `--patch --suffix dev` | `1.4.3-dev` | `1.4.3-dev` | `1.4.3-dev` |
+| `--alpha` | `1.4.3-alpha` | `1.4.3-alpha` | `1.4.3-alpha` |
+| `--minor` | `1.5.0` | `1.5.0` | `1.5.0` |
+| `--major --suffix dev` | `2.0.0-dev` | `2.0.0-dev` | `2.0.0-dev` |
+
+A floating patch (`1.4.*`) is treated as `0`. A suffix must be a valid prerelease label: letters,
+digits and `-`, optionally in dot-separated parts (`dev`, `beta.2`, `ci-42`), without the leading dash.
 
 **Tip:** a suffix keeps your local packages ordered *below* the real release of the same number
 (`1.4.3-dev` < `1.4.3`), so a later official release always wins.
@@ -590,13 +594,8 @@ Exit it and re-run the script.
 - **`run` is sequential and blocking**: each executable is awaited before the next one starts, so a
   long-running service blocks the ones after it.
 - **`SkipRun` is not honoured** by `run` yet (only `SkipRepack` is used).
-- **`--major` / `--minor` without `--suffix`** produce an invalid version with a trailing dash
-  (`2.0.0-`). Always pass a suffix with them.
-- **No bump and no suffix on a prerelease version** turns the dash into a dot (`1.4.2-beta` →
-  `1.4.2.beta`).
 - **`--git-changes`** is accepted by `build-config` but does nothing yet (intended: keep only repos
   with uncommitted changes).
-- `--remote` drops the prerelease label of the remote version (`1.4.2-beta` is read as `1.4.2.0`).
 - `--remote` reads the user/machine `NuGet.Config`, not repository-level ones, and queries sources one
   at a time.
 - Dependencies are matched **by name**: two projects with the same file name in different repos collide.

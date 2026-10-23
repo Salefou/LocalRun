@@ -59,6 +59,9 @@ shell escaping.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
 - Dependency graph semantics (layered Kahn, depth = longest path from a root, name-sorted layers,
   cycles throw) are covered by `LocalRun.Tests/Graph/DependencyGraphTests.cs`.
+- Version bump rules (a bump resets lower components and replaces the prerelease label; no bump
+  keeps the version and only `--suffix` replaces the label) are the README "Versioning rules" table,
+  mirrored case by case in `LocalRun.Tests/Options/BumpOptionsTests.cs`. Change both together.
 
 ## Conventions
 
@@ -97,9 +100,6 @@ shell escaping.
 
 Listed for the user in README "Known limitations". Do not fix silently; propose them:
 
-- `BumpOptions.Bump`: `--major`/`--minor` without suffix yield `X.Y.0-` (trailing dash); no bump and
-  no suffix turns `2-beta` into `2.beta`.
-- `--remote`: `NuGetVersion.Version.ToString()` drops the prerelease label and adds a 4th part.
 - `RunProcessor` awaits each executable sequentially and ignores `SkipRun`.
 - `--git-changes` (`BuildConfigOptions.RetainDirtyGitRepos`) is parsed but unused; LibGit2Sharp is
   referenced for it.

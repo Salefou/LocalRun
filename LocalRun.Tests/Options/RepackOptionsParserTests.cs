@@ -33,6 +33,27 @@ public class RepackOptionsParserTests
     }
 
     [Theory]
+    [InlineData("dev")]
+    [InlineData("beta.2")]
+    [InlineData("ci-42")]
+    public void ValidSuffix_IsAccepted(string suffix)
+    {
+        Assert.Equal(suffix, Parse("--suffix", suffix).BumpOptions!.Suffix);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("-dev")]
+    [InlineData("beta..2")]
+    [InlineData("dev.")]
+    [InlineData("dev_1")]
+    [InlineData("dev+sha")]
+    public void InvalidSuffix_IsRejected(string suffix)
+    {
+        Assert.Throws<UsageException>(() => Parse("--suffix", suffix));
+    }
+
+    [Theory]
     [InlineData("--patch", "--minor")]
     [InlineData("--alpha", "--major")]
     [InlineData("--alpha", "--suffix", "dev")]

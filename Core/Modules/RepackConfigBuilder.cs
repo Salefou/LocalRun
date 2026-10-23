@@ -37,7 +37,8 @@ internal class RepackConfigBuilder
                 {
                     //var nugetVersion = await nugetVersionChecker.GetLatestVersionAsync(proj.Name);
                     var nugetVersion = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name);
-                    version = ProjectVersion.Parse(nugetVersion?.Version.ToString());
+                    // Normalized keeps the prerelease label (1.4.2-beta); .Version would give 1.4.2.0
+                    version = ProjectVersion.Parse(nugetVersion?.ToNormalizedString());
                 }
                 else
                 {
