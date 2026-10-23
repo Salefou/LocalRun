@@ -7,8 +7,8 @@ public static class BuildConfigOptionsParser
         return new BuildConfigOptions
         {
             RetainDirtyGitRepos = args.Flag("--git-changes"),
-            RetainDependsOn = args.Values("--retain-depends-on"),
-            RetainIsDependencyOf = args.Values("--retain-is-dependency-of"),
+            RetainDependsOn = args.Values("--users-of"),
+            RetainIsDependencyOf = args.Values("--deps-of"),
             IncludeExternal = args.Flag("--include-external"),
         };
     }

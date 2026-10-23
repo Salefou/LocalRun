@@ -15,13 +15,16 @@ using System.Text.Json;
 
 /// <summary>
 /// Runs one LocalRun command, as given on the command line, and returns its exit code.
-/// Shared by the <c>localrun</c> executable and the interactive REPL.
+/// Shared by the <c>lrun</c> executable and the interactive REPL.
 /// </summary>
 public static class LocalRunCli
 {
     public const int ExitSuccess = 0;
     public const int ExitFailure = 1;
     public const int ExitUsage = 2;
+
+    /// <summary>Name of the installed command, used in messages and help.</summary>
+    public const string CommandName = "lrun";
 
     private const string DefaultConfigPath = "localrun.config.json";
     private const string DefaultRepackConfigPath = "repack.config.json";
@@ -49,17 +52,17 @@ public static class LocalRunCli
             var options = new CommandLineArgs(args.Skip(1));
             switch (cmd)
             {
-                case "build-config":
-                    await BuildConfigAsync(options);
+                case "build":
+                    await BuildAsync(options);
                     break;
                 case "visualize":
                     await VisualizeAsync(options);
                     break;
-                case "repack-preview":
-                    await RepackPreviewAsync(options);
+                case "pack":
+                    await PackAsync(options);
                     break;
-                case "repack-go":
-                    await RepackGoAsync(options);
+                case "go":
+                    await GoAsync(options);
                     break;
                 case "run":
                     await RunExecutablesAsync(options);
@@ -74,7 +77,7 @@ public static class LocalRunCli
         }
         catch (UsageException ex)
         {
-            logger.LogError("{Error} Run 'help' for usage.", ex.Message);
+            logger.LogError("{Error} Run '{Command} help' for usage.", ex.Message, CommandName);
             return ExitUsage;
         }
         catch (Exception ex)
@@ -85,7 +88,7 @@ public static class LocalRunCli
         }
     }
 
-    private static async Task BuildConfigAsync(CommandLineArgs args)
+    private static async Task BuildAsync(CommandLineArgs args)
     {
         string rootPath = Path.GetFullPath(args.Value("--root") ?? Directory.GetCurrentDirectory());
         string localNugetPath = Path.GetFullPath(args.Value("--local-nuget") ?? DefaultLocalNugetPath);
@@ -108,7 +111,7 @@ public static class LocalRunCli
         bool open = args.Flag("--open");
         args.EnsureAllConsumed();
 
-        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build-config");
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
         string svgPath = await GraphVisualizer.GenerateAsync(new GraphVisualizer.Config
         {
             Graph = DependencyGraph.FromConfig(config),
@@ -118,25 +121,30 @@ public static class LocalRunCli
             OpenWithDefaultApp(svgPath);
     }
 
-    private static async Task RepackPreviewAsync(CommandLineArgs args)
+    private static async Task PackAsync(CommandLineArgs args)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         string repackConfigPath = Path.GetFullPath(args.Value("--repack-config") ?? DefaultRepackConfigPath);
         RepackOptions repackOptions = RepackOptionsParser.Parse(args);
+        bool go = args.Flag("--go");
         args.EnsureAllConsumed();
 
-        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build-config");
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
         RepackConfig repackConfig = await new RepackConfigBuilder().BuildRepackConfig(config, repackOptions);
         await WriteToFile(repackConfigPath, repackConfig);
         logger.LogInformation("[✔ ] Repack configuration written to {Path}", repackConfigPath);
+
+        // The plan is still written first, so a failed or surprising repack can be inspected afterwards
+        if (go)
+            await new RepackExecutor().RepackAndRebuildAsync(repackConfig);
     }
 
-    private static async Task RepackGoAsync(CommandLineArgs args)
+    private static async Task GoAsync(CommandLineArgs args)
     {
         string repackConfigPath = args.Value("--repack-config") ?? DefaultRepackConfigPath;
         args.EnsureAllConsumed();
 
-        RepackConfig repackConfig = await ReadFromFile<RepackConfig>(repackConfigPath, "repack-preview");
+        RepackConfig repackConfig = await ReadFromFile<RepackConfig>(repackConfigPath, "pack");
         await new RepackExecutor().RepackAndRebuildAsync(repackConfig);
     }
 
@@ -145,7 +153,7 @@ public static class LocalRunCli
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         args.EnsureAllConsumed();
 
-        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build-config");
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
         await new RunProcessor().RunAsync(config);
     }
 
@@ -154,7 +162,7 @@ public static class LocalRunCli
     {
         string fullPath = Path.GetFullPath(pathToFile);
         if (!File.Exists(fullPath))
-            throw new FileNotFoundException($"'{fullPath}' not found. Run '{producingCommand}' first.");
+            throw new FileNotFoundException($"'{fullPath}' not found. Run '{CommandName} {producingCommand}' first.");
         return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(fullPath))
             ?? throw new InvalidDataException($"'{fullPath}' is empty.");
     }
@@ -201,7 +209,7 @@ public static class LocalRunCli
         Console.WriteLine("LocalRun — rebuild and run only what matters locally: scan repositories,");
         Console.WriteLine("track dependency graphs and repack components to a local NuGet source.");
         Console.WriteLine();
-        Console.WriteLine("Usage: localrun <command> [options]");
+        Console.WriteLine($"Usage: {CommandName} <command> [options]");
         Console.WriteLine();
         Console.WriteLine("Relative paths are resolved against the current directory.");
         Console.WriteLine("Exit codes: 0 success, 1 command failed, 2 invalid command line.");
@@ -209,15 +217,15 @@ public static class LocalRunCli
         Console.WriteLine("Commands:");
         Console.WriteLine();
 
-        Console.WriteLine("  build-config [options]");
+        Console.WriteLine("  build [options]");
         Console.WriteLine("      Scan a directory tree for projects and write their dependency graph to a config file.");
         Console.WriteLine("      Options:");
-        Console.WriteLine("        --root <dir>                         Directory to scan (default: current directory)");
-        Console.WriteLine("        --local-nuget <dir>                  Local NuGet feed to repack into (default: ~/.localnuget)");
-        Console.WriteLine($"        --config <file>                      Config file to write (default: {DefaultConfigPath})");
-        Console.WriteLine("        --retain-depends-on <names>          Keep projects that depend (directly or indirectly) on given libs/exes");
-        Console.WriteLine("        --retain-is-dependency-of <names>    Keep projects that are dependencies (direct or indirect) of given executables");
-        Console.WriteLine("        --include-external                   Keep dependencies on projects that no solution references");
+        Console.WriteLine("        --root <dir>            Directory to scan (default: current directory)");
+        Console.WriteLine("        --local-nuget <dir>     Local NuGet feed to repack into (default: ~/.localnuget)");
+        Console.WriteLine($"        --config <file>         Config file to write (default: {DefaultConfigPath})");
+        Console.WriteLine("        --users-of <names>      Keep the given projects and all that depend on them, transitively");
+        Console.WriteLine("        --deps-of <names>       Keep the given projects and all they depend on, transitively");
+        Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
         Console.WriteLine();
 
         Console.WriteLine("  visualize [options]");
@@ -228,8 +236,8 @@ public static class LocalRunCli
         Console.WriteLine("        --open                  Open the SVG with the default application");
         Console.WriteLine();
 
-        Console.WriteLine("  repack-preview [options]");
-        Console.WriteLine("      Write a repack config previewing what will be repacked and to which versions.");
+        Console.WriteLine("  pack [options]");
+        Console.WriteLine("      Plan what will be repacked and to which versions, and write it to a repack config.");
         Console.WriteLine("      Options:");
         Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
         Console.WriteLine($"        --repack-config <file>  Repack config file to write (default: {DefaultRepackConfigPath})");
@@ -240,9 +248,10 @@ public static class LocalRunCli
         Console.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (e.g., 'dev', 'beta.2')");
         Console.WriteLine("        --remote                Query the configured NuGet sources for version info");
         Console.WriteLine("        --clean                 Clean projects before restoring them");
+        Console.WriteLine("        --go                    Execute the plan right away, as 'go' does (default: only write it)");
         Console.WriteLine();
 
-        Console.WriteLine("  repack-go [options]");
+        Console.WriteLine("  go [options]");
         Console.WriteLine("      Pack projects in dependency order into the local NuGet feed, following a repack config.");
         Console.WriteLine("      Options:");
         Console.WriteLine($"        --repack-config <file>  Repack config file to read (default: {DefaultRepackConfigPath})");
@@ -259,10 +268,11 @@ public static class LocalRunCli
         Console.WriteLine();
 
         Console.WriteLine("Example:");
-        Console.WriteLine("  localrun build-config --root ./repos --retain-is-dependency-of WebApp");
-        Console.WriteLine("  localrun visualize --open");
-        Console.WriteLine("  localrun repack-preview --patch --suffix dev");
-        Console.WriteLine("  localrun repack-go");
-        Console.WriteLine("  localrun run");
+        Console.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp");
+        Console.WriteLine($"  {CommandName} visualize --open");
+        Console.WriteLine($"  {CommandName} pack --patch --suffix dev       (review repack.config.json, then:)");
+        Console.WriteLine($"  {CommandName} go");
+        Console.WriteLine($"  {CommandName} pack --patch --suffix dev --go  (both steps at once)");
+        Console.WriteLine($"  {CommandName} run");
     }
 }

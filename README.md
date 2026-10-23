@@ -18,7 +18,7 @@ LocalRun ships as two entry points over the same engine:
 
 | Entry point | Project | Use it for |
 |---|---|---|
-| `localrun` CLI | `LocalRun.csproj` | Scripts, CI jobs, other programs. One command per invocation, exit codes, no prompts. |
+| `lrun` CLI | `LocalRun.csproj` | Scripts, CI jobs, other programs. One command per invocation, exit codes, no prompts. |
 | Interactive REPL | `LocalRun.Repl/` | Day-to-day exploration: a `LocalRun>` prompt that runs the same commands. |
 
 ---
@@ -48,24 +48,25 @@ LocalRun is a pipeline of small commands. Each step writes a JSON file that the 
 so you can **inspect or hand-edit** the plan between steps.
 
 ```
-            build-config                 repack-preview                 repack-go
+              build                          pack                           go
  repos/ ───────────────► localrun.config.json ───────────────► repack.config.json ──────────► local NuGet feed
-                               │      │                                                        (~/.localnuget)
+                               │      │         └──────────── pack --go ─────────────┘        (~/.localnuget)
                      visualize │      │ run
                                ▼      ▼
                 dependencies.svg    dotnet run, executables in dependency order
 ```
 
-1. **`build-config`** finds every `*.csproj` under the root, reads its name, `OutputType`,
+1. **`build`** finds every `*.csproj` under the root, reads its name, `OutputType`,
    `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` files
    that reference them. Optional filters keep only the part of the graph you care about. The result
    is written in topological order to `localrun.config.json`.
 2. **`visualize`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
-3. **`repack-preview`** decides, for every project, its current version (from the csproj, or from
+3. **`pack`** decides, for every project, its current version (from the csproj, or from
    your NuGet sources with `--remote`) and the bumped version it will be packed as. Nothing is built
    yet: the plan is written to `repack.config.json` for you to review.
-4. **`repack-go`** executes the plan: `dotnet restore` against the local feed, then
+4. **`go`** executes the plan: `dotnet restore` against the local feed, then
    `dotnet pack --no-restore -o <feed> -p:PackageVersion=<new version>`.
+   `pack --go` does steps 3 and 4 in one command, when you don't need to review the plan.
 5. **`run`** starts the executables of the config with `dotnet run`, dependencies first.
 
 ### The dependency graph
@@ -109,14 +110,14 @@ Note the `--`: everything after it is passed to LocalRun rather than to `dotnet 
 
 ### Install as .NET tools (recommended)
 
-Both entry points are packaged as .NET tools: `localrun` (the CLI) and `localrun-repl` (the REPL).
+Both entry points are packaged as .NET tools: `lrun` (the CLI) and `lrun-repl` (the REPL).
 One script builds, packs and installs or updates both:
 
 ```bat
-scripts\install-tools.cmd                        :: global install: localrun, localrun-repl on the PATH
+scripts\install-tools.cmd                        :: global install: lrun, lrun-repl on the PATH
 scripts\install-tools.cmd -ToolPath C:\tools     :: or into a folder of your choice
-localrun help
-localrun-repl
+lrun help
+lrun-repl
 ```
 
 Re-run it after pulling or changing code to update the tools. On Windows, use **`install-tools.cmd`**:
@@ -170,19 +171,20 @@ Say your repositories are checked out under `~/work/repos`, and you changed `Sha
 cd ~/work
 
 # 1. Graph everything that depends on the library you changed
-localrun build-config --root ./repos --retain-depends-on Shared.Pricing
+lrun build --root ./repos --users-of Shared.Pricing
 
 # 2. Look at it
-localrun visualize --open
+lrun visualize --open
 
 # 3. Plan a patch bump with a "dev" suffix, then review repack.config.json
-localrun repack-preview --patch --suffix dev
+lrun pack --patch --suffix dev
 
 # 4. Pack everything into ~/.localnuget, in dependency order
-localrun repack-go
+lrun go
+#    (steps 3 and 4 at once, without the review: lrun pack --patch --suffix dev --go)
 
 # 5. Start the executables
-localrun run
+lrun run
 ```
 
 For your consumers to pick the new packages up, the local feed must be one of their NuGet sources,
@@ -196,7 +198,12 @@ dotnet nuget add source ~/.localnuget --name local
 
 ## Command reference
 
-General form: `localrun <command> [options]`.
+General form: `lrun <command> [options]`.
+
+> Renamed on 2026-10-24: the tool was `localrun` (now `lrun`, and `localrun-repl` is now `lrun-repl`),
+> and `build-config`, `repack-preview` and `repack-go` are now `build`, `pack` and `go`. The `build` filters
+> `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`. The old names
+> are gone: update scripts that call them. Config file names are unchanged.
 
 - Options are `--name` followed by zero or more values; values run until the next `--option`.
 - Unknown options, repeated options, missing values and extra values are **rejected** (exit code `2`)
@@ -205,25 +212,25 @@ General form: `localrun <command> [options]`.
   tool or of the config file.
 - Values containing spaces must be quoted by your shell: `--root "C:\My Repos"`.
 
-### `build-config`
+### `build`
 
 Scan a directory tree and write its dependency graph to a config file.
 
 | Option | Default | Description |
 |---|---|---|
 | `--root <dir>` | current directory | Directory scanned recursively for `*.csproj` and `*.sln`. |
-| `--local-nuget <dir>` | `~/.localnuget` | Local NuGet feed that `repack-go` will pack into. Stored in the config. |
+| `--local-nuget <dir>` | `~/.localnuget` | Local NuGet feed that `go` will pack into. Stored in the config. |
 | `--config <file>` | `localrun.config.json` | Config file to write. Parent directories are created. |
-| `--retain-depends-on <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
-| `--retain-is-dependency-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
+| `--users-of <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
+| `--deps-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 
-Both `--retain-*` filters can be combined; they are applied one after the other (depends-on first).
+Both filters can be combined; they are applied one after the other (`--users-of` first).
 Unknown names are ignored, so double-check the spelling against the generated config if the result is empty.
 
 ```sh
-localrun build-config --root ./repos --retain-is-dependency-of OrderGateway RiskService
-localrun build-config --root ./repos --config ./plans/pricing.json --retain-depends-on Shared.Pricing
+lrun build --root ./repos --deps-of OrderGateway RiskService
+lrun build --root ./repos --config ./plans/pricing.json --users-of Shared.Pricing
 ```
 
 ### `visualize`
@@ -237,10 +244,11 @@ and version, edges point from a dependency to its dependent, and colours darken 
 | `--output <path>` | `dependencies` | Output path **without extension**. |
 | `--open` | off | Open the SVG with the default application (Windows, macOS `open`, Linux `xdg-open`). |
 
-### `repack-preview`
+### `pack`
 
 Compute the version every project will be packed as, and write the plan to a repack config.
-Builds nothing.
+Builds nothing, unless `--go` is given: then the plan is still written, and executed right away as
+[`go`](#go) would.
 
 | Option | Default | Description |
 |---|---|---|
@@ -250,11 +258,17 @@ Builds nothing.
 | `--suffix <text>` | — | Prerelease label to set, without the dash: `--suffix dev` → `1.4.3-dev`. Letters, digits, `-` and `.`-separated parts. |
 | `--alpha` | — | Shorthand for `--patch --suffix alpha`. Cannot be combined with another bump or `--suffix`. |
 | `--remote` | off | Take the current version from the highest version found across your enabled NuGet sources instead of the csproj. |
-| `--clean` | off | Make `repack-go` run `dotnet clean` before restoring. |
+| `--clean` | off | Make `go` run `dotnet clean` before restoring. |
+| `--go` | off | Execute the plan right after writing it (`pack` then `go` in one command). |
+
+```sh
+lrun pack --patch --suffix dev          # write the plan, review it, then `lrun go`
+lrun pack --patch --suffix dev --go     # plan and execute in one go
+```
 
 See [Versioning rules](#versioning-rules) for exactly how versions are computed.
 
-### `repack-go`
+### `go`
 
 Execute a repack config. For each connected component in parallel, depth by depth, all projects of
 a depth in parallel:
@@ -281,7 +295,7 @@ dependency order. Each executable is awaited before the next one starts (see
 
 ### `help`
 
-Print the command reference. Also `--help` and `-h`. Running `localrun` with no arguments prints it too,
+Print the command reference. Also `--help` and `-h`. Running `lrun` with no arguments prints it too,
 with exit code `2`.
 
 ---
@@ -290,7 +304,7 @@ with exit code `2`.
 
 All files are indented JSON, safe to commit, diff or edit by hand between steps.
 
-### `localrun.config.json` — written by `build-config`
+### `localrun.config.json` — written by `build`
 
 ```jsonc
 {
@@ -304,7 +318,7 @@ All files are indented JSON, safe to commit, diff or edit by hand between steps.
       "Type": "library",                        // "executable" when <OutputType>Exe</OutputType>
       "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // first <Version>, else 1.0.0
       "Dependencies": [],                       // names of other projects in the graph
-      "SkipRepack": false,                      // set to true by hand to leave it out of repack-preview
+      "SkipRepack": false,                      // set to true by hand to leave it out of pack
       "SkipRun": false                          // reserved, not honoured yet
     }
   ]
@@ -312,9 +326,9 @@ All files are indented JSON, safe to commit, diff or edit by hand between steps.
 ```
 
 Useful hand edits: set `"SkipRepack": true` on projects you don't want repacked, or change
-`LocalNugetPath` before `repack-preview`.
+`LocalNugetPath` before `pack`.
 
-### `repack.config.json` — written by `repack-preview`
+### `repack.config.json` — written by `pack`
 
 ```jsonc
 {
@@ -336,7 +350,7 @@ Useful hand edits: set `"SkipRepack": true` on projects you don't want repacked,
 }
 ```
 
-Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `repack-go`.
+Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`.
 
 ### `dependencies.dot` / `dependencies.svg` — written by `visualize`
 
@@ -381,11 +395,11 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 
 | | |
 |---|---|
-| Invocation | `localrun <command> [options]` — one command per process, never prompts. (Executables started by `run` inherit the console.) |
+| Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `run` inherit the console.) |
 | Exit codes | `0` success · `1` the command failed (missing file, `dotnet` failure, dependency cycle, …) · `2` invalid command line. |
 | Output | Human-readable log lines on **stdout**. Warnings and errors are prefixed `[WRN] ` / `[ERR] `; ANSI colours are dropped when output is redirected. Output of child `dotnet` processes is forwarded line by line (stderr lines as warnings). |
 | Results | The JSON / DOT / SVG files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
-| Side effects | `--open` launches a viewer; `repack-go` writes packages to the feed; `run` starts processes. |
+| Side effects | `--open` launches a viewer; `go` writes packages to the feed; `run` starts processes. |
 
 Do not parse the log lines — they are for humans and may change. Read the JSON files instead.
 
@@ -396,7 +410,7 @@ using System.Diagnostics;
 
 static async Task<int> LocalRunAsync(params string[] args)
 {
-    var psi = new ProcessStartInfo("localrun") { RedirectStandardOutput = true, UseShellExecute = false };
+    var psi = new ProcessStartInfo("lrun") { RedirectStandardOutput = true, UseShellExecute = false };
     foreach (var arg in args) psi.ArgumentList.Add(arg);   // no manual quoting needed
 
     using var process = Process.Start(psi)!;
@@ -407,9 +421,9 @@ static async Task<int> LocalRunAsync(params string[] args)
 }
 
 string config = Path.Combine(workDir, "localrun.config.json");
-if (await LocalRunAsync("build-config", "--root", reposDir, "--config", config,
-                        "--retain-depends-on", "Shared.Pricing") != 0)
-    throw new InvalidOperationException("build-config failed");
+if (await LocalRunAsync("build", "--root", reposDir, "--config", config,
+                        "--users-of", "Shared.Pricing") != 0)
+    throw new InvalidOperationException("build failed");
 
 var graph = JsonDocument.Parse(await File.ReadAllTextAsync(config));
 ```
@@ -425,10 +439,10 @@ Prefer the process boundary from unrelated code: the engine's types are not a st
 ### From PowerShell
 
 ```powershell
-localrun build-config --root C:\work\repos --retain-is-dependency-of OrderGateway
-if ($LASTEXITCODE -ne 0) { throw "build-config failed ($LASTEXITCODE)" }
+lrun build --root C:\work\repos --deps-of OrderGateway
+if ($LASTEXITCODE -ne 0) { throw "build failed ($LASTEXITCODE)" }
 
-localrun repack-preview --patch --suffix "ci$env:BUILD_NUMBER"
+lrun pack --patch --suffix "ci$env:BUILD_NUMBER"
 $plan = Get-Content repack.config.json -Raw | ConvertFrom-Json
 $plan.RepackTrees.Projects | Format-Table Name, Depth
 ```
@@ -438,8 +452,8 @@ $plan.RepackTrees.Projects | Format-Table Name, Depth
 ```sh
 set -e                                   # any non-zero exit code stops the job
 export LOCALRUN_LOG_LEVEL=Debug          # full stack traces on failure
-localrun build-config --root "$WORKSPACE/repos" --config "$WORKSPACE/out/localrun.config.json"
-localrun visualize --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/out/dependencies"
+lrun build --root "$WORKSPACE/repos" --config "$WORKSPACE/out/localrun.config.json"
+lrun visualize --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/out/dependencies"
 ```
 
 ---
@@ -447,20 +461,20 @@ localrun visualize --config "$WORKSPACE/out/localrun.config.json" --output "$WOR
 ## The interactive REPL
 
 `LocalRun.Repl` is a thin shell over the CLI: every line you type is split into arguments and run as
-a `localrun` command, in the same process.
+a `lrun` command, in the same process.
 
 ```sh
-localrun-repl                                      # installed tool, starts in the current directory
-localrun-repl ~/work                               # starts in ~/work
+lrun-repl                                          # installed tool, starts in the current directory
+lrun-repl ~/work                                   # starts in ~/work
 dotnet run --project LocalRun.Repl                 # from source (locks bin/ while it runs)
 ```
 
 ```
 LocalRun> cd ~/work
-LocalRun> build-config --root ./repos --retain-is-dependency-of OrderGateway
+LocalRun> build --root ./repos --deps-of OrderGateway
 LocalRun> visualize --open
-LocalRun> repack-preview --patch --suffix dev
-LocalRun> repack-go
+LocalRun> pack --patch --suffix dev
+LocalRun> go
 LocalRun> exit
 ```
 
@@ -471,6 +485,8 @@ LocalRun> exit
 | `pwd` | Print the working directory. |
 | `exit`, `quit` | Leave. End of input (Ctrl+Z / Ctrl+D, or a piped script) also exits. |
 
+The `lrun` prefix is optional (`lrun build` and `build` are the same), so commands copied from this
+README or from error messages work as-is.
 Quote values containing spaces with double quotes. A failing command logs its error and the prompt
 continues; exit codes are not shown.
 
@@ -492,7 +508,7 @@ The minimum level is `Information`. Override it with the `LOCALRUN_LOG_LEVEL` en
 full stack trace of a failing command.
 
 ```powershell
-$env:LOCALRUN_LOG_LEVEL = "Debug"; localrun repack-preview --remote
+$env:LOCALRUN_LOG_LEVEL = "Debug"; lrun pack --remote
 ```
 
 ---
@@ -501,7 +517,7 @@ $env:LOCALRUN_LOG_LEVEL = "Debug"; localrun repack-preview --remote
 
 ```
 LocalRun.sln
-LocalRun.csproj               CLI project (packed as the `localrun` .NET tool); also hosts the engine
+LocalRun.csproj               CLI project (packed as the `lrun` .NET tool); also hosts the engine
 ├─ Program.cs                 Main: calls LocalRunCli, flushes logs
 ├─ Cli/LocalRunCli.cs         Command dispatch, file I/O, help text, exit codes
 ├─ Options/                   Command-line parsing (CommandLineArgs) and per-command option objects
@@ -512,7 +528,7 @@ LocalRun.csproj               CLI project (packed as the `localrun` .NET tool); 
 │  │                          NugetVersionChecker, SolutionScanner
 │  └─ Processing/RunProcessor.cs  `run` command
 └─ Logger/                    Logger factory and console formatter
-LocalRun.Repl/                Interactive REPL over LocalRunCli (packed as the `localrun-repl` tool)
+LocalRun.Repl/                Interactive REPL over LocalRunCli (packed as the `lrun-repl` tool)
 LocalRun.Tests/               xUnit tests (graph, options, REPL tokenizer, log formatter)
 scripts/install-tools.ps1     Build, pack and install/update both tools
 scripts/install-tools.cmd     Windows launcher for it (no execution-policy change needed)
@@ -555,10 +571,10 @@ dotnet test LocalRun.sln
 **`Warning: Could not load "...gvplugin_pango.dll"`** — printed by the embedded Graphviz on Windows.
 Harmless: the SVG is still produced, using Graphviz's built-in text rendering.
 
-**`'…localrun.config.json' not found. Run 'build-config' first.`** — the path is resolved against the
-current directory. Run from the directory where you ran `build-config`, or pass `--config`.
+**`'…localrun.config.json' not found. Run 'lrun build' first.`** — the path is resolved against the
+current directory. Run from the directory where you ran `build`, or pass `--config`.
 
-**`repack-go` fails restoring third-party packages** — restore uses the local feed as its *only*
+**`go` fails restoring third-party packages** — restore uses the local feed as its *only*
 source. Packages that are not in the feed must already be in your NuGet global packages folder
 (`~/.nuget/packages`), which is the case once the project has been restored normally at least once.
 
@@ -569,7 +585,7 @@ folder keeps the first copy, so bump the version (e.g. a new suffix) or run
 `dotnet nuget locals global-packages --clear`.
 
 **`Dependency cycle detected, cannot order: A, B`** — the listed projects reference each other
-(possibly through packages). Break the cycle, or filter it out with `--retain-*`.
+(possibly through packages). Break the cycle, or filter it out with `--users-of` / `--deps-of`.
 
 **Build fails with "file is locked by LocalRun"** — a LocalRun process (often a REPL) is still running
 from `bin/`. Exit it, or build to another folder: `dotnet build --artifacts-path <dir>`. To stop it
@@ -584,7 +600,7 @@ refused: ask your IT department.)
 started outside PowerShell (cmd, Explorer, the Visual Studio terminal), so Windows tried to *open* it
 like a document. Use `scripts\install-tools.cmd`.
 
-**`install-tools.ps1`: "Could not install …"** — the installed `localrun` or `localrun-repl` is running.
+**`install-tools.ps1`: "Could not install …"** — the installed `lrun` or `lrun-repl` is running.
 Exit it and re-run the script.
 
 ---
@@ -594,7 +610,7 @@ Exit it and re-run the script.
 - **`run` is sequential and blocking**: each executable is awaited before the next one starts, so a
   long-running service blocks the ones after it.
 - **`SkipRun` is not honoured** by `run` yet (only `SkipRepack` is used).
-- **`--git-changes`** is accepted by `build-config` but does nothing yet (intended: keep only repos
+- **`--git-changes`** is accepted by `build` but does nothing yet (intended: keep only repos
   with uncommitted changes).
 - `--remote` reads the user/machine `NuGet.Config`, not repository-level ones, and queries sources one
   at a time.

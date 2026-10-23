@@ -9,14 +9,14 @@ LocalRun: a .NET 8 tool that scans a tree of repositories, builds the project de
 and repacks changed libraries into a local NuGet feed / runs executables, in dependency order.
 Two entry points over one engine:
 
-- `LocalRun.csproj` (repo root) — the non-interactive `localrun` CLI, packed as a .NET tool. It also
+- `LocalRun.csproj` (repo root) — the non-interactive `lrun` CLI, packed as a .NET tool. It also
   contains the whole engine (`Core/`, `Options/`, `Logger/`).
-- `LocalRun.Repl/` — interactive `LocalRun>` prompt, packed as the `localrun-repl` tool; every line goes to `LocalRunCli.RunAsync`
+- `LocalRun.Repl/` — interactive `LocalRun>` prompt, packed as the `lrun-repl` tool; every line goes to `LocalRunCli.RunAsync`
   in-process. Owns the ASCII art and welcome banner. Built-ins: `cd`, `pwd`, `exit`/`quit`, `help`.
 - `LocalRun.Tests/` — xUnit, references both projects.
 
-Pipeline: `build-config` → `localrun.config.json` → `repack-preview` → `repack.config.json` →
-`repack-go`. `visualize` and `run` read `localrun.config.json`. The JSON files are the hand-editable
+Pipeline: `build` → `localrun.config.json` → `pack` → `repack.config.json` →
+`go`. `visualize` and `run` read `localrun.config.json`. The JSON files are the hand-editable
 contract between steps.
 
 ## Commands
@@ -26,7 +26,7 @@ dotnet build LocalRun.sln
 dotnet test LocalRun.sln
 dotnet run --project LocalRun.csproj -- <command> [options]
 dotnet run --project LocalRun.Repl [-- <start dir>]
-./scripts/install-tools.ps1 [-ToolPath <dir>]   # pack + install/update `localrun` and `localrun-repl`
+./scripts/install-tools.ps1 [-ToolPath <dir>]   # pack + install/update `lrun` and `lrun-repl`
 ```
 
 On Windows the user runs `scripts\install-tools.cmd`, which calls the `.ps1` with
@@ -94,6 +94,11 @@ shell escaping.
   stray directory and `run` resolving project paths against the cwd; then moved the REPL into
   `LocalRun.Repl/` on top of `LocalRunCli`, and wrote README/CLAUDE.md; then packed the REPL as a
   tool too and added `scripts/install-tools.ps1` so running LocalRun no longer locks `bin/`.
+- 2026-10-24: shortened the CLI. Tool `localrun` → `lrun` (`LocalRunCli.CommandName`), `localrun-repl` →
+  `lrun-repl`; commands `build-config` / `repack-preview` / `repack-go` → `build` / `pack` / `go`, with
+  `pack --go` doing both steps. `build` filters `--retain-depends-on` / `--retain-is-dependency-of` →
+  `--users-of` / `--deps-of`. Old names were dropped, not aliased. Package ids (`LocalRun`,
+  `LocalRun.Repl`), assembly names and config file names are unchanged.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks

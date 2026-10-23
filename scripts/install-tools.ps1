@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds LocalRun and installs (or updates) the `localrun` and `localrun-repl` .NET tools.
+    Builds LocalRun and installs (or updates) the `lrun` and `lrun-repl` .NET tools.
 
 .DESCRIPTION
     Builds into artifacts/ instead of bin/, so it works while Visual Studio or a debug session holds
@@ -22,8 +22,8 @@
 
 .EXAMPLE
     ./scripts/install-tools.ps1
-    localrun help
-    localrun-repl
+    lrun help
+    lrun-repl
 #>
 [CmdletBinding()]
 param(
@@ -37,8 +37,8 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $buildDir = Join-Path $repoRoot 'artifacts/tool-build'
 $packageDir = Join-Path $repoRoot 'artifacts/tool-packages'
 $tools = @(
-    @{ Id = 'LocalRun';      Project = 'LocalRun.csproj';                   Command = 'localrun' },
-    @{ Id = 'LocalRun.Repl'; Project = 'LocalRun.Repl/LocalRun.Repl.csproj'; Command = 'localrun-repl' }
+    @{ Id = 'LocalRun';      Project = 'LocalRun.csproj';                   Command = 'lrun' },
+    @{ Id = 'LocalRun.Repl'; Project = 'LocalRun.Repl/LocalRun.Repl.csproj'; Command = 'lrun-repl' }
 )
 
 function Invoke-Dotnet {
@@ -66,6 +66,9 @@ function Get-NextBuildNumber {
 }
 
 function Get-CommitLabel {
+    # Windows PowerShell turns any native stderr line into a terminating error under 'Stop', even with
+    # 2>$null, and git warns on stderr (e.g. CRLF conversion): rely on exit codes here instead.
+    $ErrorActionPreference = 'Continue'
     $hash = & git -C $repoRoot rev-parse --short=7 HEAD 2>$null
     if ($LASTEXITCODE -ne 0 -or -not $hash) { return 'nogit' }
     & git -C $repoRoot diff --quiet HEAD 2>$null

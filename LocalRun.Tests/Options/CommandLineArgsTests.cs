@@ -7,9 +7,9 @@ public class CommandLineArgsTests
     [Fact]
     public void Values_RunUntilTheNextOption()
     {
-        var args = new CommandLineArgs(["--retain-depends-on", "A", "B", "--include-external"]);
+        var args = new CommandLineArgs(["--users-of", "A", "B", "--include-external"]);
 
-        Assert.Equal(["A", "B"], args.Values("--retain-depends-on"));
+        Assert.Equal(["A", "B"], args.Values("--users-of"));
         Assert.True(args.Flag("--include-external"));
         args.EnsureAllConsumed();
     }
@@ -21,7 +21,7 @@ public class CommandLineArgsTests
 
         Assert.False(args.Flag("--open"));
         Assert.Null(args.Value("--config"));
-        Assert.Null(args.Values("--retain-depends-on"));
+        Assert.Null(args.Values("--users-of"));
     }
 
     [Fact]
