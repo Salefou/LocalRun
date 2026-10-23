@@ -29,6 +29,7 @@
 		<PackageReference Include="NuGet.Configuration" Version="6.14.0" />
 		<PackageReference Include="NuGet.Protocol" Version="6.14.0" />
 		<PackageReference Include="NuGet.Versioning" Version="6.14.0" />
+		<PackageReference Include="Rubjerg.Graphviz" Version="3.0.5" />
 	</ItemGroup>
 
 	<ProjectExtensions><VisualStudio><UserProperties output_4repack_1config_1json__JsonSchema="https://api.app-prg1.zerops.io/api/rest/public/settings/zerops-yml-json-schema.json" /></VisualStudio></ProjectExtensions>
