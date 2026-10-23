@@ -11,7 +11,7 @@ Two entry points over one engine:
 
 - `LocalRun.csproj` (repo root) — the non-interactive `localrun` CLI, packed as a .NET tool. It also
   contains the whole engine (`Core/`, `Options/`, `Logger/`).
-- `LocalRun.Repl/` — interactive `LocalRun>` prompt; every line goes to `LocalRunCli.RunAsync`
+- `LocalRun.Repl/` — interactive `LocalRun>` prompt, packed as the `localrun-repl` tool; every line goes to `LocalRunCli.RunAsync`
   in-process. Owns the ASCII art and welcome banner. Built-ins: `cd`, `pwd`, `exit`/`quit`, `help`.
 - `LocalRun.Tests/` — xUnit, references both projects.
 
@@ -26,12 +26,18 @@ dotnet build LocalRun.sln
 dotnet test LocalRun.sln
 dotnet run --project LocalRun.csproj -- <command> [options]
 dotnet run --project LocalRun.Repl [-- <start dir>]
-dotnet pack LocalRun.csproj -o <dir>     # produces the `localrun` tool package
+./scripts/install-tools.ps1 [-ToolPath <dir>]   # pack + install/update `localrun` and `localrun-repl`
 ```
 
-If the build fails with "file is locked by LocalRun (pid)", the user has a LocalRun/REPL process
-running from `bin/`. Do not kill it; build and test elsewhere:
-`dotnet test LocalRun.sln --artifacts-path <scratch dir>`.
+The user runs LocalRun day to day through the installed tools, so `bin/` should normally be free.
+If a build still fails with "file is locked by LocalRun (pid)", a LocalRun/REPL is running from `bin/`
+(e.g. a VS debug session). Do not kill it; build and test elsewhere:
+`dotnet test LocalRun.sln --artifacts-path <scratch dir>`. To try the install script without touching
+the user's global tools, use `-ToolPath <scratch dir>`.
+
+The repo needs no tooling beyond the .NET SDK and PowerShell. For multi-line or backslash-heavy file
+edits prefer the Edit tool over sed: csproj globs (`\**`) and C# escapes (`﻿`) get mangled by
+shell escaping.
 
 ## Contracts to preserve
 
@@ -57,9 +63,13 @@ running from `bin/`. Do not kill it; build and test elsewhere:
 - Level via `LOCALRUN_LOG_LEVEL`. Errors log the message; `LogDebug(ex, …)` carries the stack trace.
 - Options objects live in `Options/`, one parser per command (`*OptionsParser.Parse(CommandLineArgs)`).
 - New command: see README "Adding a command". Update `LocalRunCli.PrintHelp` and README together.
-- The root csproj excludes sibling project folders from its globs
-  (`Compile/None/EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**"`). A new project folder
-  must be added there.
+- The root csproj excludes sibling project folders and `artifacts/` from its globs
+  (`Compile/None/EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**"`). A new
+  project or build-output folder must be added there, or its generated `.cs` files (AssemblyInfo…)
+  get compiled into the CLI (symptom: CS0579 duplicate attribute).
+- Tool packages need a fresh version per install (`-p:VersionSuffix=local.<timestamp>` in the
+  script): the same version would be served stale from the NuGet global packages folder.
+- REPL input may start with a BOM when piped from PowerShell; `ReplTokenizer` drops `﻿`.
 - MSBuild gotcha: XML comments cannot contain `--` (so no CLI flags in csproj comments).
 
 ## History
@@ -69,7 +79,8 @@ running from `bin/`. Do not kill it; build and test elsewhere:
 - 2026-10-23, branch `claude/cli-entrypoint`: turned it into a non-interactive CLI
   (`CommandLineArgs`, exit codes, path options, .NET tool packaging), fixed `visualize` writing into a
   stray directory and `run` resolving project paths against the cwd; then moved the REPL into
-  `LocalRun.Repl/` on top of `LocalRunCli`, and wrote README/CLAUDE.md.
+  `LocalRun.Repl/` on top of `LocalRunCli`, and wrote README/CLAUDE.md; then packed the REPL as a
+  tool too and added `scripts/install-tools.ps1` so running LocalRun no longer locks `bin/`.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks

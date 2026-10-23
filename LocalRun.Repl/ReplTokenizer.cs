@@ -18,6 +18,11 @@ internal static class ReplTokenizer
 
         foreach (char c in line)
         {
+            if (c == '﻿')
+            {
+                // Byte order mark: PowerShell prefixes piped input with one
+                continue;
+            }
             if (c == '"')
             {
                 inQuotes = !inQuotes;

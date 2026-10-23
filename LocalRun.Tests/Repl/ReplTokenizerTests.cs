@@ -29,6 +29,12 @@ public class ReplTokenizerTests
     }
 
     [Fact]
+    public void ByteOrderMark_IsIgnored()
+    {
+        Assert.Equal(["pwd"], ReplTokenizer.Split("﻿pwd"));
+    }
+
+    [Fact]
     public void UnterminatedQuote_IsRejected()
     {
         Assert.Throws<FormatException>(() => ReplTokenizer.Split(@"cd ""C:\oops"));

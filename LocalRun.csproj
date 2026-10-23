@@ -18,10 +18,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<!-- The other projects live under the repo root; keep them out of this project's default globs. -->
-		<Compile Remove="LocalRun.Tests\**;LocalRun.Repl\**" />
-		<None Remove="LocalRun.Tests\**;LocalRun.Repl\**" />
-		<EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**" />
+		<!-- Other projects and the install script build output (artifacts/) live under the repo root: keep them out of this project's default globs. -->
+		<Compile Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**" />
+		<None Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**" />
+		<EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**" />
 	</ItemGroup>
 
 	<ItemGroup>

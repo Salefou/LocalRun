@@ -107,23 +107,37 @@ dotnet run --project LocalRun.Repl                    # the REPL
 
 Note the `--`: everything after it is passed to LocalRun rather than to `dotnet run`.
 
-### Install as a global .NET tool
+### Install as .NET tools (recommended)
 
-The CLI project is packaged as a .NET tool whose command is `localrun`:
+Both entry points are packaged as .NET tools: `localrun` (the CLI) and `localrun-repl` (the REPL).
+One script builds, packs and installs or updates both:
 
-```sh
-dotnet pack LocalRun.csproj -c Release -o ./nupkg
-dotnet tool install --global LocalRun --add-source ./nupkg
+```powershell
+./scripts/install-tools.ps1                      # global install: localrun, localrun-repl on the PATH
+./scripts/install-tools.ps1 -ToolPath C:\tools   # or into a folder of your choice
 localrun help
+localrun-repl
 ```
 
-Update after pulling changes with `dotnet tool update --global LocalRun --add-source ./nupkg`
-(bump `<Version>` in `LocalRun.csproj` first, or uninstall/reinstall).
-Uninstall with `dotnet tool uninstall --global LocalRun`.
+Re-run the script after pulling or changing code to update the tools. It needs PowerShell
+(Windows PowerShell 5.1 or PowerShell 7 `pwsh`, which also runs on Linux and macOS).
 
-To pin it per repository instead, use a tool manifest:
-`dotnet new tool-manifest` then `dotnet tool install LocalRun --add-source ./nupkg`, and call it with
-`dotnet localrun …`.
+**Why use the installed tools rather than `bin/`?** The tools run from the .NET tool store
+(`~/.dotnet/tools`), and the script builds in `artifacts/` rather than `bin/`. So the LocalRun you
+*use* never locks the build output of the LocalRun you're *working on*: you can keep a REPL open while
+you build, test or debug in Visual Studio. The only thing that can block an update is a running
+installed tool — exit it and re-run the script.
+
+What the script does, if you prefer doing it by hand:
+
+```sh
+dotnet pack LocalRun.csproj -c Release -o ./nupkg -p:VersionSuffix=local.1
+dotnet tool update --global LocalRun --add-source ./nupkg --version 1.0.0-local.1   # also installs
+```
+
+Every pack needs a **new** version (the script uses a timestamp): re-installing the same version number
+silently reuses the copy cached in the NuGet global packages folder.
+Uninstall with `dotnet tool uninstall --global LocalRun` and `dotnet tool uninstall --global LocalRun.Repl`.
 
 ### Publish a standalone executable
 
@@ -419,8 +433,9 @@ localrun visualize --config "$WORKSPACE/out/localrun.config.json" --output "$WOR
 a `localrun` command, in the same process.
 
 ```sh
-dotnet run --project LocalRun.Repl                 # starts in the current directory
-dotnet run --project LocalRun.Repl -- ~/work       # starts in ~/work
+localrun-repl                                      # installed tool, starts in the current directory
+localrun-repl ~/work                               # starts in ~/work
+dotnet run --project LocalRun.Repl                 # from source (locks bin/ while it runs)
 ```
 
 ```
@@ -480,8 +495,10 @@ LocalRun.csproj               CLI project (packed as the `localrun` .NET tool); 
 │  │                          NugetVersionChecker, SolutionScanner
 │  └─ Processing/RunProcessor.cs  `run` command
 └─ Logger/                    Logger factory and console formatter
-LocalRun.Repl/                Interactive REPL over LocalRunCli
+LocalRun.Repl/                Interactive REPL over LocalRunCli (packed as the `localrun-repl` tool)
 LocalRun.Tests/               xUnit tests (graph, options, REPL tokenizer, log formatter)
+scripts/install-tools.ps1     Build, pack and install/update both tools
+artifacts/                    (ignored) build output of the install script
 CLAUDE.md                     Context for AI coding assistants working on this repo
 ```
 
@@ -497,9 +514,11 @@ dotnet test LocalRun.sln
 ```
 
 - Target framework: `net8.0`, nullable and implicit usings enabled.
-- The CLI project sits at the repository root, so its csproj **excludes the other project folders**
-  from its default globs (`Compile/None/EmbeddedResource Remove`). Add any new project folder there,
-  or its files get compiled twice.
+- The CLI project sits at the repository root, so its csproj **excludes the other project folders and
+  `artifacts/`** from its default globs (`Compile/None/EmbeddedResource Remove`). Add any new project
+  or output folder there, or its `.cs` files get compiled into the CLI too.
+- Use the installed tools for day-to-day runs (see [Installation](#install-as-net-tools-recommended)),
+  so `bin/` stays free for builds and debugging.
 - `LocalRun` and `LocalRun.Repl` expose internals to `LocalRun.Tests` via `InternalsVisibleTo`.
 
 ### Adding a command
@@ -535,7 +554,11 @@ folder keeps the first copy, so bump the version (e.g. a new suffix) or run
 (possibly through packages). Break the cycle, or filter it out with `--retain-*`.
 
 **Build fails with "file is locked by LocalRun"** — a LocalRun process (often a REPL) is still running
-from `bin/`. Exit it, or build to another folder: `dotnet build --artifacts-path <dir>`.
+from `bin/`. Exit it, or build to another folder: `dotnet build --artifacts-path <dir>`. To stop it
+happening, run the installed tools instead of `bin/` (`./scripts/install-tools.ps1`).
+
+**`install-tools.ps1`: "Could not install …"** — the installed `localrun` or `localrun-repl` is running.
+Exit it and re-run the script.
 
 ---
 
