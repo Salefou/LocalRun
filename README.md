@@ -136,12 +136,20 @@ installed tool — exit it and re-run the script.
 What the script does, if you prefer doing it by hand:
 
 ```sh
-dotnet pack LocalRun.csproj -c Release -o ./nupkg -p:VersionSuffix=local.1
-dotnet tool update --global LocalRun --add-source ./nupkg --version 1.0.0-local.1   # also installs
+dotnet pack LocalRun.csproj -c Release -o ./nupkg -p:VersionSuffix=local-0001-1a2b3c4
+dotnet tool update --global LocalRun --add-source ./nupkg --version 1.0.0-local-0001-1a2b3c4   # also installs
 ```
 
-Every pack needs a **new** version (the script uses a timestamp): re-installing the same version number
-silently reuses the copy cached in the NuGet global packages folder.
+Every pack needs a **new, higher** version. The script builds it as `1.0.0-local-<build>-<commit>`,
+e.g. `1.0.0-local-0042-1a2b3c4`, so `dotnet tool list` shows what you're running:
+
+- **build**: the build number of the installed tools plus one, `0001` when none is installed. The
+  installed version is the only state needed, so there's no counter file to lose. It is zero-padded
+  because NuGet compares `local-0042-…` as text, where `local-10` would sort before `local-9`.
+- **commit**: the short hash of `HEAD`, with `-dirty` appended when tracked files have uncommitted
+  changes (`nogit` outside a git checkout).
+
+Re-installing the same version number could reuse a stale cached copy instead of your new build.
 Uninstall with `dotnet tool uninstall --global LocalRun` and `dotnet tool uninstall --global LocalRun.Repl`.
 
 ### Publish a standalone executable

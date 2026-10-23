@@ -7,8 +7,12 @@
     bin/, and the installed tools run from the .NET tool store, so a running LocalRun never locks the
     build output.
 
-    Every run packs a unique prerelease version (1.0.0-local.<timestamp>): installing the same version
-    number twice would reuse the stale copy cached in the NuGet global packages folder.
+    Every run packs a new, higher prerelease version: 1.0.0-local-<build>-<commit>[-dirty], e.g.
+    1.0.0-local-0042-1a2b3c4. Installing the same version number twice could reuse a stale cached copy.
+    - <build> is the build number of the installed tools plus one (1 when none is installed): the
+      tool store already remembers the last install, so no counter file is needed. It is padded to
+      4 digits because NuGet compares 'local-0042-...' as text, where 'local-10' < 'local-9'.
+    - <commit> is the short hash of HEAD, and '-dirty' marks uncommitted changes to tracked files.
 
 .PARAMETER ToolPath
     Install into this directory instead of globally (dotnet tool --tool-path).
@@ -32,7 +36,6 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $buildDir = Join-Path $repoRoot 'artifacts/tool-build'
 $packageDir = Join-Path $repoRoot 'artifacts/tool-packages'
-$versionSuffix = 'local.' + (Get-Date -Format 'yyyyMMddHHmmss')
 $tools = @(
     @{ Id = 'LocalRun';      Project = 'LocalRun.csproj';                   Command = 'localrun' },
     @{ Id = 'LocalRun.Repl'; Project = 'LocalRun.Repl/LocalRun.Repl.csproj'; Command = 'localrun-repl' }
@@ -48,6 +51,30 @@ if (Test-Path $packageDir) { Remove-Item -Recurse -Force $packageDir }
 # Typed as an array: an 'if' returning a one-element array unrolls it to a plain string, and
 # splatting a string passes its characters one by one ('-', '-', 'g', ...)
 [string[]] $scope = if ($ToolPath) { @('--tool-path', $ToolPath) } else { @('--global') }
+
+function Get-NextBuildNumber {
+    if ($ToolPath -and -not (Test-Path $ToolPath)) { return 1 }
+    $ids = $tools | ForEach-Object { [regex]::Escape($_.Id) }
+    $installed = & dotnet tool list @scope | ForEach-Object {
+        # "<package id>   <version>   <commands>"; versions from before this scheme don't match
+        if ($_ -match "^($($ids -join '|'))\s+\S*-local-(\d+)-") { [int] $Matches[2] }
+    }
+    $last = ($installed | Measure-Object -Maximum).Maximum
+    if ($null -eq $last) { return 1 }
+    # Measure-Object returns a double, which the D4 format rejects
+    return [int] $last + 1
+}
+
+function Get-CommitLabel {
+    $hash = & git -C $repoRoot rev-parse --short=7 HEAD 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $hash) { return 'nogit' }
+    & git -C $repoRoot diff --quiet HEAD 2>$null
+    if ($LASTEXITCODE -ne 0) { return "$hash-dirty" }
+    return $hash
+}
+
+$versionSuffix = 'local-{0:D4}-{1}' -f (Get-NextBuildNumber), (Get-CommitLabel)
+Write-Host "Version suffix: $versionSuffix"
 
 foreach ($tool in $tools) {
     Write-Host "Packing $($tool.Id)..."

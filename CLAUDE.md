@@ -42,7 +42,7 @@ If a build still fails with "file is locked by LocalRun (pid)", a LocalRun/REPL 
 the user's global tools, use `-ToolPath <scratch dir>`.
 
 The repo needs no tooling beyond the .NET SDK and PowerShell. For multi-line or backslash-heavy file
-edits prefer the Edit tool over sed: csproj globs (`\**`) and C# escapes (`﻿`) get mangled by
+edits prefer the Edit tool over sed: csproj globs (`\**`) and C# escapes (``) get mangled by
 shell escaping.
 
 ## Contracts to preserve
@@ -73,9 +73,13 @@ shell escaping.
   (`Compile/None/EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**"`). A new
   project or build-output folder must be added there, or its generated `.cs` files (AssemblyInfo…)
   get compiled into the CLI (symptom: CS0579 duplicate attribute).
-- Tool packages need a fresh version per install (`-p:VersionSuffix=local.<timestamp>` in the
-  script): the same version would be served stale from the NuGet global packages folder.
-- REPL input may start with a BOM when piped from PowerShell; `ReplTokenizer` drops `﻿`.
+- Tool packages need a new, higher version per install: the script packs
+  `1.0.0-local-<build>-<hash>[-dirty]`, with build = installed build + 1 (no counter file, by design:
+  the tool store already holds the last version). Zero-padded to 4 digits because NuGet compares that
+  prerelease label as text. Both tools always share one version.
+- PowerShell traps hit in that script: an `if` returning a one-element array unrolls to a string
+  (splatting it passes characters), and `Measure-Object` returns doubles (`{0:D4}` rejects them).
+- REPL input may start with a BOM when piped from PowerShell; `ReplTokenizer` drops U+FEFF.
 - MSBuild gotcha: XML comments cannot contain `--` (so no CLI flags in csproj comments).
 
 ## History
