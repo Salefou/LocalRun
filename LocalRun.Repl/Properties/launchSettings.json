@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "LocalRun.Repl": {
+      "commandName": "Project"
+    }
+  }
+}

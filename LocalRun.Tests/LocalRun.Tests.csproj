@@ -19,6 +19,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\LocalRun.csproj" />
+		<ProjectReference Include="..\LocalRun.Repl\LocalRun.Repl.csproj" />
 	</ItemGroup>
 
 </Project>

@@ -18,10 +18,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<!-- The test project lives under the repo root; keep it out of this project's default globs. -->
-		<Compile Remove="LocalRun.Tests\**" />
-		<None Remove="LocalRun.Tests\**" />
-		<EmbeddedResource Remove="LocalRun.Tests\**" />
+		<!-- The other projects live under the repo root; keep them out of this project's default globs. -->
+		<Compile Remove="LocalRun.Tests\**;LocalRun.Repl\**" />
+		<None Remove="LocalRun.Tests\**;LocalRun.Repl\**" />
+		<EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**" />
 	</ItemGroup>
 
 	<ItemGroup>
