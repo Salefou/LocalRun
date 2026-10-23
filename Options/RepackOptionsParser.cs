@@ -1,10 +1,15 @@
 ﻿namespace LocalRun.Options;
-internal class RepackOptionsParser
+
+using System.Text.RegularExpressions;
+
+internal partial class RepackOptionsParser
 {
     public static RepackOptions Parse(CommandLineArgs args)
     {
         BumpType bumpType = BumpType.None;
         string? suffix = args.Value("--suffix");
+        if (suffix != null && !PrereleaseLabelRegex().IsMatch(suffix))
+            throw new UsageException($"Invalid '--suffix' value '{suffix}': use letters, digits and '-', optionally in dot-separated parts (e.g. 'dev', 'beta.2'), without a leading dash.");
 
         List<string> bumpFlags = [];
         if (args.Flag("--patch"))
@@ -45,5 +50,9 @@ internal class RepackOptionsParser
             CleanBeforeRestore = args.Flag("--clean"),
         };
     }
+
+    // SemVer 2 prerelease identifiers: non-empty [0-9A-Za-z-] parts separated by dots
+    [GeneratedRegex(@"^[0-9A-Za-z][0-9A-Za-z-]*(\.[0-9A-Za-z-]+)*$")]
+    private static partial Regex PrereleaseLabelRegex();
 }
 

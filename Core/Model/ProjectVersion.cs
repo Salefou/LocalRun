@@ -17,12 +17,14 @@ public readonly record struct ProjectVersion
         {
             throw new InvalidOperationException($"Invalid version string '{value}'");
         }
-        if (!int.TryParse(versionNumbers[1], out var minorInt))
+        // Short versions ("1", "1.4") have their missing components at 0
+        int minorInt = 0;
+        if (versionNumbers.Length > 1 && !int.TryParse(versionNumbers[1], out minorInt))
         {
             throw new InvalidOperationException($"Invalid version string '{value}'");
         }
 
-        return new() { Major = majorInt, Minor = minorInt, PatchAndSuffix = versionNumbers[2] };
+        return new() { Major = majorInt, Minor = minorInt, PatchAndSuffix = versionNumbers.Length > 2 ? versionNumbers[2] : "0" };
     }
 
     public string AsVersionString()

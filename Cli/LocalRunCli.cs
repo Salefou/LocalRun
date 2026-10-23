@@ -237,7 +237,7 @@ public static class LocalRunCli
         Console.WriteLine("        --minor                 Increment minor version (resets patch)");
         Console.WriteLine("        --patch                 Increment patch version");
         Console.WriteLine("        --alpha                 Shorthand for --patch --suffix alpha");
-        Console.WriteLine("        --suffix <text>         Add or replace version suffix (e.g., 'local', 'beta')");
+        Console.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (e.g., 'dev', 'beta.2')");
         Console.WriteLine("        --remote                Query the configured NuGet sources for version info");
         Console.WriteLine("        --clean                 Clean projects before restoring them");
         Console.WriteLine();
