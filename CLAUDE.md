@@ -21,6 +21,10 @@ contract between steps.
 
 ## Commands
 
+CI (`.github/workflows/ci.yml`, job `build-and-test`, windows-latest) runs restore/build/test and the
+install script on every PR. After pushing, check it with `gh pr checks <n> --watch` before reporting
+a PR as ready.
+
 ```sh
 dotnet build LocalRun.sln
 dotnet test LocalRun.sln
@@ -108,7 +112,6 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
 - `RunProcessor` awaits each executable sequentially and ignores `SkipRun`.
 - `--git-changes` (`BuildConfigOptions.RetainDirtyGitRepos`) is parsed but unused; LibGit2Sharp is
   referenced for it.
-- `RepackExecutor` restores with `--source <local feed>` only (TODO in code).
 - Projects are keyed by file name: same-named projects in different repos collide.
 - `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
   `IsNewerThanRemoteAsync`).

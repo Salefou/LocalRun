@@ -14,6 +14,8 @@ public class RepackExecutor
     public async Task RepackAndRebuildAsync(RepackConfig repackConfig)
     {
         logger.LogInformation("[⚙ ] Starting repack in dependency order...");
+        // Restore uses the feed as a source before the first pack creates it: NuGet rejects a missing local source
+        Directory.CreateDirectory(repackConfig.LocalNugetPath);
         Stopwatch stopwatch = Stopwatch.StartNew();
         var independentTreePackingTasks = repackConfig.RepackTrees.Select(async projTree =>
         {
@@ -60,8 +62,9 @@ public class RepackExecutor
         var levelCleanAndRestoreTasks = projects.Select(async proj =>
         {
             logger.LogInformation("[🔁] [Depth {Depth}] Restoring {Project}...", depth, proj.Name);
-            // TODO source = everything in nuget manager
-            await RunProcessAsync("dotnet", $"restore \"{proj.PathToCsproj}\" --source \"{nugetRepoPath}\" --verbosity minimal");
+            // The local feed is added to the sources from NuGet.config (--source would replace them all,
+            // breaking restore of any third-party package that isn't in the global packages folder yet)
+            await RunProcessAsync("dotnet", $"restore \"{proj.PathToCsproj}\" -p:RestoreAdditionalProjectSources=\"{nugetRepoPath}\" --verbosity minimal");
         });
         await Task.WhenAll(levelCleanAndRestoreTasks);
     }
