@@ -57,7 +57,7 @@ so you can **inspect or hand-edit** the plan between steps.
 ```
 
 1. **`build`** finds every `*.csproj` under the root, reads its name, `OutputType`,
-   `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` files
+   `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
    that reference them. Optional filters keep only the part of the graph you care about. The result
    is written in topological order to `localrun.config.json`.
 2. **`visualize`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
@@ -65,7 +65,7 @@ so you can **inspect or hand-edit** the plan between steps.
    your NuGet sources with `--remote`) and the bumped version it will be packed as. Nothing is built
    yet: the plan is written to `repack.config.json` for you to review.
 4. **`go`** executes the plan: `dotnet restore` with the local feed added to your sources, then
-   `dotnet pack --no-restore -o <feed> -p:PackageVersion=<new version>`.
+   `dotnet pack --no-restore -o <feed>`, each project getting its planned version.
    `pack --go` does steps 3 and 4 in one command, when you don't need to review the plan.
 5. **`run`** starts the executables of the config with `dotnet run`, dependencies first.
 
@@ -79,8 +79,10 @@ so you can **inspect or hand-edit** the plan between steps.
 - Projects are ordered with a **layered Kahn's algorithm**. A project's **depth** is the length of
   the longest path from a root (a project with no dependencies), so every dependency sits at a strictly
   lower depth than its dependents. Within a depth, projects are sorted by name so output is deterministic.
-- A **dependency cycle** is an error: LocalRun names the projects it could not order instead of
-  silently dropping them.
+- A **dependency cycle** cannot be ordered, so `build` leaves its projects out of the config, with a
+  warning naming them, and carries on with the rest. Projects that depended on the cycle are kept
+  without that dependency, and named in a second warning: packing or running them may fail.
+  (A cycle written into a config by hand still fails the command that reads it.)
 - Independent sub-graphs (**connected components**) are repacked in parallel; within a component,
   all projects of the same depth are packed in parallel, depth by depth.
 
@@ -163,6 +165,9 @@ dotnet publish LocalRun.csproj -c Release -r win-x64 --self-contained false -o .
 ---
 
 ## Quick start
+
+> To try every command on dummy projects first, see [`samples/`](samples/README.md): a ready-made
+> multi-repo workspace with a walkthrough and the expected results.
 
 Say your repositories are checked out under `~/work/repos`, and you changed `Shared.Pricing`, which
 `OrderGateway` (an executable) consumes through two intermediate libraries.
@@ -278,7 +283,11 @@ a depth in parallel:
    the local feed is used **in addition to** the sources of your `NuGet.config`, so packages of earlier
    depths come from the feed and third-party packages from your usual sources. The feed folder is
    created if it doesn't exist yet.
-3. `dotnet pack <csproj> --no-restore -o <local feed> -p:PackageVersion=<to version>`
+3. `dotnet pack <csproj> --no-restore -o <local feed> -p:CustomBeforeMicrosoftCommonProps=<versions.props>`:
+   a temporary props file sets the `PackageVersion` of **every project in the plan**, matched by path.
+   So a package that project-references another declares that project's planned version as its
+   dependency (with a plain `-p:PackageVersion`, MSBuild would hand the packed project's own version to
+   its references too). A project that sets `<PackageVersion>` itself in its `.csproj` overrides this.
 
 | Option | Default | Description |
 |---|---|---|
@@ -536,6 +545,7 @@ LocalRun.Tests/               xUnit tests (graph, options, REPL tokenizer, log f
 scripts/install-tools.ps1     Build, pack and install/update both tools
 scripts/install-tools.cmd     Windows launcher for it (no execution-policy change needed)
 artifacts/                    (ignored) build output of the install script
+samples/                      Dummy multi-repo workspace for hand testing (see samples/README.md)
 CLAUDE.md                     Context for AI coding assistants working on this repo
 ```
 
@@ -592,8 +602,9 @@ stale caches. Re-packing the **same** version number is the usual culprit: the N
 folder keeps the first copy, so bump the version (e.g. a new suffix) or run
 `dotnet nuget locals global-packages --clear`.
 
-**`Dependency cycle detected, cannot order: A, B`** — the listed projects reference each other
-(possibly through packages). Break the cycle, or filter it out with `--users-of` / `--deps-of`.
+**`Dependency cycle left out of the config: A, B`** — the listed projects reference each other, possibly
+through packages, so `build` dropped them. Break the cycle to get them back. `Dependency cycle
+detected, cannot order` comes instead from a command reading a config whose cycle was added by hand.
 
 **Build fails with "file is locked by LocalRun"** — a LocalRun process (often a REPL) is still running
 from `bin/`. Exit it, or build to another folder: `dotnet build --artifacts-path <dir>`. To stop it
@@ -622,4 +633,5 @@ Exit it and re-run the script.
   with uncommitted changes).
 - `--remote` reads the user/machine `NuGet.Config`, not repository-level ones, and queries sources one
   at a time.
-- Dependencies are matched **by name**: two projects with the same file name in different repos collide.
+- Dependencies are matched **by name**: two projects with the same file name in different repos collide,
+  and one of them silently disappears from the graph (no warning yet).

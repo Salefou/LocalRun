@@ -51,6 +51,13 @@ shell escaping.
 
 ## Contracts to preserve
 
+- **Planned versions reach referenced projects**: `RepackExecutor` sets each project's `PackageVersion`
+  through a generated props file (`CustomBeforeMicrosoftCommonProps`, matched by
+  `MSBuildProjectFullPath`). Never go back to `-p:PackageVersion`: as a global property it flows into
+  project references, and packages then declare their own version for every project they reference
+  (NU1107 in consumers). `samples/` reproduces this: Logging project-references Primitives.
+- **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
+  rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
 - **Exit codes** (`LocalRunCli`): `0` success, `1` command failed, `2` invalid command line
   (`UsageException`). External code relies on them.
 - **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values`, then call
@@ -62,7 +69,9 @@ shell escaping.
   unless asked by a flag (`visualize --open`). Interactive behaviour belongs in `LocalRun.Repl`.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
 - Dependency graph semantics (layered Kahn, depth = longest path from a root, name-sorted layers,
-  cycles throw) are covered by `LocalRun.Tests/Graph/DependencyGraphTests.cs`.
+  cycles throw) are covered by `LocalRun.Tests/Graph/DependencyGraphTests.cs`. `build` calls
+  `RemoveCycles()` (Tarjan SCC) after the filters, so cycles are left out with a warning instead of
+  failing; the throw in `TopologicalClassOrder` stays as the safety net for hand-edited configs.
 - Version bump rules (a bump resets lower components and replaces the prerelease label; no bump
   keeps the version and only `--suffix` replaces the label) are the README "Versioning rules" table,
   mirrored case by case in `LocalRun.Tests/Options/BumpOptionsTests.cs`. Change both together.
@@ -76,8 +85,8 @@ shell escaping.
 - Level via `LOCALRUN_LOG_LEVEL`. Errors log the message; `LogDebug(ex, …)` carries the stack trace.
 - Options objects live in `Options/`, one parser per command (`*OptionsParser.Parse(CommandLineArgs)`).
 - New command: see README "Adding a command". Update `LocalRunCli.PrintHelp` and README together.
-- The root csproj excludes sibling project folders and `artifacts/` from its globs
-  (`Compile/None/EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**"`). A new
+- The root csproj excludes sibling project folders, `artifacts/` and `samples/` from its globs
+  (`Compile/None/EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**;samples\**"`). A new
   project or build-output folder must be added there, or its generated `.cs` files (AssemblyInfo…)
   get compiled into the CLI (symptom: CS0579 duplicate attribute).
 - Tool packages need a new, higher version per install: the script packs
@@ -112,6 +121,7 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
 - `RunProcessor` awaits each executable sequentially and ignores `SkipRun`.
 - `--git-changes` (`BuildConfigOptions.RetainDirtyGitRepos`) is parsed but unused; LibGit2Sharp is
   referenced for it.
-- Projects are keyed by file name: same-named projects in different repos collide.
+- Projects are keyed by file name: same-named projects in different repos collide, and one silently
+  disappears (`DependencyGraph` dictionary overwrite; `samples/edge-cases/name-collision`).
 - `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
   `IsNewerThanRemoteAsync`).

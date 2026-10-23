@@ -1,0 +1,18 @@
+<Project>
+  <!-- Shared by every sample project. Version, OutputType and references stay in each .csproj:
+       LocalRun reads them from the .csproj XML, not from MSBuild evaluation. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <!-- Pack each project's dummy README.md, or `dotnet pack` notes "The package ... is missing a readme" -->
+  <PropertyGroup Condition="Exists('$(MSBuildProjectDirectory)\README.md')">
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\README.md')">
+    <None Include="$(MSBuildProjectDirectory)\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

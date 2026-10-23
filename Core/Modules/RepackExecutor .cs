@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Security;
+using System.Text;
 using System.Threading.Tasks;
 
 public class RepackExecutor
@@ -16,33 +18,65 @@ public class RepackExecutor
         logger.LogInformation("[⚙ ] Starting repack in dependency order...");
         // Restore uses the feed as a source before the first pack creates it: NuGet rejects a missing local source
         Directory.CreateDirectory(repackConfig.LocalNugetPath);
+        string versionsPropsPath = Path.Combine(Path.GetTempPath(), $"localrun-versions-{Guid.NewGuid():N}.props");
+        await File.WriteAllTextAsync(versionsPropsPath, BuildVersionsProps(repackConfig));
         Stopwatch stopwatch = Stopwatch.StartNew();
-        var independentTreePackingTasks = repackConfig.RepackTrees.Select(async projTree =>
+        try
         {
-            var depthToProjects = projTree.Projects.GroupBy(proj => proj.Depth)
-                .ToDictionary(group => group.Key, group => group.ToList());
-
-            foreach (var (depth, projects) in depthToProjects.OrderBy(p => p.Key))
+            var independentTreePackingTasks = repackConfig.RepackTrees.Select(async projTree =>
             {
-                if (repackConfig.Clean)
+                var depthToProjects = projTree.Projects.GroupBy(proj => proj.Depth)
+                    .ToDictionary(group => group.Key, group => group.ToList());
+
+                foreach (var (depth, projects) in depthToProjects.OrderBy(p => p.Key))
                 {
-                    await CleanAllAsync(projects, repackConfig.LocalNugetPath, depth);
+                    if (repackConfig.Clean)
+                    {
+                        await CleanAllAsync(projects, repackConfig.LocalNugetPath, depth);
+                    }
+                    await RestoreAllAsync(projects, repackConfig.LocalNugetPath, depth);
+                    await PackAllAsync(projects, repackConfig.LocalNugetPath, versionsPropsPath, depth);
                 }
-                await RestoreAllAsync(projects, repackConfig.LocalNugetPath, depth);
-                await PackAllAsync(projects, repackConfig.LocalNugetPath, depth);
-            }
-        });
-        await Task.WhenAll(independentTreePackingTasks);
+            });
+            await Task.WhenAll(independentTreePackingTasks);
+        }
+        finally
+        {
+            File.Delete(versionsPropsPath);
+        }
         stopwatch.Stop();
         logger.LogInformation("[🚀] Repack complete. Took {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
     }
 
-    private async Task PackAllAsync(List<ProjectRepack> projects, string nugetRepoPath, int depth)
+    /// <summary>
+    /// MSBuild props giving every project of the plan its planned PackageVersion, keyed by project path.
+    /// Passing -p:PackageVersion instead would be a global property: it flows into project references too,
+    /// so a package would declare its own version as the version of every project it references.
+    /// Imported through CustomBeforeMicrosoftCommonProps, which every project, referenced ones included, imports.
+    /// </summary>
+    internal static string BuildVersionsProps(RepackConfig repackConfig)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<Project>");
+        foreach (var proj in repackConfig.RepackTrees.SelectMany(tree => tree.Projects))
+        {
+            // MSBuild compares strings case-insensitively, so path casing doesn't matter
+            string path = SecurityElement.Escape(Path.GetFullPath(proj.PathToCsproj));
+            string version = SecurityElement.Escape(proj.ToVersion.AsVersionString());
+            sb.AppendLine($"  <PropertyGroup Condition=\"'$(MSBuildProjectFullPath)' == '{path}'\">");
+            sb.AppendLine($"    <PackageVersion>{version}</PackageVersion>");
+            sb.AppendLine("  </PropertyGroup>");
+        }
+        sb.AppendLine("</Project>");
+        return sb.ToString();
+    }
+
+    private async Task PackAllAsync(List<ProjectRepack> projects, string nugetRepoPath, string versionsPropsPath, int depth)
     {
         var levelPackingTasks = projects.Select(async proj =>
         {
             logger.LogInformation("[📦] [Depth {Depth}] Packing {Project} ({FromVersion}) to ({ToVersion})...", depth, proj.Name, proj.FromVersion, proj.ToVersion);
-            await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{nugetRepoPath}\" -p:PackageVersion=\"{proj.ToVersion.AsVersionString()}\"");
+            await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{nugetRepoPath}\" -p:CustomBeforeMicrosoftCommonProps=\"{versionsPropsPath}\"");
         });
         await Task.WhenAll(levelPackingTasks);
     }

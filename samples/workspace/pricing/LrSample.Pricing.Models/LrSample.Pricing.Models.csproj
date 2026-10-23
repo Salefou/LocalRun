@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Version>1.4.2.7</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="LrSample.Primitives" Version="*-*" />
+  </ItemGroup>
+</Project>

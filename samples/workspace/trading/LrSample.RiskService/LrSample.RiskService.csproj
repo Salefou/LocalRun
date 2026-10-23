@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <Version>0.9.0-rc.1</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="LrSample.Pricing.Models" Version="*-*" />
+    <PackageReference Include="LrSample.Primitives" Version="*-*" />
+  </ItemGroup>
+</Project>

@@ -19,9 +19,9 @@
 
 	<ItemGroup>
 		<!-- Other projects and the install script build output (artifacts/) live under the repo root: keep them out of this project's default globs. -->
-		<Compile Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**" />
-		<None Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**" />
-		<EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**" />
+		<Compile Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**;samples\**" />
+		<None Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**;samples\**" />
+		<EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**;samples\**" />
 	</ItemGroup>
 
 	<ItemGroup>
