@@ -550,6 +550,11 @@ dotnet build LocalRun.sln
 dotnet test LocalRun.sln
 ```
 
+**CI** (`.github/workflows/ci.yml`) runs on every pull request and every push to `master`, on Windows:
+restore, build, test, then `install-tools.ps1 -ToolPath <temp>` in Windows PowerShell 5.1 followed by
+`lrun help`. Wait for the green check before merging. To make it mandatory, add a branch protection
+rule on `master` requiring the **build-and-test** check.
+
 - Target framework: `net8.0`, nullable and implicit usings enabled.
 - The CLI project sits at the repository root, so its csproj **excludes the other project folders and
   `artifacts/`** from its default globs (`Compile/None/EmbeddedResource Remove`). Add any new project

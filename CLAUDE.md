@@ -21,6 +21,10 @@ contract between steps.
 
 ## Commands
 
+CI (`.github/workflows/ci.yml`, job `build-and-test`, windows-latest) runs restore/build/test and the
+install script on every PR. After pushing, check it with `gh pr checks <n> --watch` before reporting
+a PR as ready.
+
 ```sh
 dotnet build LocalRun.sln
 dotnet test LocalRun.sln

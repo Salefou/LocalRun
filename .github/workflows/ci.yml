@@ -1,0 +1,45 @@
+# Build, test and install-script check for every pull request and for master.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# A new push to the same PR cancels the run still going for the previous one
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # Windows, like the team's machines: the install script targets Windows PowerShell
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore LocalRun.sln
+
+      - name: Build
+        run: dotnet build LocalRun.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test LocalRun.sln -c Release --no-build --verbosity normal
+
+      # Windows PowerShell 5.1 ('powershell', not 'pwsh'), as when running install-tools.cmd locally
+      - name: Install the tools with the install script
+        shell: powershell
+        run: |
+          $toolPath = Join-Path $env:RUNNER_TEMP 'tools'
+          ./scripts/install-tools.ps1 -ToolPath $toolPath
+          # Not piped: Select-Object -First would stop lrun early and fake a non-zero exit code
+          & (Join-Path $toolPath 'lrun.exe') help
+          if ($LASTEXITCODE -ne 0) { throw "lrun help failed with exit code $LASTEXITCODE" }
