@@ -1,0 +1,10 @@
+<Project>
+  <!-- Shared by every sample project. Version, OutputType and references stay in each .csproj:
+       LocalRun reads them from the .csproj XML, not from MSBuild evaluation. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

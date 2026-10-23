@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Version>1.4</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../LrSample.Pricing.Models/LrSample.Pricing.Models.csproj" />
+    <PackageReference Include="LrSample.Logging" Version="*-*" />
+  </ItemGroup>
+</Project>

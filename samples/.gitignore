@@ -1,0 +1,5 @@
+# Local feed and package cache of the sample workspace (see NuGet.config). The feed folder itself is
+# kept (.gitkeep): NuGet fails every restore when a configured local source doesn't exist.
+.feed/*
+!.feed/.gitkeep
+.packages/

@@ -1,0 +1,8 @@
+<Project>
+  <!-- Stamp the version a package was packed as (set per project by `lrun go`) into the assembly, so the
+       executables can print which build of each dependency they actually loaded. In .targets because
+       PackageVersion is only final once the project and all props are evaluated. -->
+  <PropertyGroup Condition="'$(PackageVersion)' != ''">
+    <InformationalVersion>$(PackageVersion)</InformationalVersion>
+  </PropertyGroup>
+</Project>
