@@ -6,7 +6,7 @@ LocalRun is a .NET command-line tool for working across many repositories whose 
 each other through NuGet packages. It scans a directory tree of repositories, builds the dependency
 graph between their projects, and then:
 
-- **visualizes** that graph as an SVG,
+- **plots** that graph as an SVG,
 - **bumps versions** and **repacks** the libraries you changed into a local NuGet feed, in dependency order,
 - **runs** the executables that consume them, in dependency order.
 
@@ -46,7 +46,7 @@ so you can **inspect or hand-edit** the plan between steps.
               build                          pack                           go
  repos/ ───────────────► localrun.config.json ───────────────► repack.config.json ──────────► local NuGet feed
                                │      │         └──────────── pack --go ─────────────┘        (~/.localnuget)
-                     visualize │      │ run
+                          plot │      │ run
                                ▼      ▼
                 dependencies.svg    dotnet run, executables in dependency order
 ```
@@ -55,7 +55,7 @@ so you can **inspect or hand-edit** the plan between steps.
    `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
    that reference them. Optional filters keep only the part of the graph you care about. The result
    is written in topological order to `localrun.config.json`.
-2. **`visualize`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
+2. **`plot`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
 3. **`pack`** decides, for every project, its current version (from the csproj, or from
    your NuGet sources with `--remote`) and the bumped version it will be packed as. Nothing is built
    yet: the plan is written to `repack.config.json` for you to review.
@@ -170,11 +170,11 @@ Say your repositories are checked out under `~/work/repos`, and you changed `Sha
 ```sh
 cd ~/work
 
-# 1. Graph everything that depends on the library you changed
-lrun build --root ./repos --users-of Shared.Pricing
+# 1. Graph everything that depends on the library you changed, and plot it (Ctrl+click the printed link)
+lrun build --root ./repos --users-of Shared.Pricing --plot
 
-# 2. Look at it
-lrun visualize --open
+# 2. Or plot the current config again, opening the SVG directly
+lrun plot --open
 
 # 3. Plan a patch bump with a "dev" suffix, then review repack.config.json
 lrun pack --patch --suffix dev
@@ -202,8 +202,8 @@ General form: `lrun <command> [options]`.
 
 > Renamed on 2026-10-24: the tool was `localrun` (now `lrun`; the `localrun-repl` prompt has since been
 > removed), and `build-config`, `repack-preview` and `repack-go` are now `build`, `pack` and `go`. The `build` filters
-> `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`. The old names
-> are gone: update scripts that call them. Config file names are unchanged.
+> `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`, and `visualize`
+> is now `plot`. The old names are gone: update scripts that call them. Config file names are unchanged.
 
 - Options are `--name` followed by zero or more values; values run until the next `--option`.
 - Unknown options, repeated options, missing values and extra values are **rejected** (exit code `2`)
@@ -226,6 +226,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--union` | off | With both filters: keep the users of `--users-of` **or** the dependencies of `--deps-of`, instead of the projects between them. |
 | `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
+| `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.svg`, printed as a link). |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
 The two flags are AND'ed: with `--users-of X --deps-of Y` you get **the projects between X and Y**,
@@ -249,7 +250,7 @@ what the flag added.
 
 Names are matched case-insensitively against the scanned projects. An unknown name fails with exit code `2`.
 
-### `visualize`
+### `plot`
 
 Render the graph of a config file as `<output>.dot` and `<output>.svg`. Nodes show the project name
 and version, edges point from a dependency to its dependent, and colours darken with depth.
@@ -412,9 +413,9 @@ on executables you don't want started, or change `LocalNugetPath` before `pack`.
 
 Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`.
 
-### `lrun-visuals/dependencies-<date-time>.dot` / `.svg` — written by `visualize`
+### `lrun-visuals/dependencies-<date-time>.dot` / `.svg` — written by `plot` (or `build --plot`)
 
-Plain Graphviz DOT and its rendering, one pair per `visualize` run (delete the folder when you're done). The DOT file can be re-rendered or post-processed with any
+Plain Graphviz DOT and its rendering, one pair per graph (delete the folder when you're done). The DOT file can be re-rendered or post-processed with any
 Graphviz tooling.
 
 ---
@@ -518,7 +519,7 @@ $plan.RepackTrees.Projects | Format-Table Name, Depth
 set -e                                   # any non-zero exit code stops the job
 export LOCALRUN_LOG_LEVEL=Debug          # full stack traces on failure
 lrun build --root "$WORKSPACE/repos" --config "$WORKSPACE/out/localrun.config.json"
-lrun visualize --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/out/dependencies"
+lrun plot --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/out/dependencies"
 ```
 
 ---

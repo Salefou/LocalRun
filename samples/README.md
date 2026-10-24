@@ -66,7 +66,7 @@ NuGet keeps the first copy of a version in `.packages/` and would silently reuse
 
 ```powershell
 lrun build --root workspace --local-nuget .feed
-lrun visualize --open
+lrun plot --open
 ```
 
 - Warns that `LrSample.Orphan` is referenced by no solution.
@@ -74,7 +74,7 @@ lrun visualize --open
 
 ### 2. Filters
 
-Rebuild the config with each line and check the `Name`s in `localrun.config.json` (or `lrun visualize`):
+Rebuild the config with each line and check the `Name`s in `localrun.config.json` (or `lrun plot`):
 
 | Command | Projects kept (without the `LrSample.` prefix) |
 |---|---|
@@ -174,7 +174,7 @@ Variations worth trying:
 - **Debugging one service**: `lrun run --exclude LrSample.RiskService` logs `Not running
   LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
   IDE (`:5102` stays free for it). `--exclude LrSample.Pricing` is rejected (exit code 2): it's a library.
-- **Graphs**: each `lrun visualize` writes a new `lrun-visuals/dependencies-<date-time>.svg` and prints
+- **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `lrun-visuals/dependencies-<date-time>.svg` and prints
   it as a `file:///` link; Ctrl+click it (Windows Terminal, VS Code) to open it in the browser.
 
 ### 5. Edge cases

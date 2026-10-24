@@ -8,6 +8,7 @@ public class LocalRunCliTests
     [InlineData("build-config")]
     [InlineData("repack-preview")]
     [InlineData("repack-go")]
+    [InlineData("visualize")]
     public async Task FormerCommandNames_AreUnknown(string command)
     {
         Assert.Equal(LocalRunCli.ExitUsage, await LocalRunCli.RunAsync([command]));
@@ -15,6 +16,8 @@ public class LocalRunCliTests
 
     [Theory]
     [InlineData("build", "--nope")]
+    [InlineData("build", "--plot", "yes")]
+    [InlineData("plot", "--nope")]
     [InlineData("pack", "--nope")]
     [InlineData("pack", "--go", "yes")]
     [InlineData("go", "--nope")]

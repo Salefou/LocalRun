@@ -17,7 +17,7 @@ The repository root holds only repo-wide files (solution, docs, `.github/`, git 
 `tests/` and into `LocalRun.sln`.
 
 Pipeline: `build` → `localrun.config.json` → `pack` → `repack.config.json` →
-`go`. `visualize` and `run` read `localrun.config.json`. The JSON files are the hand-editable
+`go`. `plot` and `run` read `localrun.config.json`. The JSON files are the hand-editable
 contract between steps.
 
 ## Commands
@@ -82,7 +82,7 @@ shell escaping.
   `~/.localnuget`.
   Never reintroduce paths relative to `bin/` (the old `..\..\..\Output` hack) or `~/source/repos`.
 - **Non-interactive CLI**: nothing in `src/LocalRun` may prompt, read stdin or open windows
-  unless asked by a flag (`visualize --open`). There is no interactive front end any more (the REPL
+  unless asked by a flag (`plot --open`). There is no interactive front end any more (the REPL
   was removed on 2026-10-24); don't add one without asking.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
 - Dependency graph semantics (layered Kahn, depth = longest path from a root, name-sorted layers,
@@ -136,6 +136,8 @@ shell escaping.
 - 2026-10-24, branch `claude/remove-repl`: removed `src/LocalRun.Repl` (`lrun-repl`). With the short
   `lrun` commands it only saved typing the prefix, while hiding exit codes and duplicating the shell
   (`cd`, quoting). The install script uninstalls it.
+- 2026-10-24, branch `claude/plot`: `visualize` → `plot` (dropped, not aliased), and `build --plot`
+  plots the config it just wrote with `plot`'s defaults. `GraphVisualizer` and `lrun-visuals/` keep their names.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks

@@ -36,7 +36,7 @@ public static class LocalRunCli
     private static string DefaultLocalNugetPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".localnuget");
 
-    /// <param name="args">The command name followed by its options, e.g. <c>["visualize", "--open"]</c>.</param>
+    /// <param name="args">The command name followed by its options, e.g. <c>["plot", "--open"]</c>.</param>
     public static async Task<int> RunAsync(string[] args)
     {
         if (args.Length == 0)
@@ -54,8 +54,8 @@ public static class LocalRunCli
                 case "build":
                     await BuildAsync(options);
                     break;
-                case "visualize":
-                    await VisualizeAsync(options);
+                case "plot":
+                    await PlotAsync(options);
                     break;
                 case "pack":
                     await PackAsync(options);
@@ -93,6 +93,7 @@ public static class LocalRunCli
         string localNugetPath = Path.GetFullPath(args.Value("--local-nuget") ?? DefaultLocalNugetPath);
         string configPath = Path.GetFullPath(args.Value("--config") ?? DefaultConfigPath);
         BuildConfigOptions configOptions = BuildConfigOptionsParser.Parse(args);
+        bool plot = args.Flag("--plot");
         args.EnsureAllConsumed();
 
         if (!Directory.Exists(rootPath))
@@ -101,9 +102,13 @@ public static class LocalRunCli
         LocalRunConfig localRunConfig = new ConfigBuilder().BuildConfig(rootPath, configOptions, localNugetPath);
         await WriteToFile(configPath, localRunConfig);
         logger.LogInformation("[✔ ] Configuration written to {Path}", configPath);
+
+        // As 'plot' with its defaults, from the config just written
+        if (plot)
+            await PlotGraphAsync(localRunConfig, UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now), open: false);
     }
 
-    private static async Task VisualizeAsync(CommandLineArgs args)
+    private static async Task PlotAsync(CommandLineArgs args)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         string outputPath = args.Value("--output") ?? UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now);
@@ -111,6 +116,11 @@ public static class LocalRunCli
         args.EnsureAllConsumed();
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
+        await PlotGraphAsync(config, outputPath, open);
+    }
+
+    private static async Task PlotGraphAsync(LocalRunConfig config, string outputPath, bool open)
+    {
         string svgPath = await GraphVisualizer.GenerateAsync(new GraphVisualizer.Config
         {
             Graph = DependencyGraph.FromConfig(config),
@@ -242,9 +252,10 @@ public static class LocalRunCli
         Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
         Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
+        Console.WriteLine("        --plot                  Then plot the graph, as 'plot' does with its defaults");
         Console.WriteLine();
 
-        Console.WriteLine("  visualize [options]");
+        Console.WriteLine("  plot [options]");
         Console.WriteLine("      Render the dependency graph of a config file as DOT and SVG.");
         Console.WriteLine("      Options:");
         Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
@@ -285,8 +296,8 @@ public static class LocalRunCli
         Console.WriteLine();
 
         Console.WriteLine("Example:");
-        Console.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp");
-        Console.WriteLine($"  {CommandName} visualize --open");
+        Console.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp --plot");
+        Console.WriteLine($"  {CommandName} plot --open                     (the same graph, opened)");
         Console.WriteLine($"  {CommandName} pack --patch --suffix dev       (review repack.config.json, then:)");
         Console.WriteLine($"  {CommandName} go");
         Console.WriteLine($"  {CommandName} pack --patch --suffix dev --go  (both steps at once)");
