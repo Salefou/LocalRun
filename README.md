@@ -356,7 +356,7 @@ the services, as `docker compose up` does for containers:
    **Ctrl+C**. They all receive it (they share the console). Whatever is still running 10 seconds later
    is killed, with its child processes.
 
-Projects with `"SkipRun": true` in the config are not run. A process that fails *on its own* (non-zero
+A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
 has stopped. Processes stopped by Ctrl+C never count as failures.
 
@@ -377,7 +377,7 @@ starting the next. A service that needs another one at startup should retry.
 | Option | Default | Description |
 |---|---|---|
 | `--config <file>` | `localrun.config.json` | Config file to read. |
-| `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `up` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). Unlike `SkipRun`, nothing to edit in the config. |
+| `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `up` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). |
 
 ```sh
 lrun up --exclude OrderGateway     # everything but OrderGateway, which you start under the debugger
@@ -407,16 +407,16 @@ All files are indented JSON, safe to commit, diff or edit by hand between steps.
       "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // null if no solution references it
       "Type": "library",                        // "executable" when <OutputType>Exe</OutputType>
       "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // first <Version>, else 1.0.0
-      "Dependencies": [],                       // names of other projects in the graph
-      "SkipRepack": false,                      // set to true by hand to leave it out of pack
-      "SkipRun": false                          // set to true by hand to leave it out of run
+      "Dependencies": []                        // names of other projects in the graph
     }
   ]
 }
 ```
 
-Useful hand edits: set `"SkipRepack": true` on projects you don't want repacked, `"SkipRun": true`
-on executables you don't want started, or change `LocalNugetPath` before `pack`.
+`build` rewrites this file from scratch, so hand edits last until the next `build`. To leave a project
+out of a repack, delete it from `repack.config.json` before `go`. To leave an executable out of `up`,
+use `up --exclude`. (Configs from before 2026-10-24 may still hold `SkipRepack` / `SkipRun` fields:
+they are ignored.)
 
 ### `repack.config.json` — written by `pack`
 

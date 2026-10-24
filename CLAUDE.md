@@ -151,7 +151,9 @@ shell escaping.
 - 2026-10-24, branch `claude/git-changes`: re-shipped the `plot` commit (#18 had merged into the
   already-merged `claude/remove-repl`), name collisions left out with an error, `--git-changes` implemented,
   `run` → `up` (`lrun run` read oddly; `start` was rejected as ambiguous; dropped, not aliased).
-  `RunProcessor` and the `SkipRun` config field keep their names.
+  `RunProcessor` keeps its name. Then removed the `SkipRepack` / `SkipRun` config fields (user's choice):
+  `build` rewrites the config, so they never survived a rebuild, and `up --exclude` / deleting from
+  `repack.config.json` do the same job. Old configs holding them still load (unknown JSON fields are ignored).
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks

@@ -156,7 +156,6 @@ lrun up
 Variations worth trying:
 
 - `pack` without `--go`, edit `repack.config.json` (change a `ToVersion`, delete a project), then `lrun go`.
-- Set `"SkipRepack": true` on a project in `localrun.config.json` before `pack`: it disappears from the plan.
 - After a reset, `lrun pack --patch --suffix dev --clean --go` shows the `Cleaning` step.
 - **A service failing at startup**: occupy RiskService's port from another PowerShell window first:
 
@@ -169,8 +168,6 @@ Variations worth trying:
   `LrSample.RiskService (exit code 1) failed` (exit code 1). Running `lrun up` twice doesn't show this:
   the second one fails earlier, building executables the first one is running.
 - **Another port**: `$env:LRSAMPLE_ORDERGATEWAY_PORT = 6101` (or `LRSAMPLE_RISKSERVICE_PORT`) before `lrun up`.
-- **`SkipRun`**: set `"SkipRun": true` on `LrSample.RiskService` in `localrun.config.json`, then
-  `lrun up`: only 3 processes start.
 - **Debugging one service**: `lrun up --exclude LrSample.RiskService` logs `Not running
   LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
   IDE (`:5102` stays free for it). `--exclude LrSample.Pricing` is rejected (exit code 2): it's a library.
