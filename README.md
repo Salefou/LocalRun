@@ -319,7 +319,9 @@ the services:
 
 1. **Build** each executable with `dotnet build`, one at a time, in dependency order. Executables
    sharing a project reference would otherwise build it concurrently and collide on its output. A
-   build failure stops `run` before anything starts, and only then is the build output shown.
+   build failure stops `run` before anything starts, and only then is the build output shown. As with
+   `go`, the config's local feed is added to the restore sources, so the packages `go` produced are
+   found even if your `NuGet.config` doesn't list that feed.
 2. **Start** them all, in dependency order, with `dotnet run --no-build --project <csproj>`, without
    waiting for each one. `dotnet run` still applies the project's `launchSettings.json` (URLs,
    environment variables). Every output line is prefixed with the project name.
