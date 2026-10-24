@@ -23,9 +23,25 @@ public class LocalRunCliTests
     [InlineData("pack", "--go", "yes")]
     [InlineData("go", "--nope")]
     [InlineData("up", "--nope")]
+    [InlineData("version", "--nope")]
     public async Task Commands_RejectBadOptionsBeforeDoingAnyWork(params string[] args)
     {
         Assert.Equal(LocalRunCli.ExitUsage, await LocalRunCli.RunAsync(args));
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("--version")]
+    public async Task Version_Succeeds(string command)
+    {
+        Assert.Equal(LocalRunCli.ExitSuccess, await LocalRunCli.RunAsync([command]));
+    }
+
+    [Fact]
+    public void Version_IsThePackageVersion()
+    {
+        // VersionPrefix in the csproj, then the prerelease label and/or '+<commit>' the build adds
+        Assert.Matches(@"^\d+\.\d+\.\d+([-+].*)?$", LocalRunCli.Version);
     }
 
     [Fact]

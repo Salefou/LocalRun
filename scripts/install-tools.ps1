@@ -7,8 +7,11 @@
     bin/, and the installed tools run from the .NET tool store, so a running LocalRun never locks the
     build output. It also uninstalls the former `lrun-repl` tool (LocalRun.Repl) if it is still there.
 
-    Every run packs a new, higher prerelease version: 1.0.0-local-<build>-<commit>[-dirty], e.g.
-    1.0.0-local-0042-1a2b3c4. Installing the same version number twice could reuse a stale cached copy.
+    Every run packs a new prerelease of the next release: <VersionPrefix>-local-<build>-<commit>[-dirty],
+    e.g. 0.1.1-local-0042-1a2b3c4, VersionPrefix coming from the csproj. Installing the same version
+    number twice could reuse a stale cached copy.
+    - It replaces whatever LocalRun is installed, even a higher version (a release from nuget.org, or a
+      former 1.0.0-local-... build): this script installs the code you are working on.
     - <build> is the build number of the installed tool plus one (1 when none is installed): the
       tool store already remembers the last install, so no counter file is needed. It is padded to
       4 digits because NuGet compares 'local-0042-...' as text, where 'local-10' < 'local-9'.
@@ -92,8 +95,16 @@ foreach ($tool in $tools) {
     if (-not $package) { throw "No package found for $($tool.Id) in $packageDir" }
     $version = [regex]::Match($package.Name, $pattern).Groups[1].Value
     Write-Host "Installing $($tool.Command) $version..."
-    # 'update' also installs a tool that is not installed yet
-    & dotnet tool update $tool.Id @scope --add-source $packageDir --version $version --ignore-failed-sources
+    # Uninstall first: 'update' refuses a lower version than the installed one, which a release from
+    # nuget.org or a former 1.0.0-local-... build is (and SDK 8 has no --allow-downgrade)
+    $installedIds = if (-not $ToolPath -or (Test-Path $ToolPath)) { & dotnet tool list @scope | ForEach-Object { ($_ -split '\s+')[0] } }
+    if ($installedIds -contains $tool.Id) {
+        & dotnet tool uninstall $tool.Id @scope | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not uninstall the installed $($tool.Id) (dotnet exit code $LASTEXITCODE). If '$($tool.Command)' is running, exit it and retry."
+        }
+    }
+    & dotnet tool install $tool.Id @scope --add-source $packageDir --version $version --ignore-failed-sources
     if ($LASTEXITCODE -ne 0) {
         throw "Could not install $($tool.Id) (dotnet exit code $LASTEXITCODE, see its output above). If '$($tool.Command)' is running, exit it and retry."
     }

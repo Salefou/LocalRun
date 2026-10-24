@@ -17,6 +17,14 @@ packages in the right order.
 LocalRun is the `lrun` command-line tool (`src/LocalRun/`): one command per invocation, exit codes,
 no prompts, so it works the same from your shell, scripts, CI jobs and other programs.
 
+```sh
+dotnet tool install -g LocalRun
+lrun help
+```
+
+LocalRun is young (`0.x`): commands and file formats may still change between minor versions, as listed in
+[CHANGELOG.md](CHANGELOG.md). Issues and feedback are welcome on GitHub; please include `lrun --version`.
+
 ---
 
 ## Contents
@@ -34,6 +42,7 @@ no prompts, so it works the same from your shell, scripts, CI jobs and other pro
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [Known limitations](#known-limitations)
+- [Licence](#licence)
 
 ---
 
@@ -93,12 +102,24 @@ so you can **inspect or hand-edit** the plan between steps.
 
 - **.NET SDK 8.0 or later** (`dotnet` on the `PATH`). LocalRun itself targets `net8.0`, and it shells
   out to `dotnet restore`, `dotnet pack`, `dotnet clean` and `dotnet run`.
-- Windows, Linux or macOS. Graphviz native binaries come with the `Rubjerg.Graphviz` package.
+- **Tested on Windows x64**, which is what CI runs. It is written to run on Linux and macOS too, but that
+  is untested, and `plot` needs the Graphviz binaries bundled by `Rubjerg.Graphviz`, which exist for
+  win-x64 and linux-x64 only.
 - For `--remote`: the NuGet sources configured in your user/machine `NuGet.Config`.
 
 ---
 
 ## Installation
+
+### From nuget.org (recommended)
+
+```sh
+dotnet tool install -g LocalRun     # then: dotnet tool update -g LocalRun
+lrun --version
+```
+
+If you installed a build from source before 0.1.0 (`1.0.0-local-…` in `dotnet tool list -g`), run
+`dotnet tool uninstall -g LocalRun` first: that version sorts above the releases.
 
 ### Run from source
 
@@ -110,9 +131,10 @@ dotnet run --project src/LocalRun -- help
 
 Note the `--`: everything after it is passed to LocalRun rather than to `dotnet run`.
 
-### Install as a .NET tool (recommended)
+### Install your working copy as the tool
 
-LocalRun is packaged as the `lrun` .NET tool. One script builds, packs and installs or updates it:
+When working on LocalRun itself, one script builds, packs and installs your checkout as the `lrun` tool,
+replacing whatever version is installed (a release included):
 
 ```bat
 scripts\install-tools.cmd                        :: global install: lrun on the PATH
@@ -140,11 +162,13 @@ What the script does, if you prefer doing it by hand:
 
 ```sh
 dotnet pack src/LocalRun -c Release -o ./nupkg -p:VersionSuffix=local-0001-1a2b3c4
-dotnet tool update --global LocalRun --add-source ./nupkg --version 1.0.0-local-0001-1a2b3c4   # also installs
+dotnet tool uninstall --global LocalRun
+dotnet tool install --global LocalRun --add-source ./nupkg --version 0.1.1-local-0001-1a2b3c4
 ```
 
-Every pack needs a **new, higher** version. The script builds it as `1.0.0-local-<build>-<commit>`,
-e.g. `1.0.0-local-0042-1a2b3c4`, so `dotnet tool list` shows what you're running:
+Every pack needs a **new** version. The script builds it as `<next release>-local-<build>-<commit>`,
+e.g. `0.1.1-local-0042-1a2b3c4`, where the next release is `<VersionPrefix>` in the csproj
+(see [Releasing](#releasing)), so `dotnet tool list` shows what you're running:
 
 - **build**: the build number of the installed tool plus one, `0001` when none is installed. The
   installed version is the only state needed, so there's no counter file to lose. It is zero-padded
@@ -205,10 +229,8 @@ dotnet nuget add source ~/.localnuget --name local
 
 General form: `lrun <command> [options]`.
 
-> Renamed on 2026-10-24: the tool was `localrun` (now `lrun`; the `localrun-repl` prompt has since been
-> removed), and `build-config`, `repack-preview` and `repack-go` are now `build`, `pack` and `go`. The `build` filters
-> `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`; `visualize`
-> is now `plot` and `run` is now `up`. The old names are gone: update scripts that call them. Config file names are unchanged.
+> Commands and options were renamed before the first release (e.g. `visualize` is now `plot`, `run` is now
+> `up`); the old names are gone. See [CHANGELOG.md](CHANGELOG.md) for the full list and for every change since.
 
 - Options are `--name` followed by zero or more values; values run until the next `--option`.
 - Unknown options, repeated options, missing values and extra values are **rejected** (exit code `2`)
@@ -617,7 +639,7 @@ rule on `master` requiring the **build-and-test** check.
 - Target framework: `net8.0`, nullable and implicit usings enabled.
 - Projects go under `src/` (shipped code) or `tests/`, one folder each, and are added to
   `LocalRun.sln`. Keep the repository root for repo-wide files only.
-- Use the installed tool for day-to-day runs (see [Installation](#install-as-a-net-tool-recommended)),
+- Use the installed tool for day-to-day runs (see [Installation](#install-your-working-copy-as-the-tool)),
   so `bin/` stays free for builds and debugging.
 - `LocalRun` exposes internals to `LocalRun.Tests` via `InternalsVisibleTo`.
 
@@ -628,7 +650,27 @@ rule on `master` requiring the **build-and-test** check.
    doing any work, so typos fail fast with exit code `2`.
 3. Throw `UsageException` for command-line mistakes; any other exception becomes exit code `1`.
 4. Resolve paths with `Path.GetFullPath` and log the absolute path of anything you write.
-5. Document it in `PrintHelp` and in this README.
+5. Document it in `PrintHelp` and in this README, and add a line under `[Unreleased]` in `CHANGELOG.md`.
+
+### Releasing
+
+`<VersionPrefix>` in `src/LocalRun/LocalRun.csproj` is always **the next version to release**.
+
+1. Move the `[Unreleased]` entries of `CHANGELOG.md` under the new version, in a PR, and merge it.
+2. Tag that commit of `master` `v<VersionPrefix>` (e.g. `v0.1.0`) and push the tag.
+   `.github/workflows/release.yml` then tests, checks the tag matches `<VersionPrefix>`, packs, pushes the
+   package and its symbols to nuget.org and creates the GitHub release. nuget.org takes a few minutes, up to an
+   hour, to validate and index it.
+3. Bump `<VersionPrefix>` to the next patch in a PR, so local builds (`0.1.1-local-…`) sort above the release
+   you just made, and the next release above them.
+
+Publishing uses nuget.org [Trusted Publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing):
+nuget.org trusts this repository's `release.yml`, so no API key is stored. One-time setup on nuget.org: a
+trusted publishing policy for owner `Salefou`, repository `LocalRun`, workflow file `release.yml`, and your
+nuget.org user name (profile name, not e-mail) in the repository secret `NUGET_USER`.
+
+`release.yml` can also be started by hand (Actions → Release → Run workflow): it then runs every step but the
+publishing ones, to check a release would build and pack.
 
 ---
 
@@ -683,3 +725,10 @@ Exit it and re-run the script.
   at a time.
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
   told apart, so they're all left out of the graph (with an error), rather than handled.
+
+---
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). The package bundles third-party components (Graphviz, libgit2, NuGet
+client libraries, …) under their own licences: see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

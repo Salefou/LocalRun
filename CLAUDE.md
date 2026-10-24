@@ -121,10 +121,18 @@ shell escaping.
 - Each project has its own folder, so default globs never overlap. (Before the move to `src/`, the CLI
   csproj sat at the root and had to exclude every sibling folder; forgetting one compiled its
   generated `.cs` files into the CLI, symptom CS0579 duplicate attribute.)
-- Tool packages need a new, higher version per install: the script packs
-  `1.0.0-local-<build>-<hash>[-dirty]`, with build = installed build + 1 (no counter file, by design:
+- **Versioning / releases** (user's choice, 2026-10-24): SemVer, public on nuget.org as `LocalRun` from 0.1.0;
+  while 0.x a breaking change bumps the minor. `<VersionPrefix>` in the csproj is always the *next* release;
+  `release.yml` publishes on a `v*` tag only if the tag equals it (Trusted Publishing, secret `NUGET_USER`),
+  and right after a release a PR bumps it to the next patch. Every user-visible change gets a line under
+  `[Unreleased]` in `CHANGELOG.md`. Tags are the user's job, never mine.
+- Local tool packages need a new version per install: the script packs
+  `<VersionPrefix>-local-<build>-<hash>[-dirty]`, with build = installed build + 1 (no counter file, by design:
   the tool store already holds the last version). Zero-padded to 4 digits because NuGet compares that
-  prerelease label as text. The script also uninstalls retired tools (`$retiredTools`: `LocalRun.Repl`).
+  prerelease label as text. It uninstalls then installs, because `dotnet tool update` refuses a lower version
+  (a nuget.org release, a former `1.0.0-local-…`) and SDK 8 has no `--allow-downgrade`. The script also
+  uninstalls retired tools (`$retiredTools`: `LocalRun.Repl`).
+- Licence: MIT (`LICENSE`). A new dependency that ships in the tool package goes into `THIRD-PARTY-NOTICES.md`.
 - PowerShell traps hit in that script: an `if` returning a one-element array unrolls to a string
   (splatting it passes characters), and `Measure-Object` returns doubles (`{0:D4}` rejects them).
 - MSBuild gotcha: XML comments cannot contain `--` (so no CLI flags in csproj comments).
@@ -158,8 +166,10 @@ shell escaping.
   `build` rewrites the config, so they never survived a rebuild, and `up --exclude` / deleting from
   `repack.config.json` do the same job. Old configs holding them still load (unknown JSON fields are ignored).
 - 2026-10-24, branch `claude/job-object`: `up` puts its processes in a Windows job object, so a forced kill of
-  `lrun` no longer leaves services running. Separate console windows per service were floated for later
-  (they would need another way to stop services gracefully, since Ctrl+C no longer reaches them).
+  `lrun` no longer leaves services running. Separate console windows per service were then considered and
+  dropped by the user: graceful stop, one-shot output and failure rules would each need a host process per window.
+- 2026-10-24, branch `claude/release`: MIT licence, third-party notices, SemVer from 0.1.0, `lrun version`,
+  CHANGELOG, nuget.org package metadata and readme (`src/LocalRun/PACKAGE.md`), `release.yml`.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -32,6 +33,10 @@ public static class LocalRunCli
     private static readonly ILogger logger = Log.For(typeof(LocalRunCli).FullName!);
 
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+
+    /// <summary>The package version, with the commit it was built from (e.g. <c>0.1.0+1a2b3c4…</c>).</summary>
+    internal static string Version =>
+        typeof(LocalRunCli).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
 
     private static string DefaultLocalNugetPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".localnuget");
@@ -68,6 +73,10 @@ public static class LocalRunCli
                     break;
                 case "help" or "--help" or "-h":
                     PrintHelp();
+                    break;
+                case "version" or "--version":
+                    options.EnsureAllConsumed();
+                    Console.WriteLine($"{CommandName} {Version}");
                     break;
                 default:
                     throw new UsageException($"Unknown command '{cmd}'.");
@@ -295,6 +304,10 @@ public static class LocalRunCli
 
         Console.WriteLine("  help");
         Console.WriteLine("      Show this help message.");
+        Console.WriteLine();
+
+        Console.WriteLine("  version");
+        Console.WriteLine("      Show the installed version (also --version). Please include it when reporting an issue.");
         Console.WriteLine();
 
         Console.WriteLine("Example:");
