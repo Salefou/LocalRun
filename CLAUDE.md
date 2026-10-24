@@ -9,11 +9,15 @@ LocalRun: a .NET 8 tool that scans a tree of repositories, builds the project de
 and repacks changed libraries into a local NuGet feed / runs executables, in dependency order.
 Two entry points over one engine:
 
-- `LocalRun.csproj` (repo root) — the non-interactive `lrun` CLI, packed as a .NET tool. It also
-  contains the whole engine (`Core/`, `Options/`, `Logger/`).
-- `LocalRun.Repl/` — interactive `LocalRun>` prompt, packed as the `lrun-repl` tool; every line goes to `LocalRunCli.RunAsync`
+- `src/LocalRun/` — the non-interactive `lrun` CLI, packed as a .NET tool. It also contains the whole
+  engine (`Core/`, `Options/`, `Logger/`).
+- `src/LocalRun.Repl/` — interactive `LocalRun>` prompt, packed as the `lrun-repl` tool; every line goes to `LocalRunCli.RunAsync`
   in-process. Owns the ASCII art and welcome banner. Built-ins: `cd`, `pwd`, `exit`/`quit`, `help`.
-- `LocalRun.Tests/` — xUnit, references both projects.
+- `tests/LocalRun.Tests/` — xUnit, references both projects; folders mirror `src/LocalRun`.
+
+The repository root holds only repo-wide files (solution, docs, `.github/`, git config) and the
+`src/`, `tests/`, `scripts/`, `samples/` folders. Keep it that way: new projects go under `src/` or
+`tests/` and into `LocalRun.sln`.
 
 Pipeline: `build` → `localrun.config.json` → `pack` → `repack.config.json` →
 `go`. `visualize` and `run` read `localrun.config.json`. The JSON files are the hand-editable
@@ -28,8 +32,8 @@ a PR as ready.
 ```sh
 dotnet build LocalRun.sln
 dotnet test LocalRun.sln
-dotnet run --project LocalRun.csproj -- <command> [options]
-dotnet run --project LocalRun.Repl [-- <start dir>]
+dotnet run --project src/LocalRun -- <command> [options]
+dotnet run --project src/LocalRun.Repl [-- <start dir>]
 ./scripts/install-tools.ps1 [-ToolPath <dir>]   # pack + install/update `lrun` and `lrun-repl`
 ```
 
@@ -46,7 +50,7 @@ If a build still fails with "file is locked by LocalRun (pid)", a LocalRun/REPL 
 the user's global tools, use `-ToolPath <scratch dir>`.
 
 The repo needs no tooling beyond the .NET SDK and PowerShell. For multi-line or backslash-heavy file
-edits prefer the Edit tool over sed: csproj globs (`\**`) and C# escapes (``) get mangled by
+edits prefer the Edit tool over sed: csproj globs (`\**`) and C# escapes (`\uFEFF`, written as text) get mangled by
 shell escaping.
 
 ## Contracts to preserve
@@ -65,16 +69,16 @@ shell escaping.
 - **No machine-specific paths**: every path is an option, defaulting to a file in the current
   directory (`localrun.config.json`, `repack.config.json`, `dependencies`) or `~/.localnuget`.
   Never reintroduce paths relative to `bin/` (the old `..\..\..\Output` hack) or `~/source/repos`.
-- **Non-interactive CLI**: nothing in `LocalRun.csproj` may prompt, read stdin or open windows
-  unless asked by a flag (`visualize --open`). Interactive behaviour belongs in `LocalRun.Repl`.
+- **Non-interactive CLI**: nothing in `src/LocalRun` may prompt, read stdin or open windows
+  unless asked by a flag (`visualize --open`). Interactive behaviour belongs in `src/LocalRun.Repl`.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
 - Dependency graph semantics (layered Kahn, depth = longest path from a root, name-sorted layers,
-  cycles throw) are covered by `LocalRun.Tests/Graph/DependencyGraphTests.cs`. `build` calls
+  cycles throw) are covered by `tests/LocalRun.Tests/Graph/DependencyGraphTests.cs`. `build` calls
   `RemoveCycles()` (Tarjan SCC) after the filters, so cycles are left out with a warning instead of
   failing; the throw in `TopologicalClassOrder` stays as the safety net for hand-edited configs.
 - Version bump rules (a bump resets lower components and replaces the prerelease label; no bump
   keeps the version and only `--suffix` replaces the label) are the README "Versioning rules" table,
-  mirrored case by case in `LocalRun.Tests/Options/BumpOptionsTests.cs`. Change both together.
+  mirrored case by case in `tests/LocalRun.Tests/Options/BumpOptionsTests.cs`. Change both together.
 
 ## Conventions
 
@@ -85,10 +89,9 @@ shell escaping.
 - Level via `LOCALRUN_LOG_LEVEL`. Errors log the message; `LogDebug(ex, …)` carries the stack trace.
 - Options objects live in `Options/`, one parser per command (`*OptionsParser.Parse(CommandLineArgs)`).
 - New command: see README "Adding a command". Update `LocalRunCli.PrintHelp` and README together.
-- The root csproj excludes sibling project folders, `artifacts/` and `samples/` from its globs
-  (`Compile/None/EmbeddedResource Remove="LocalRun.Tests\**;LocalRun.Repl\**;artifacts\**;samples\**"`). A new
-  project or build-output folder must be added there, or its generated `.cs` files (AssemblyInfo…)
-  get compiled into the CLI (symptom: CS0579 duplicate attribute).
+- Each project has its own folder, so default globs never overlap. (Before the move to `src/`, the CLI
+  csproj sat at the root and had to exclude every sibling folder; forgetting one compiled its
+  generated `.cs` files into the CLI, symptom CS0579 duplicate attribute.)
 - Tool packages need a new, higher version per install: the script packs
   `1.0.0-local-<build>-<hash>[-dirty]`, with build = installed build + 1 (no counter file, by design:
   the tool store already holds the last version). Zero-padded to 4 digits because NuGet compares that
@@ -112,6 +115,9 @@ shell escaping.
   `pack --go` doing both steps. `build` filters `--retain-depends-on` / `--retain-is-dependency-of` →
   `--users-of` / `--deps-of`. Old names were dropped, not aliased. Package ids (`LocalRun`,
   `LocalRun.Repl`), assembly names and config file names are unchanged.
+- 2026-10-24: moved the code out of the repository root: `src/LocalRun`, `src/LocalRun.Repl`,
+  `tests/LocalRun.Tests` (with `git mv`, so `git log --follow` keeps history), dropped the CLI's glob
+  exclusions, and renamed `RepackExecutor .cs` (stray space) to `RepackExecutor.cs`.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks

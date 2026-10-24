@@ -37,8 +37,8 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $buildDir = Join-Path $repoRoot 'artifacts/tool-build'
 $packageDir = Join-Path $repoRoot 'artifacts/tool-packages'
 $tools = @(
-    @{ Id = 'LocalRun';      Project = 'LocalRun.csproj';                   Command = 'lrun' },
-    @{ Id = 'LocalRun.Repl'; Project = 'LocalRun.Repl/LocalRun.Repl.csproj'; Command = 'lrun-repl' }
+    @{ Id = 'LocalRun';      Project = 'src/LocalRun/LocalRun.csproj';           Command = 'lrun' },
+    @{ Id = 'LocalRun.Repl'; Project = 'src/LocalRun.Repl/LocalRun.Repl.csproj'; Command = 'lrun-repl' }
 )
 
 function Invoke-Dotnet {

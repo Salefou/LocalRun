@@ -45,7 +45,7 @@ intended ones: `LrSample.Orphan` in no solution, and the `LrEdge.A, LrEdge.B, Lr
 
 ## Setup
 
-Use the installed `lrun` (`scripts\install-tools.cmd` at the repo root), or `dotnet run --project ..\LocalRun.csproj --`
+Use the installed `lrun` (`scripts\install-tools.cmd` at the repo root), or `dotnet run --project ..\src\LocalRun --`
 in place of `lrun`. Run everything from this `samples/` folder:
 
 ```powershell
@@ -151,4 +151,5 @@ lrun build --root edge-cases/slnx-only --config edge.json
   `Directory.Build.props`.
 - `.sln` and `.slnx` both work. With the .NET 10 SDK, `dotnet sln add` adds referenced projects too:
   pass `--include-references false` (otherwise Orphan, for example, would land in `Reporting.sln`).
-- The root `LocalRun.csproj` excludes `samples\**` from its globs, so nothing here is compiled into `lrun`.
+- `samples/` sits outside `src/`, so nothing here is part of the LocalRun build or solution. Its own
+  `Directory.Build.props` / `NuGet.config` apply only to the projects below it.
