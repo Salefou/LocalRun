@@ -22,7 +22,7 @@
 		     release it is bumped right away, so local builds (VersionPrefix-local-...) sort above the release -->
 		<VersionPrefix>0.1.0</VersionPrefix>
 		<PackageId>LocalRun</PackageId>
-		<Authors>Maxime Challier</Authors>
+		<Authors>Salefou</Authors>
 		<Description>Try a library change in the services that consume it as a NuGet package, across repositories: lrun scans them, builds the project dependency graph, repacks the libraries in between into a local feed in dependency order, and runs the executables side by side.</Description>
 		<PackageTags>dotnet-tool;nuget;local-feed;multi-repo;dependency-graph;repack</PackageTags>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
