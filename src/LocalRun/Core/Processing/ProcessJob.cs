@@ -49,7 +49,7 @@ internal sealed class ProcessJob : IDisposable
         {
             BasicLimitInformation = new JOBOBJECT_BASIC_LIMIT_INFORMATION { LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE },
         };
-        if (!SetInformationJobObject(handle, JobObjectExtendedLimitInformation, ref info, (uint)Marshal.SizeOf(info)))
+        if (!SetInformationJobObject(handle, JobObjectExtendedLimitInformation, ref info, (uint)ExtendedLimitInformationSize))
         {
             logger.LogWarning("Could not configure the job object ({Error}): processes will outlive LocalRun if it is killed",
                 new Win32Exception(Marshal.GetLastWin32Error()).Message);
@@ -75,6 +75,12 @@ internal sealed class ProcessJob : IDisposable
             // Exited already
         }
     }
+
+    /// <summary>
+    /// Size of the limits struct as passed to Windows, which rejects any other: 144 bytes in a 64-bit process
+    /// (x64, ARM64), 112 in a 32-bit one. The pointer-sized fields and their padding follow the architecture.
+    /// </summary>
+    internal static int ExtendedLimitInformationSize => Marshal.SizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>();
 
     /// <summary>Kills the processes still in the job.</summary>
     public void Dispose() => handle.Dispose();

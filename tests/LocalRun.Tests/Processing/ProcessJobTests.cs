@@ -12,6 +12,13 @@ public class ProcessJobTests
     })!;
 
     [Fact]
+    public void LimitsStruct_HasTheSizeWindowsExpects()
+    {
+        // JOBOBJECT_EXTENDED_LIMIT_INFORMATION from the Windows SDK: 144 bytes in 64-bit processes, 112 in 32-bit ones
+        Assert.Equal(Environment.Is64BitProcess ? 144 : 112, ProcessJob.ExtendedLimitInformationSize);
+    }
+
+    [Fact]
     public void Dispose_KillsTheProcessesOfTheJob()
     {
         if (!OperatingSystem.IsWindows()) return;
