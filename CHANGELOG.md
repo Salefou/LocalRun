@@ -7,6 +7,8 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-24
+
 ### Changed
 
 - `plot` draws the dependencies outside the config (left out by a filter, a name collision or a cycle,
@@ -42,5 +44,6 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Salefou/LocalRun/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Salefou/LocalRun/releases/tag/v0.1.0
