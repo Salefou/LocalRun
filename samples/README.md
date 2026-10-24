@@ -152,6 +152,9 @@ lrun up
 - **Ctrl+C** in the `lrun up` terminal stops both: `[■] Stopping all processes...`, each service
   prints `… stopped` and exits with code 0, and `up` exits with code 0. No `LrSample.*` process is
   left in Task Manager.
+- **Killing `lrun` from outside**: while they run, `taskkill /F /IM lrun.exe` from another terminal.
+  The services go with it (no `LrSample.*` process left, ports free), without printing `… stopped`:
+  Windows ends them through the job object.
 
 Variations worth trying:
 

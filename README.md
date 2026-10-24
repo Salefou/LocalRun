@@ -360,6 +360,10 @@ A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
 has stopped. Processes stopped by Ctrl+C never count as failures.
 
+On Windows the started processes are also tied to `lrun` through a job object: if `lrun` is killed
+without a chance to stop them (Task Manager, `taskkill /F`, stopping a debugger attached to it),
+Windows ends them too, so they don't keep holding their ports and build output.
+
 ```
 [▶] Starting LrSample.RiskService
 [▶] Starting LrSample.OrderGateway
@@ -372,7 +376,7 @@ has stopped. Processes stopped by Ctrl+C never count as failures.
 ```
 
 Processes are started in dependency order, but `up` doesn't wait for one to be *ready* before
-starting the next. A service that needs another one at startup should retry.
+starting the next: by design, each service is expected to wait for (or retry) the ones it needs.
 
 | Option | Default | Description |
 |---|---|---|
@@ -670,9 +674,9 @@ Exit it and re-run the script.
 
 ## Known limitations
 
-- **`up` doesn't wait for readiness**: processes start in dependency order, but not one after the
-  other being *ready*. Processes killed from outside (e.g. Task Manager on `lrun`) are not stopped
-  with it; Ctrl+C or closing the terminal stops them.
+- **`up` doesn't wait for readiness**, by design: all processes start at once, and each service is
+  expected to wait for (or retry) the ones it needs. Outside Windows, processes outlive an `lrun`
+  killed from outside; Ctrl+C or closing the terminal stops them.
 - **`--git-changes`** compares with your last fetch and only knows `origin`; files changed outside
   project folders mark the whole repository, even when only docs changed.
 - `--remote` reads the user/machine `NuGet.Config`, not repository-level ones, and queries sources one
