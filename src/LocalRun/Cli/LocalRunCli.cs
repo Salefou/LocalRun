@@ -249,6 +249,8 @@ public static class LocalRunCli
         Console.WriteLine("        --users-of <names>      Keep the given projects and all that depend on them, transitively");
         Console.WriteLine("        --deps-of <names>       Keep the given projects and all they depend on, transitively");
         Console.WriteLine("                                With both: only the projects between them (AND)");
+        Console.WriteLine("        --git-changes           Add the projects with uncommitted changes or commits not on origin's");
+        Console.WriteLine("                                default branch to --users-of (compares with your last fetch)");
         Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
         Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");

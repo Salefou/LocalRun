@@ -6,17 +6,19 @@ public static class BuildConfigOptionsParser
     {
         var options = new BuildConfigOptions
         {
-            RetainDirtyGitRepos = args.Flag("--git-changes"),
+            RetainGitChanges = args.Flag("--git-changes"),
             RetainDependsOn = args.Values("--users-of"),
             RetainIsDependencyOf = args.Values("--deps-of"),
             IncludeExternal = args.Flag("--include-external"),
             Union = args.Flag("--union"),
             WithServices = args.Flag("--with-services"),
         };
-        if (options.Union && (options.RetainDependsOn == null || options.RetainIsDependencyOf == null))
-            throw new UsageException("'--union' combines '--users-of' and '--deps-of': give both.");
-        if (options.WithServices && options.RetainDependsOn == null && options.RetainIsDependencyOf == null)
-            throw new UsageException("'--with-services' has nothing to extend: give '--users-of' and/or '--deps-of'.");
+        // --git-changes adds to the --users-of side
+        bool hasUsersOf = options.RetainDependsOn != null || options.RetainGitChanges;
+        if (options.Union && (!hasUsersOf || options.RetainIsDependencyOf == null))
+            throw new UsageException("'--union' combines '--users-of' (or '--git-changes') and '--deps-of': give both.");
+        if (options.WithServices && !hasUsersOf && options.RetainIsDependencyOf == null)
+            throw new UsageException("'--with-services' has nothing to extend: give '--users-of', '--git-changes' and/or '--deps-of'.");
         return options;
     }
 }

@@ -64,6 +64,28 @@ public class BuildConfigOptionsParserTests
     }
 
     [Fact]
+    public void GitChanges_IsOffByDefault()
+    {
+        Assert.False(Parse().RetainGitChanges);
+        Assert.True(Parse("--git-changes").RetainGitChanges);
+    }
+
+    [Theory]
+    [InlineData("--git-changes", "--deps-of", "Y", "--union")]
+    [InlineData("--git-changes", "--with-services")]
+    public void GitChanges_CountsAsTheUsersOfSide(params string[] argv)
+    {
+        Assert.True(Parse(argv).RetainGitChanges);
+    }
+
+    [Fact]
+    public void Union_WithGitChangesButNoDepsOf_IsRejected()
+    {
+        var ex = Assert.Throws<UsageException>(() => Parse("--git-changes", "--union"));
+        Assert.Contains("--union", ex.Message);
+    }
+
+    [Fact]
     public void WithServices_WithoutAnyFilter_IsRejected()
     {
         var ex = Assert.Throws<UsageException>(() => Parse("--with-services"));

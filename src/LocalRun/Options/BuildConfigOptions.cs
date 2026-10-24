@@ -2,7 +2,8 @@
 
 public class BuildConfigOptions
 {
-    public bool RetainDirtyGitRepos { get; internal set; }
+    /// <summary>Add the projects with pending git changes to the --users-of names.</summary>
+    public bool RetainGitChanges { get; internal set; }
 
     public List<string>? RetainDependsOn { get; internal set; }
 

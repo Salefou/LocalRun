@@ -16,7 +16,6 @@ public class ConfigBuilder
         logger.LogInformation("[⚙ ] Building dependency graph from {RootPath}...", rootPath);
 
         string[] csprojs = Directory.GetFiles(rootPath, "*.csproj", SearchOption.AllDirectories);
-        // TODO if git repo and stuff
         var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal);
         foreach (var collision in graph.Collisions)
         {
@@ -30,16 +29,20 @@ public class ConfigBuilder
         }
 
         ValidateFilterNames(graph, options);
-        var addedForServices = graph.Retain(options.RetainDependsOn, options.RetainIsDependencyOf, options.Union, options.WithServices);
+        List<string>? usersOf = options.RetainGitChanges
+            ? [.. (options.RetainDependsOn ?? []).Union(FindGitChanges(rootPath, csprojs, graph), StringComparer.OrdinalIgnoreCase)]
+            : options.RetainDependsOn;
+
+        var addedForServices = graph.Retain(usersOf, options.RetainIsDependencyOf, options.Union, options.WithServices);
         if (options.WithServices)
         {
             logger.LogInformation("[⚙ ] --with-services added: {Projects}",
                 addedForServices.Count == 0 ? "nothing (no other service uses the kept projects)" : string.Join(", ", addedForServices));
         }
-        if (options.RetainDependsOn != null && options.RetainIsDependencyOf != null && !options.Union && !graph.AllProjects.Any())
+        if (usersOf is { Count: > 0 } && options.RetainIsDependencyOf != null && !options.Union && !graph.AllProjects.Any())
         {
             logger.LogWarning("No project is both a user of {UsersOf} and needed by {DepsOf}: the latter doesn't depend on the former. Use --union, or one flag alone.",
-                string.Join(", ", options.RetainDependsOn), string.Join(", ", options.RetainIsDependencyOf));
+                string.Join(", ", usersOf), string.Join(", ", options.RetainIsDependencyOf));
         }
 
         // After the filters, so they still see the real graph; a cycle cannot be ordered, so it is left out
@@ -60,6 +63,20 @@ public class ConfigBuilder
             Projects = [.. graph.TopologicalOrder()]
         };
         return config;
+    }
+
+    /// <summary>The projects of the graph with pending git changes, which <c>--git-changes</c> adds to the <c>--users-of</c> names.</summary>
+    private static List<string> FindGitChanges(string rootPath, string[] csprojs, DependencyGraph graph)
+    {
+        // Every scanned project, collided ones included, so their files map to them rather than to the whole repo
+        var changed = GitChangeDetector.FindChangedProjects(csprojs.Select(csproj => (Path.GetFileNameWithoutExtension(csproj), csproj)))
+            .Where(name => graph.TryGetFromName(name, out _))
+            .ToList();
+        if (changed.Count == 0)
+            logger.LogWarning("--git-changes: no pending changes under {RootPath}, nothing to keep", rootPath);
+        else
+            logger.LogInformation("[🔀] --git-changes: {Projects} changed, kept with all their users", string.Join(", ", changed));
+        return changed;
     }
 
     /// <summary>A misspelt name would silently filter everything out: reject it, checked against the full graph.</summary>

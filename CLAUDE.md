@@ -58,6 +58,12 @@ shell escaping.
   `--with-services` then adds S's affected executables *with the libraries in between*:
   S ∪ (users-of(S) ∩ deps-of(executables among users-of(S))). The in-between libraries are on purpose
   (user's choice): without them, a service consuming a library as a package keeps the old build.
+- **`--git-changes`** (`GitChangeDetector`, user's choices 2026-10-24): changed projects are added to the
+  `--users-of` names. Changed = uncommitted/untracked files, or commits on HEAD not on origin's default
+  branch (`origin/HEAD` → `origin/main` → `origin/master`); being behind is not a change. Per project
+  (deepest folder owning the file); a file outside every project folder marks the whole repo. Guiding
+  rule: **when unsure, keep more** (no base, unreadable repo, not in git → changed, with a warning),
+  since extra projects are easy to delete from the config/plot. Never fetch.
 
 - **Planned versions reach referenced projects**: `RepackExecutor` sets each project's `PackageVersion`
   through a generated props file (`CustomBeforeMicrosoftCommonProps`, matched by
@@ -142,6 +148,8 @@ shell escaping.
   (`cd`, quoting). The install script uninstalls it.
 - 2026-10-24, branch `claude/plot`: `visualize` → `plot` (dropped, not aliased), and `build --plot`
   plots the config it just wrote with `plot`'s defaults. `GraphVisualizer` and `lrun-visuals/` keep their names.
+- 2026-10-24, branch `claude/git-changes`: re-shipped the `plot` commit (#18 had merged into the
+  already-merged `claude/remove-repl`), name collisions left out with an error, `--git-changes` implemented.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks
@@ -150,7 +158,7 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
 
 - `run` has no readiness checks between dependent services, and processes outlive an `lrun` that is
   killed from outside (a Windows job object would tie them together).
-- `--git-changes` (`BuildConfigOptions.RetainDirtyGitRepos`) is parsed but unused; LibGit2Sharp is
-  referenced for it.
+- Batch git operations across the repos of a config (`lrun git …`, keep going on failure, summary):
+  floated by the user on 2026-10-24, not decided. Never stash/reset on the user's behalf.
 - `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
   `IsNewerThanRemoteAsync`).

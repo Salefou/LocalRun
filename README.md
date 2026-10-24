@@ -229,7 +229,8 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--users-of <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
 | `--deps-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
 | `--union` | off | With both filters: keep the users of `--users-of` **or** the dependencies of `--deps-of`, instead of the projects between them. |
-| `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of` and/or `--deps-of`. |
+| `--git-changes` | off | Add the projects with pending git changes to the `--users-of` names (see below), so they're kept with everything that uses them. |
+| `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 | `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.svg`, printed as a link). |
 
@@ -254,6 +255,29 @@ the old build.) Libraries that use the kept projects but lead to no service stay
 what the flag added.
 
 Names are matched case-insensitively against the scanned projects. An unknown name fails with exit code `2`.
+
+**`--git-changes`** answers "what did I change, and what does it affect?" without naming anything:
+
+```sh
+lrun build --root ./repos --git-changes --plot              # my changes and all their users
+lrun build --root ./repos --git-changes --deps-of OrderGateway  # only what OrderGateway needs of them
+```
+
+A project counts as **changed** when its repository has, under the project's folder:
+
+- uncommitted changes, staged or not, or untracked files (git-ignored files don't count), or
+- changes in commits that are on `HEAD` but not on origin's default branch (`origin/HEAD`, else
+  `origin/main`, else `origin/master`), pushed or not. Being *behind* that branch is not a change.
+
+When in doubt it counts more, not less: an extra project is easy to spot in the plot and delete from
+`localrun.config.json` before `pack`, a missing one isn't. So a change **outside every project folder**
+(`Directory.Build.props`, `global.json`, …) marks every project of that repository, and so does a
+repository with no origin default branch to compare with, or one LocalRun can't read (with a warning).
+A project in no git repository counts as changed too.
+`build` logs, for each changed repository, why and which projects (`[🔀] …\repo-two: 2 uncommitted
+file(s), 1 commit(s) on feature not on origin/main -> LrSample.Pricing`).
+Nothing is fetched: run `git fetch` first if origin may have moved. With no change at all, `build`
+warns and writes an empty config.
 
 ### `plot`
 
@@ -649,8 +673,8 @@ Exit it and re-run the script.
 - **`run` doesn't wait for readiness**: processes start in dependency order, but not one after the
   other being *ready*. Processes killed from outside (e.g. Task Manager on `lrun`) are not stopped
   with it; Ctrl+C or closing the terminal stops them.
-- **`--git-changes`** is accepted by `build` but does nothing yet (intended: keep only repos
-  with uncommitted changes).
+- **`--git-changes`** compares with your last fetch and only knows `origin`; files changed outside
+  project folders mark the whole repository, even when only docs changed.
 - `--remote` reads the user/machine `NuGet.Config`, not repository-level ones, and queries sources one
   at a time.
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
