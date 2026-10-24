@@ -3,6 +3,7 @@
 using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
 using LocalRun.Logger;
+using LocalRun.Options;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
@@ -20,9 +21,14 @@ public class RunProcessor : IRunProcessor
 
     internal static readonly TimeSpan StopGracePeriod = TimeSpan.FromSeconds(10);
 
-    public async Task RunAsync(LocalRunConfig config)
+    public async Task RunAsync(LocalRunConfig config, IReadOnlyCollection<string>? exclude = null)
     {
-        List<ProjectNode> executables = PlanRun(config);
+        List<ProjectNode> executables = PlanRun(config, exclude);
+        if (exclude is { Count: > 0 })
+        {
+            logger.LogInformation("[⏭ ] Not running {Projects}: start them yourself (e.g. from your IDE to debug them)",
+                string.Join(", ", exclude));
+        }
         if (executables.Count == 0)
         {
             logger.LogWarning("No executable to run in this config.");
@@ -93,10 +99,22 @@ public class RunProcessor : IRunProcessor
     }
 
     /// <summary>The executables to run, dependencies first, without those marked SkipRun.</summary>
-    internal static List<ProjectNode> PlanRun(LocalRunConfig config)
+    internal static List<ProjectNode> PlanRun(LocalRunConfig config, IReadOnlyCollection<string>? exclude = null)
     {
-        return [.. DependencyGraph.FromConfig(config).TopologicalOrder()
-            .Where(project => project.Type == "executable" && !project.SkipRun)];
+        var executables = DependencyGraph.FromConfig(config).TopologicalOrder()
+            .Where(project => project.Type == "executable")
+            .ToList();
+        var excluded = new HashSet<string>(exclude ?? [], StringComparer.OrdinalIgnoreCase);
+
+        // A misspelt name would silently run the very service being debugged elsewhere
+        var unknown = excluded.Where(name => !executables.Any(exe => exe.Name.Equals(name, StringComparison.OrdinalIgnoreCase))).ToList();
+        if (unknown.Count != 0)
+        {
+            throw new UsageException($"'--exclude': not an executable of this config: {string.Join(", ", unknown)}. " +
+                $"Executables: {string.Join(", ", executables.Select(exe => exe.Name))}.");
+        }
+
+        return [.. executables.Where(project => !project.SkipRun && !excluded.Contains(project.Name))];
     }
 
     /// <summary>

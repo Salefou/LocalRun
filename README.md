@@ -263,8 +263,11 @@ and version, edges point from a dependency to its dependent, and colours darken 
 | Option | Default | Description |
 |---|---|---|
 | `--config <file>` | `localrun.config.json` | Config file to read. |
-| `--output <path>` | `dependencies` | Output path **without extension**. |
+| `--output <path>` | `lrun-visuals/dependencies-<yyyyMMdd-HHmmss>` | Output path **without extension**. The default never overwrites an earlier graph (`-2`, `-3`, … within the same second). |
 | `--open` | off | Open the SVG with the default application (Windows, macOS `open`, Linux `xdg-open`). |
+
+The SVG is printed as a `file:///…` link: in Windows Terminal or VS Code, Ctrl+click opens it with its
+default app, usually the browser.
 
 ### `pack`
 
@@ -350,6 +353,11 @@ starting the next. A service that needs another one at startup should retry.
 | Option | Default | Description |
 |---|---|---|
 | `--config <file>` | `localrun.config.json` | Config file to read. |
+| `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `run` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). Unlike `SkipRun`, nothing to edit in the config. |
+
+```sh
+lrun run --exclude OrderGateway     # everything but OrderGateway, which you start under the debugger
+```
 
 ### `help`
 
@@ -410,9 +418,9 @@ on executables you don't want started, or change `LocalNugetPath` before `pack`.
 
 Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`.
 
-### `dependencies.dot` / `dependencies.svg` — written by `visualize`
+### `lrun-visuals/dependencies-<date-time>.dot` / `.svg` — written by `visualize`
 
-Plain Graphviz DOT and its rendering. The DOT file can be re-rendered or post-processed with any
+Plain Graphviz DOT and its rendering, one pair per `visualize` run (delete the folder when you're done). The DOT file can be re-rendered or post-processed with any
 Graphviz tooling.
 
 ---

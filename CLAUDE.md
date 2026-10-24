@@ -82,7 +82,8 @@ shell escaping.
 - **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values`, then call
   `EnsureAllConsumed()` before doing work. Unknown/repeated/malformed options must fail, not be ignored.
 - **No machine-specific paths**: every path is an option, defaulting to a file in the current
-  directory (`localrun.config.json`, `repack.config.json`, `dependencies`) or `~/.localnuget`.
+  directory (`localrun.config.json`, `repack.config.json`, `lrun-visuals/dependencies-<date-time>`) or
+  `~/.localnuget`.
   Never reintroduce paths relative to `bin/` (the old `..\..\..\Output` hack) or `~/source/repos`.
 - **Non-interactive CLI**: nothing in `src/LocalRun` may prompt, read stdin or open windows
   unless asked by a flag (`visualize --open`). Interactive behaviour belongs in `src/LocalRun.Repl`.

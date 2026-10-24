@@ -173,6 +173,11 @@ Variations worth trying:
 - **Another port**: `$env:LRSAMPLE_ORDERGATEWAY_PORT = 6101` (or `LRSAMPLE_RISKSERVICE_PORT`) before `lrun run`.
 - **`SkipRun`**: set `"SkipRun": true` on `LrSample.RiskService` in `localrun.config.json`, then
   `lrun run`: only 3 processes start.
+- **Debugging one service**: `lrun run --exclude LrSample.RiskService` logs `Not running
+  LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
+  IDE (`:5102` stays free for it). `--exclude LrSample.Pricing` is rejected (exit code 2): it's a library.
+- **Graphs**: each `lrun visualize` writes a new `lrun-visuals/dependencies-<date-time>.svg` and prints
+  it as a `file:///` link; Ctrl+click it (Windows Terminal, VS Code) to open it in the browser.
 
 ### 5. Edge cases
 

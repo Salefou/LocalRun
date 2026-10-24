@@ -366,8 +366,7 @@ FodyWeavers.xsd
 # LocalRun outputs when run from the repo (default file names)
 localrun.config.json
 repack.config.json
-dependencies.dot
-dependencies.svg
+lrun-visuals/
 nupkg/
 # Output folders of the former REPL
 Output/

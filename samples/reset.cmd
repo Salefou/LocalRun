@@ -7,6 +7,7 @@ pushd "%~dp0"
 for /d /r %%d in (bin obj) do @if exist "%%d" rd /s /q "%%d"
 if exist .packages rd /s /q .packages
 del /q .feed\*.nupkg 2>nul
-del /q localrun.config.json repack.config.json dependencies.dot dependencies.svg 2>nul
+del /q localrun.config.json repack.config.json 2>nul
+if exist lrun-visuals rd /s /q lrun-visuals
 echo Sample workspace reset.
 popd
