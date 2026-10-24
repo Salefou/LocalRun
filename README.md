@@ -18,8 +18,8 @@ LocalRun ships as two entry points over the same engine:
 
 | Entry point | Project | Use it for |
 |---|---|---|
-| `lrun` CLI | `LocalRun.csproj` | Scripts, CI jobs, other programs. One command per invocation, exit codes, no prompts. |
-| Interactive REPL | `LocalRun.Repl/` | Day-to-day exploration: a `LocalRun>` prompt that runs the same commands. |
+| `lrun` CLI | `src/LocalRun/` | Scripts, CI jobs, other programs. One command per invocation, exit codes, no prompts. |
+| Interactive REPL | `src/LocalRun.Repl/` | Day-to-day exploration: a `LocalRun>` prompt that runs the same commands. |
 
 ---
 
@@ -104,8 +104,8 @@ so you can **inspect or hand-edit** the plan between steps.
 ```sh
 git clone https://github.com/Salefou/LocalRun.git
 cd LocalRun
-dotnet run --project LocalRun.csproj -- help          # the CLI
-dotnet run --project LocalRun.Repl                    # the REPL
+dotnet run --project src/LocalRun -- help        # the CLI
+dotnet run --project src/LocalRun.Repl          # the REPL
 ```
 
 Note the `--`: everything after it is passed to LocalRun rather than to `dotnet run`.
@@ -139,7 +139,7 @@ installed tool — exit it and re-run the script.
 What the script does, if you prefer doing it by hand:
 
 ```sh
-dotnet pack LocalRun.csproj -c Release -o ./nupkg -p:VersionSuffix=local-0001-1a2b3c4
+dotnet pack src/LocalRun -c Release -o ./nupkg -p:VersionSuffix=local-0001-1a2b3c4
 dotnet tool update --global LocalRun --add-source ./nupkg --version 1.0.0-local-0001-1a2b3c4   # also installs
 ```
 
@@ -158,7 +158,7 @@ Uninstall with `dotnet tool uninstall --global LocalRun` and `dotnet tool uninst
 ### Publish a standalone executable
 
 ```sh
-dotnet publish LocalRun.csproj -c Release -r win-x64 --self-contained false -o ./publish
+dotnet publish src/LocalRun -c Release -r win-x64 --self-contained false -o ./publish
 ./publish/LocalRun.exe help
 ```
 
@@ -443,7 +443,7 @@ var graph = JsonDocument.Parse(await File.ReadAllTextAsync(config));
 Without the global tool installed, use `dotnet` as the file name and
 `"<path>/LocalRun.dll"` as the first argument (from `dotnet publish` or `bin/`).
 
-Running in-process is also possible: reference `LocalRun.csproj` and call
+Running in-process is also possible: reference `src/LocalRun/LocalRun.csproj` and call
 `await LocalRun.Cli.LocalRunCli.RunAsync(args)`, which returns the same exit codes. That is what the
 REPL does. Call `LocalRun.Logger.Log.Shutdown()` once before your process exits to flush the logs.
 Prefer the process boundary from unrelated code: the engine's types are not a stable API.
@@ -478,7 +478,7 @@ a `lrun` command, in the same process.
 ```sh
 lrun-repl                                          # installed tool, starts in the current directory
 lrun-repl ~/work                                   # starts in ~/work
-dotnet run --project LocalRun.Repl                 # from source (locks bin/ while it runs)
+dotnet run --project src/LocalRun.Repl             # from source (locks bin/ while it runs)
 ```
 
 ```
@@ -505,14 +505,14 @@ continues; exit codes are not shown.
 **Running from Visual Studio:** the debugger starts the REPL in `bin/Debug/net8.0`, so `cd` to your
 work directory first, or set a working directory in the launch profile
 (*Debug ▸ LocalRun.Repl Debug Properties ▸ Working directory*), which is saved in
-`LocalRun.Repl/Properties/launchSettings.json` — keep machine-specific paths out of commits.
+`src/LocalRun.Repl/Properties/launchSettings.json` — keep machine-specific paths out of commits.
 
 ---
 
 ## Logging
 
 Logging uses `Microsoft.Extensions.Logging` with a compact console formatter
-(`Logger/LocalRunConsoleFormatter.cs`): information lines are printed as-is, other levels get a
+(`src/LocalRun/Logger/LocalRunConsoleFormatter.cs`): information lines are printed as-is, other levels get a
 `[DBG]`, `[WRN]` or `[ERR]` prefix, and colours are dropped when output is redirected.
 
 The minimum level is `Information`. Override it with the `LOCALRUN_LOG_LEVEL` environment variable
@@ -528,25 +528,27 @@ $env:LOCALRUN_LOG_LEVEL = "Debug"; lrun pack --remote
 ## Repository layout
 
 ```
-LocalRun.sln
-LocalRun.csproj               CLI project (packed as the `lrun` .NET tool); also hosts the engine
-├─ Program.cs                 Main: calls LocalRunCli, flushes logs
-├─ Cli/LocalRunCli.cs         Command dispatch, file I/O, help text, exit codes
-├─ Options/                   Command-line parsing (CommandLineArgs) and per-command option objects
-├─ Core/
-│  ├─ Graph/DependencyGraph.cs   Graph building, filtering, layered topological sort, components
-│  ├─ Model/                  JSON-serialised types: LocalRunConfig, RepackConfig, ProjectNode, …
-│  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphVisualizer,
-│  │                          NugetVersionChecker, SolutionScanner
-│  └─ Processing/RunProcessor.cs  `run` command
-└─ Logger/                    Logger factory and console formatter
-LocalRun.Repl/                Interactive REPL over LocalRunCli (packed as the `lrun-repl` tool)
-LocalRun.Tests/               xUnit tests (graph, options, REPL tokenizer, log formatter)
-scripts/install-tools.ps1     Build, pack and install/update both tools
-scripts/install-tools.cmd     Windows launcher for it (no execution-policy change needed)
-artifacts/                    (ignored) build output of the install script
-samples/                      Dummy multi-repo workspace for hand testing (see samples/README.md)
-CLAUDE.md                     Context for AI coding assistants working on this repo
+LocalRun.sln                     Solution: the three projects below
+src/
+├─ LocalRun/                     CLI project (packed as the `lrun` .NET tool); also hosts the engine
+│  ├─ Program.cs                 Main: calls LocalRunCli, flushes logs
+│  ├─ Cli/LocalRunCli.cs         Command dispatch, file I/O, help text, exit codes
+│  ├─ Options/                   Command-line parsing (CommandLineArgs) and per-command option objects
+│  ├─ Core/
+│  │  ├─ Graph/                  DependencyGraph: building, filtering, cycles, layered topological sort
+│  │  ├─ Model/                  JSON-serialised types: LocalRunConfig, RepackConfig, ProjectNode, …
+│  │  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphVisualizer,
+│  │  │                          NugetVersionChecker, SolutionScanner
+│  │  └─ Processing/             RunProcessor: the `run` command
+│  └─ Logger/                    Logger factory and console formatter
+└─ LocalRun.Repl/                Interactive REPL over LocalRunCli (packed as the `lrun-repl` tool)
+tests/
+└─ LocalRun.Tests/               xUnit tests, one folder per area of src/LocalRun (Graph, Options, …)
+scripts/                         install-tools.ps1 (build, pack, install/update both tools) + .cmd launcher
+samples/                         Dummy multi-repo workspace for hand testing (see samples/README.md)
+.github/workflows/ci.yml         CI: build, test, install-script check on every PR
+CLAUDE.md                        Context for AI coding assistants working on this repo
+artifacts/                       (ignored) build output of the install script
 ```
 
 The CLI and the engine share one project for now. The REPL and the tests reference it.
@@ -566,9 +568,8 @@ restore, build, test, then `install-tools.ps1 -ToolPath <temp>` in Windows Power
 rule on `master` requiring the **build-and-test** check.
 
 - Target framework: `net8.0`, nullable and implicit usings enabled.
-- The CLI project sits at the repository root, so its csproj **excludes the other project folders and
-  `artifacts/`** from its default globs (`Compile/None/EmbeddedResource Remove`). Add any new project
-  or output folder there, or its `.cs` files get compiled into the CLI too.
+- Projects go under `src/` (shipped code) or `tests/`, one folder each, and are added to
+  `LocalRun.sln`. Keep the repository root for repo-wide files only.
 - Use the installed tools for day-to-day runs (see [Installation](#install-as-net-tools-recommended)),
   so `bin/` stays free for builds and debugging.
 - `LocalRun` and `LocalRun.Repl` expose internals to `LocalRun.Tests` via `InternalsVisibleTo`.
