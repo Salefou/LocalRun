@@ -14,12 +14,8 @@ Typical use: you change a shared library deep in the stack and want to test it e
 services that consume it — without publishing to a shared feed, and without hand-packing a dozen
 packages in the right order.
 
-LocalRun ships as two entry points over the same engine:
-
-| Entry point | Project | Use it for |
-|---|---|---|
-| `lrun` CLI | `src/LocalRun/` | Scripts, CI jobs, other programs. One command per invocation, exit codes, no prompts. |
-| Interactive REPL | `src/LocalRun.Repl/` | Day-to-day exploration: a `LocalRun>` prompt that runs the same commands. |
+LocalRun is the `lrun` command-line tool (`src/LocalRun/`): one command per invocation, exit codes,
+no prompts, so it works the same from your shell, scripts, CI jobs and other programs.
 
 ---
 
@@ -33,7 +29,6 @@ LocalRun ships as two entry points over the same engine:
 - [The files LocalRun reads and writes](#the-files-localrun-reads-and-writes)
 - [Versioning rules](#versioning-rules)
 - [Calling LocalRun from other code](#calling-localrun-from-other-code)
-- [The interactive REPL](#the-interactive-repl)
 - [Logging](#logging)
 - [Repository layout](#repository-layout)
 - [Development](#development)
@@ -105,25 +100,24 @@ so you can **inspect or hand-edit** the plan between steps.
 ```sh
 git clone https://github.com/Salefou/LocalRun.git
 cd LocalRun
-dotnet run --project src/LocalRun -- help        # the CLI
-dotnet run --project src/LocalRun.Repl          # the REPL
+dotnet run --project src/LocalRun -- help
 ```
 
 Note the `--`: everything after it is passed to LocalRun rather than to `dotnet run`.
 
-### Install as .NET tools (recommended)
+### Install as a .NET tool (recommended)
 
-Both entry points are packaged as .NET tools: `lrun` (the CLI) and `lrun-repl` (the REPL).
-One script builds, packs and installs or updates both:
+LocalRun is packaged as the `lrun` .NET tool. One script builds, packs and installs or updates it:
 
 ```bat
-scripts\install-tools.cmd                        :: global install: lrun, lrun-repl on the PATH
+scripts\install-tools.cmd                        :: global install: lrun on the PATH
 scripts\install-tools.cmd -ToolPath C:\tools     :: or into a folder of your choice
 lrun help
-lrun-repl
 ```
 
-Re-run it after pulling or changing code to update the tools. On Windows, use **`install-tools.cmd`**:
+The script also uninstalls `lrun-repl`, the interactive prompt LocalRun used to ship, if it finds it.
+
+Re-run it after pulling or changing code to update the tool. On Windows, use **`install-tools.cmd`**:
 it works from cmd, any terminal or a double-click in Explorer, and runs the PowerShell script with
 `-ExecutionPolicy Bypass` for that one process, so you don't have to change your machine's execution
 policy. From a PowerShell prompt, `./scripts/install-tools.ps1` also works if your policy allows
@@ -131,11 +125,11 @@ scripts. On Linux/macOS, run `pwsh ./scripts/install-tools.ps1` (PowerShell 7).
 From automation, call `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install-tools.ps1`
 directly: the `.cmd` waits for a key press when it thinks it was double-clicked.
 
-**Why use the installed tools rather than `bin/`?** The tools run from the .NET tool store
+**Why use the installed tool rather than `bin/`?** The tool runs from the .NET tool store
 (`~/.dotnet/tools`), and the script builds in `artifacts/` rather than `bin/`. So the LocalRun you
-*use* never locks the build output of the LocalRun you're *working on*: you can keep a REPL open while
-you build, test or debug in Visual Studio. The only thing that can block an update is a running
-installed tool — exit it and re-run the script.
+*use* never locks the build output of the LocalRun you're *working on*: you can keep an `lrun run`
+going while you build, test or debug in Visual Studio. The only thing that can block an update is a
+running installed `lrun` — exit it and re-run the script.
 
 What the script does, if you prefer doing it by hand:
 
@@ -147,14 +141,14 @@ dotnet tool update --global LocalRun --add-source ./nupkg --version 1.0.0-local-
 Every pack needs a **new, higher** version. The script builds it as `1.0.0-local-<build>-<commit>`,
 e.g. `1.0.0-local-0042-1a2b3c4`, so `dotnet tool list` shows what you're running:
 
-- **build**: the build number of the installed tools plus one, `0001` when none is installed. The
+- **build**: the build number of the installed tool plus one, `0001` when none is installed. The
   installed version is the only state needed, so there's no counter file to lose. It is zero-padded
   because NuGet compares `local-0042-…` as text, where `local-10` would sort before `local-9`.
 - **commit**: the short hash of `HEAD`, with `-dirty` appended when tracked files have uncommitted
   changes (`nogit` outside a git checkout).
 
 Re-installing the same version number could reuse a stale cached copy instead of your new build.
-Uninstall with `dotnet tool uninstall --global LocalRun` and `dotnet tool uninstall --global LocalRun.Repl`.
+Uninstall with `dotnet tool uninstall --global LocalRun`.
 
 ### Publish a standalone executable
 
@@ -206,8 +200,8 @@ dotnet nuget add source ~/.localnuget --name local
 
 General form: `lrun <command> [options]`.
 
-> Renamed on 2026-10-24: the tool was `localrun` (now `lrun`, and `localrun-repl` is now `lrun-repl`),
-> and `build-config`, `repack-preview` and `repack-go` are now `build`, `pack` and `go`. The `build` filters
+> Renamed on 2026-10-24: the tool was `localrun` (now `lrun`; the `localrun-repl` prompt has since been
+> removed), and `build-config`, `repack-preview` and `repack-go` are now `build`, `pack` and `go`. The `build` filters
 > `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`. The old names
 > are gone: update scripts that call them. Config file names are unchanged.
 
@@ -330,7 +324,7 @@ the services:
    environment variables). Every output line is prefixed with the project name.
 3. **Wait** until they have all exited. One-shot jobs simply finish; services run until you press
    **Ctrl+C**. They all receive it (they share the console). Whatever is still running 10 seconds later
-   is killed, with its child processes. Inside the REPL, Ctrl+C stops the processes, not the REPL.
+   is killed, with its child processes.
 
 Projects with `"SkipRun": true` in the config are not run. A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `run` exit with code `1` once everything
@@ -504,8 +498,7 @@ Without the global tool installed, use `dotnet` as the file name and
 `"<path>/LocalRun.dll"` as the first argument (from `dotnet publish` or `bin/`).
 
 Running in-process is also possible: reference `src/LocalRun/LocalRun.csproj` and call
-`await LocalRun.Cli.LocalRunCli.RunAsync(args)`, which returns the same exit codes. That is what the
-REPL does. Call `LocalRun.Logger.Log.Shutdown()` once before your process exits to flush the logs.
+`await LocalRun.Cli.LocalRunCli.RunAsync(args)`, which returns the same exit codes. Call `LocalRun.Logger.Log.Shutdown()` once before your process exits to flush the logs.
 Prefer the process boundary from unrelated code: the engine's types are not a stable API.
 
 ### From PowerShell
@@ -530,45 +523,6 @@ lrun visualize --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPA
 
 ---
 
-## The interactive REPL
-
-`LocalRun.Repl` is a thin shell over the CLI: every line you type is split into arguments and run as
-a `lrun` command, in the same process.
-
-```sh
-lrun-repl                                          # installed tool, starts in the current directory
-lrun-repl ~/work                                   # starts in ~/work
-dotnet run --project src/LocalRun.Repl             # from source (locks bin/ while it runs)
-```
-
-```
-LocalRun> cd ~/work
-LocalRun> build --root ./repos --deps-of OrderGateway
-LocalRun> visualize --open
-LocalRun> pack --patch --suffix dev
-LocalRun> go
-LocalRun> exit
-```
-
-| Built-in | Description |
-|---|---|
-| `help` | CLI reference plus these built-ins. |
-| `cd <dir>` | Change the working directory (`~` is expanded). Config files are resolved against it. |
-| `pwd` | Print the working directory. |
-| `exit`, `quit` | Leave. End of input (Ctrl+Z / Ctrl+D, or a piped script) also exits. |
-
-The `lrun` prefix is optional (`lrun build` and `build` are the same), so commands copied from this
-README or from error messages work as-is.
-Quote values containing spaces with double quotes. A failing command logs its error and the prompt
-continues; exit codes are not shown.
-
-**Running from Visual Studio:** the debugger starts the REPL in `bin/Debug/net8.0`, so `cd` to your
-work directory first, or set a working directory in the launch profile
-(*Debug ▸ LocalRun.Repl Debug Properties ▸ Working directory*), which is saved in
-`src/LocalRun.Repl/Properties/launchSettings.json` — keep machine-specific paths out of commits.
-
----
-
 ## Logging
 
 Logging uses `Microsoft.Extensions.Logging` with a compact console formatter
@@ -588,30 +542,29 @@ $env:LOCALRUN_LOG_LEVEL = "Debug"; lrun pack --remote
 ## Repository layout
 
 ```
-LocalRun.sln                     Solution: the three projects below
+LocalRun.sln                     Solution: the two projects below
 src/
-├─ LocalRun/                     CLI project (packed as the `lrun` .NET tool); also hosts the engine
-│  ├─ Program.cs                 Main: calls LocalRunCli, flushes logs
-│  ├─ Cli/LocalRunCli.cs         Command dispatch, file I/O, help text, exit codes
-│  ├─ Options/                   Command-line parsing (CommandLineArgs) and per-command option objects
-│  ├─ Core/
-│  │  ├─ Graph/                  DependencyGraph: building, filtering, cycles, layered topological sort
-│  │  ├─ Model/                  JSON-serialised types: LocalRunConfig, RepackConfig, ProjectNode, …
-│  │  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphVisualizer,
-│  │  │                          NugetVersionChecker, SolutionScanner
-│  │  └─ Processing/             RunProcessor: the `run` command
-│  └─ Logger/                    Logger factory and console formatter
-└─ LocalRun.Repl/                Interactive REPL over LocalRunCli (packed as the `lrun-repl` tool)
+└─ LocalRun/                     CLI project (packed as the `lrun` .NET tool); also hosts the engine
+   ├─ Program.cs                 Main: calls LocalRunCli, flushes logs
+   ├─ Cli/LocalRunCli.cs         Command dispatch, file I/O, help text, exit codes
+   ├─ Options/                   Command-line parsing (CommandLineArgs) and per-command option objects
+   ├─ Core/
+   │  ├─ Graph/                  DependencyGraph: building, filtering, cycles, layered topological sort
+   │  ├─ Model/                  JSON-serialised types: LocalRunConfig, RepackConfig, ProjectNode, …
+   │  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphVisualizer,
+   │  │                          NugetVersionChecker, SolutionScanner
+   │  └─ Processing/             RunProcessor: the `run` command
+   └─ Logger/                    Logger factory and console formatter
 tests/
 └─ LocalRun.Tests/               xUnit tests, one folder per area of src/LocalRun (Graph, Options, …)
-scripts/                         install-tools.ps1 (build, pack, install/update both tools) + .cmd launcher
+scripts/                         install-tools.ps1 (build, pack, install/update `lrun`) + .cmd launcher
 samples/                         Dummy multi-repo workspace for hand testing (see samples/README.md)
 .github/workflows/ci.yml         CI: build, test, install-script check on every PR
 CLAUDE.md                        Context for AI coding assistants working on this repo
 artifacts/                       (ignored) build output of the install script
 ```
 
-The CLI and the engine share one project for now. The REPL and the tests reference it.
+The CLI and the engine share one project for now. The tests reference it.
 
 ---
 
@@ -630,9 +583,9 @@ rule on `master` requiring the **build-and-test** check.
 - Target framework: `net8.0`, nullable and implicit usings enabled.
 - Projects go under `src/` (shipped code) or `tests/`, one folder each, and are added to
   `LocalRun.sln`. Keep the repository root for repo-wide files only.
-- Use the installed tools for day-to-day runs (see [Installation](#install-as-net-tools-recommended)),
+- Use the installed tool for day-to-day runs (see [Installation](#install-as-a-net-tool-recommended)),
   so `bin/` stays free for builds and debugging.
-- `LocalRun` and `LocalRun.Repl` expose internals to `LocalRun.Tests` via `InternalsVisibleTo`.
+- `LocalRun` exposes internals to `LocalRun.Tests` via `InternalsVisibleTo`.
 
 ### Adding a command
 
@@ -641,7 +594,7 @@ rule on `master` requiring the **build-and-test** check.
    doing any work, so typos fail fast with exit code `2`.
 3. Throw `UsageException` for command-line mistakes; any other exception becomes exit code `1`.
 4. Resolve paths with `Path.GetFullPath` and log the absolute path of anything you write.
-5. Document it in `PrintHelp` and in this README. The REPL picks it up with no change.
+5. Document it in `PrintHelp` and in this README.
 
 ---
 
@@ -667,9 +620,9 @@ folder keeps the first copy, so bump the version (e.g. a new suffix) or run
 through packages, so `build` dropped them. Break the cycle to get them back. `Dependency cycle
 detected, cannot order` comes instead from a command reading a config whose cycle was added by hand.
 
-**Build fails with "file is locked by LocalRun"** — a LocalRun process (often a REPL) is still running
-from `bin/`. Exit it, or build to another folder: `dotnet build --artifacts-path <dir>`. To stop it
-happening, run the installed tools instead of `bin/` (`scripts\install-tools.cmd`).
+**Build fails with "file is locked by LocalRun"** — a LocalRun process (often a debug session) is still
+running from `bin/`. Exit it, or build to another folder: `dotnet build --artifacts-path <dir>`. To stop
+it happening, run the installed tool instead of `bin/` (`scripts\install-tools.cmd`).
 
 **"…install-tools.ps1 cannot be loaded because running scripts is disabled on this system"** — the
 PowerShell execution policy blocks `.ps1` files. Use `scripts\install-tools.cmd` instead, which
@@ -680,7 +633,7 @@ refused: ask your IT department.)
 started outside PowerShell (cmd, Explorer, the Visual Studio terminal), so Windows tried to *open* it
 like a document. Use `scripts\install-tools.cmd`.
 
-**`install-tools.ps1`: "Could not install …"** — the installed `lrun` or `lrun-repl` is running.
+**`install-tools.ps1`: "Could not install …"** — the installed `lrun` is running.
 Exit it and re-run the script.
 
 ---

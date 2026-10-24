@@ -15,7 +15,6 @@ using System.Text.Json;
 
 /// <summary>
 /// Runs one LocalRun command, as given on the command line, and returns its exit code.
-/// Shared by the <c>lrun</c> executable and the interactive REPL.
 /// </summary>
 public static class LocalRunCli
 {

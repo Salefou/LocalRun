@@ -47,7 +47,7 @@ public class RunProcessor : IRunProcessor
         using var stopping = new CancellationTokenSource();
         ConsoleCancelEventHandler onCancel = (_, e) =>
         {
-            e.Cancel = true; // keep LocalRun (and the REPL) alive to stop the processes properly
+            e.Cancel = true; // keep LocalRun alive to stop the processes properly
             if (!stopping.IsCancellationRequested)
             {
                 logger.LogInformation("[■] Stopping all processes...");

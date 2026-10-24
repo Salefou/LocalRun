@@ -7,13 +7,10 @@ read its "How it works" and "Known limitations" sections before changing behavio
 
 LocalRun: a .NET 8 tool that scans a tree of repositories, builds the project dependency graph,
 and repacks changed libraries into a local NuGet feed / runs executables, in dependency order.
-Two entry points over one engine:
 
 - `src/LocalRun/` — the non-interactive `lrun` CLI, packed as a .NET tool. It also contains the whole
   engine (`Core/`, `Options/`, `Logger/`).
-- `src/LocalRun.Repl/` — interactive `LocalRun>` prompt, packed as the `lrun-repl` tool; every line goes to `LocalRunCli.RunAsync`
-  in-process. Owns the ASCII art and welcome banner. Built-ins: `cd`, `pwd`, `exit`/`quit`, `help`.
-- `tests/LocalRun.Tests/` — xUnit, references both projects; folders mirror `src/LocalRun`.
+- `tests/LocalRun.Tests/` — xUnit, references `src/LocalRun`; folders mirror it.
 
 The repository root holds only repo-wide files (solution, docs, `.github/`, git config) and the
 `src/`, `tests/`, `scripts/`, `samples/` folders. Keep it that way: new projects go under `src/` or
@@ -33,8 +30,7 @@ a PR as ready.
 dotnet build LocalRun.sln
 dotnet test LocalRun.sln
 dotnet run --project src/LocalRun -- <command> [options]
-dotnet run --project src/LocalRun.Repl [-- <start dir>]
-./scripts/install-tools.ps1 [-ToolPath <dir>]   # pack + install/update `lrun` and `lrun-repl`
+./scripts/install-tools.ps1 [-ToolPath <dir>]   # pack + install/update `lrun`
 ```
 
 On Windows the user runs `scripts\install-tools.cmd`, which calls the `.ps1` with
@@ -43,8 +39,8 @@ have no app association outside PowerShell. Keep the `.cmd` a thin pass-through;
 `.ps1`. When you run the script yourself, call
 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-tools.ps1 -ToolPath <scratch>`.
 
-The user runs LocalRun day to day through the installed tools, so `bin/` should normally be free.
-If a build still fails with "file is locked by LocalRun (pid)", a LocalRun/REPL is running from `bin/`
+The user runs LocalRun day to day through the installed tool, so `bin/` should normally be free.
+If a build still fails with "file is locked by LocalRun (pid)", a LocalRun is running from `bin/`
 (e.g. a VS debug session). Do not kill it; build and test elsewhere:
 `dotnet test LocalRun.sln --artifacts-path <scratch dir>`. To try the install script without touching
 the user's global tools, use `-ToolPath <scratch dir>`.
@@ -86,7 +82,8 @@ shell escaping.
   `~/.localnuget`.
   Never reintroduce paths relative to `bin/` (the old `..\..\..\Output` hack) or `~/source/repos`.
 - **Non-interactive CLI**: nothing in `src/LocalRun` may prompt, read stdin or open windows
-  unless asked by a flag (`visualize --open`). Interactive behaviour belongs in `src/LocalRun.Repl`.
+  unless asked by a flag (`visualize --open`). There is no interactive front end any more (the REPL
+  was removed on 2026-10-24); don't add one without asking.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
 - Dependency graph semantics (layered Kahn, depth = longest path from a root, name-sorted layers,
   cycles throw) are covered by `tests/LocalRun.Tests/Graph/DependencyGraphTests.cs`. `build` calls
@@ -114,10 +111,9 @@ shell escaping.
 - Tool packages need a new, higher version per install: the script packs
   `1.0.0-local-<build>-<hash>[-dirty]`, with build = installed build + 1 (no counter file, by design:
   the tool store already holds the last version). Zero-padded to 4 digits because NuGet compares that
-  prerelease label as text. Both tools always share one version.
+  prerelease label as text. The script also uninstalls retired tools (`$retiredTools`: `LocalRun.Repl`).
 - PowerShell traps hit in that script: an `if` returning a one-element array unrolls to a string
   (splatting it passes characters), and `Measure-Object` returns doubles (`{0:D4}` rejects them).
-- REPL input may start with a BOM when piped from PowerShell; `ReplTokenizer` drops U+FEFF.
 - MSBuild gotcha: XML comments cannot contain `--` (so no CLI flags in csproj comments).
 
 ## History
@@ -137,6 +133,9 @@ shell escaping.
 - 2026-10-24: moved the code out of the repository root: `src/LocalRun`, `src/LocalRun.Repl`,
   `tests/LocalRun.Tests` (with `git mv`, so `git log --follow` keeps history), dropped the CLI's glob
   exclusions, and renamed `RepackExecutor .cs` (stray space) to `RepackExecutor.cs`.
+- 2026-10-24, branch `claude/remove-repl`: removed `src/LocalRun.Repl` (`lrun-repl`). With the short
+  `lrun` commands it only saved typing the prefix, while hiding exit codes and duplicating the shell
+  (`cd`, quoting). The install script uninstalls it.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks

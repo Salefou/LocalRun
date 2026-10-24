@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-    Builds LocalRun and installs (or updates) the `lrun` and `lrun-repl` .NET tools.
+    Builds LocalRun and installs (or updates) the `lrun` .NET tool.
 
 .DESCRIPTION
     Builds into artifacts/ instead of bin/, so it works while Visual Studio or a debug session holds
     bin/, and the installed tools run from the .NET tool store, so a running LocalRun never locks the
-    build output.
+    build output. It also uninstalls the former `lrun-repl` tool (LocalRun.Repl) if it is still there.
 
     Every run packs a new, higher prerelease version: 1.0.0-local-<build>-<commit>[-dirty], e.g.
     1.0.0-local-0042-1a2b3c4. Installing the same version number twice could reuse a stale cached copy.
-    - <build> is the build number of the installed tools plus one (1 when none is installed): the
+    - <build> is the build number of the installed tool plus one (1 when none is installed): the
       tool store already remembers the last install, so no counter file is needed. It is padded to
       4 digits because NuGet compares 'local-0042-...' as text, where 'local-10' < 'local-9'.
     - <commit> is the short hash of HEAD, and '-dirty' marks uncommitted changes to tracked files.
@@ -23,7 +23,6 @@
 .EXAMPLE
     ./scripts/install-tools.ps1
     lrun help
-    lrun-repl
 #>
 [CmdletBinding()]
 param(
@@ -37,9 +36,10 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $buildDir = Join-Path $repoRoot 'artifacts/tool-build'
 $packageDir = Join-Path $repoRoot 'artifacts/tool-packages'
 $tools = @(
-    @{ Id = 'LocalRun';      Project = 'src/LocalRun/LocalRun.csproj';           Command = 'lrun' },
-    @{ Id = 'LocalRun.Repl'; Project = 'src/LocalRun.Repl/LocalRun.Repl.csproj'; Command = 'lrun-repl' }
+    @{ Id = 'LocalRun'; Project = 'src/LocalRun/LocalRun.csproj'; Command = 'lrun' }
 )
+# Tools this script used to install, removed so their commands don't linger on the PATH
+$retiredTools = @('LocalRun.Repl')
 
 function Invoke-Dotnet {
     & dotnet @args
@@ -86,7 +86,7 @@ foreach ($tool in $tools) {
 }
 
 foreach ($tool in $tools) {
-    # <Id>.<version>.nupkg; the digit after the id keeps 'LocalRun' from matching 'LocalRun.Repl'
+    # <Id>.<version>.nupkg; the digit after the id keeps 'LocalRun' from matching 'LocalRun.<Other>'
     $pattern = "^$([regex]::Escape($tool.Id))\.(\d.*)\.nupkg$"
     $package = Get-ChildItem $packageDir -Filter '*.nupkg' | Where-Object { $_.Name -match $pattern } | Select-Object -First 1
     if (-not $package) { throw "No package found for $($tool.Id) in $packageDir" }
@@ -96,6 +96,15 @@ foreach ($tool in $tools) {
     & dotnet tool update $tool.Id @scope --add-source $packageDir --version $version --ignore-failed-sources
     if ($LASTEXITCODE -ne 0) {
         throw "Could not install $($tool.Id) (dotnet exit code $LASTEXITCODE, see its output above). If '$($tool.Command)' is running, exit it and retry."
+    }
+}
+
+if (-not $ToolPath -or (Test-Path $ToolPath)) {
+    $installedIds = & dotnet tool list @scope | ForEach-Object { ($_ -split '\s+')[0] }
+    foreach ($id in $retiredTools | Where-Object { $installedIds -contains $_ }) {
+        Write-Host "Uninstalling retired tool $id..."
+        & dotnet tool uninstall $id @scope
+        if ($LASTEXITCODE -ne 0) { Write-Warning "Could not uninstall $id (dotnet exit code $LASTEXITCODE). If it is running, exit it and rerun this script." }
     }
 }
 
