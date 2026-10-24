@@ -79,6 +79,11 @@ so you can **inspect or hand-edit** the plan between steps.
   warning naming them, and carries on with the rest. Projects that depended on the cycle are kept
   without that dependency, and named in a second warning: packing or running them may fail.
   (A cycle written into a config by hand still fails the command that reads it.)
+- Projects are identified **by file name**, since that's all a dependency names. When several projects
+  share a name (e.g. a library copied into two repos), `build` can't tell which one a dependency means,
+  so it logs an **error** listing their paths and leaves all of them out. The rest of the config is
+  still written, and projects that depended on the name are kept without it, named in a warning.
+  Naming such a project in `--users-of` or `--deps-of` fails with exit code `2`.
 - Independent sub-graphs (**connected components**) are repacked in parallel; within a component,
   all projects of the same depth are packed in parallel, depth by depth.
 
@@ -648,5 +653,5 @@ Exit it and re-run the script.
   with uncommitted changes).
 - `--remote` reads the user/machine `NuGet.Config`, not repository-level ones, and queries sources one
   at a time.
-- Dependencies are matched **by name**: two projects with the same file name in different repos collide,
-  and one of them silently disappears from the graph (no warning yet).
+- Dependencies are matched **by name**: projects with the same file name in different repos can't be
+  told apart, so they're all left out of the graph (with an error), rather than handled.

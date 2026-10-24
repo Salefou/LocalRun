@@ -18,6 +18,16 @@ public class ConfigBuilder
         string[] csprojs = Directory.GetFiles(rootPath, "*.csproj", SearchOption.AllDirectories);
         // TODO if git repo and stuff
         var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal);
+        foreach (var collision in graph.Collisions)
+        {
+            logger.LogError("Several projects are named {Name}, all left out of the config: {Paths}",
+                collision.Name, string.Join(", ", collision.Paths));
+            if (collision.Dependents.Count != 0)
+            {
+                logger.LogWarning("  Kept without their dependency on it (packing or running them may fail): {Dependents}",
+                    string.Join(", ", collision.Dependents));
+            }
+        }
 
         ValidateFilterNames(graph, options);
         var addedForServices = graph.Retain(options.RetainDependsOn, options.RetainIsDependencyOf, options.Union, options.WithServices);
@@ -58,6 +68,9 @@ public class ConfigBuilder
         foreach (var (flag, names) in new[] { ("--users-of", options.RetainDependsOn), ("--deps-of", options.RetainIsDependencyOf) })
         {
             if (names == null) continue;
+            var collided = graph.FindCollided(names);
+            if (collided.Count != 0)
+                throw new UsageException($"Ambiguous project(s) for '{flag}': {string.Join(", ", collided)} (several projects share the name, see the error above).");
             var unknown = graph.FindUnknown(names);
             if (unknown.Count != 0)
                 throw new UsageException($"Unknown project(s) for '{flag}': {string.Join(", ", unknown)}.");

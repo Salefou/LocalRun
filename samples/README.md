@@ -188,7 +188,7 @@ lrun build --root edge-cases/slnx-only --config edge.json
 | Case | What happens |
 |---|---|
 | `cycle/`: A → B → C → A, with A → Base and Top → A | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `LrEdge.Top` kept without its dependency on it. The config holds Base and Top |
-| `name-collision/`: two `LrEdge.Shared` | Known limitation: only `repo-two`'s (2.0.0) is kept, `repo-one`'s silently disappears |
+| `name-collision/`: two `LrEdge.Shared` | Succeeds (exit 0) with `[ERR] Several projects are named LrEdge.Shared, all left out of the config: repo-one\…, repo-two\…` and a warning that `LrEdge.Consumer` is kept without its dependency on it. The config holds Consumer only. Adding `--users-of LrEdge.Shared` fails with `Ambiguous project(s)`, exit code 2 |
 | `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Succeeds with no warning: `.slnx` solutions (the .NET 10 SDK default) are read like `.sln` ones. A `Did not find any solution referencing …LrEdge.Modern` warning means `.slnx` support regressed |
 
 ## Changing the samples

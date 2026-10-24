@@ -89,6 +89,10 @@ shell escaping.
   cycles throw) are covered by `tests/LocalRun.Tests/Graph/DependencyGraphTests.cs`. `build` calls
   `RemoveCycles()` (Tarjan SCC) after the filters, so cycles are left out with a warning instead of
   failing; the throw in `TopologicalClassOrder` stays as the safety net for hand-edited configs.
+- **Name collisions** (user's choice, 2026-10-24): projects are keyed by file name, so the
+  `DependencyGraph` constructor leaves out *every* project of a shared name (`Collisions`); `build` logs
+  an error with their paths, a warning for the dependents kept without the edge, still writes the
+  config (exit 0), and rejects the name in filters as ambiguous (exit 2). Never keep one of them silently.
 - Version bump rules (a bump resets lower components and replaces the prerelease label; no bump
   keeps the version and only `--suffix` replaces the label) are mirrored case by case in
   `tests/LocalRun.Tests/Options/BumpOptionsTests.cs` (BumpOptions level, null suffix = drop the label).
@@ -148,7 +152,5 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
   killed from outside (a Windows job object would tie them together).
 - `--git-changes` (`BuildConfigOptions.RetainDirtyGitRepos`) is parsed but unused; LibGit2Sharp is
   referenced for it.
-- Projects are keyed by file name: same-named projects in different repos collide, and one silently
-  disappears (`DependencyGraph` dictionary overwrite; `samples/edge-cases/name-collision`).
 - `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
   `IsNewerThanRemoteAsync`).
