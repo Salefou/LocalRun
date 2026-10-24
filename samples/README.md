@@ -5,7 +5,10 @@ both project and package references, and use awkward versions, so every command 
 to show. All expected results below were observed on a real run.
 
 Everything stays inside this folder: packages are packed into `.feed/` and NuGet caches them in
-`.packages/` (see `NuGet.config`), so your own `~/.nuget/packages` is never touched.
+`.packages/` (see `NuGet.config`), so your own `~/.nuget/packages` is never touched. `NuGet.config` also
+clears your user-level sources, keeping only `.feed/` and nuget.org: otherwise `LrSample.*` packages
+left in another local feed (such as `~/.localnuget`, after packing without `--local-nuget .feed`) would
+win over this workspace's builds.
 
 ## The graph
 
