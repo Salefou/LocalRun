@@ -70,7 +70,8 @@ lrun plot --open
 ```
 
 - Warns that `LrSample.Orphan` is referenced by no solution.
-- `localrun.config.json` lists the 11 projects; the SVG shows the two islands and the diamond.
+- `localrun.config.json` lists the 11 projects; the SVG shows the two islands and the diamond, with
+  the executables in green and nothing dashed (no dependency outside the config).
 
 ### 2. Filters
 
@@ -95,6 +96,10 @@ Rebuild the config with each line and check the `Name`s in `localrun.config.json
 | `… --include-external --users-of LrSample.Orphan` | Orphan, Reports, ReportCli |
 | `… --users-of Nope` | rejected, exit code 2: `Unknown project(s) for '--users-of': Nope` |
 | `… --retain-depends-on LrSample.Logging` | rejected, exit code 2 (old flag name) |
+
+`lrun plot` after the first line: the six kept projects are filled (RiskService, OrderGateway and
+ReportCli green, the libraries blue), and Primitives and Logging, which they use but the filter left
+out, have a grey dashed outline with dashed edges and no version.
 
 ### 3. Version planning (nothing is built)
 

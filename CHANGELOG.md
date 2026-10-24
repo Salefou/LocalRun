@@ -7,6 +7,12 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Changed
+
+- `plot` draws the dependencies outside the config (left out by a filter, a name collision or a cycle,
+  or external with `--include-external`) dashed and unfilled, instead of like the config's own projects
+  without a version. Executables are green, libraries stay blue.
+
 ## [0.1.0] - 2026-10-24
 
 First release on nuget.org.

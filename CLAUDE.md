@@ -178,5 +178,9 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
 
 - Batch git operations across the repos of a config (`lrun git …`, keep going on failure, summary):
   floated by the user on 2026-10-24, postponed until they hit enough real use cases. Never stash/reset on the user's behalf.
+- Replace the Graphviz SVG of `plot` with an interactive HTML page (user's interest, 2026-10-24): layered layout
+  via elkjs embedded in the page (Graphviz's `dot` layout is fine; the costs are the ~20 MB native binaries,
+  win-x64/linux-x64 only, and a static image), hover to highlight a project's users-of / deps-of cones, search,
+  zoom. MSAGL (pure .NET) was the portability-only alternative. Not started.
 - `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
   `IsNewerThanRemoteAsync`).
