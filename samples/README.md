@@ -158,8 +158,6 @@ Variations worth trying:
 - `pack` without `--go`, edit `repack.config.json` (change a `ToVersion`, delete a project), then `lrun go`.
 - Set `"SkipRepack": true` on a project in `localrun.config.json` before `pack`: it disappears from the plan.
 - After a reset, `lrun pack --patch --suffix dev --clean --go` shows the `Cleaning` step.
-- `lrun-repl`, then the same commands without the `lrun` prefix (`cd`, `pwd` work too). In the REPL,
-  Ctrl+C during `run` stops the services but keeps the REPL.
 - **A service failing at startup**: occupy RiskService's port from another PowerShell window first:
 
   ```powershell
