@@ -7,7 +7,7 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
-## [0.1.0]
+## [0.1.0] - 2026-10-24
 
 First release on nuget.org.
 
