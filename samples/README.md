@@ -15,8 +15,8 @@ workspace/
               LrSample.Logging         2.3.1-beta   lib  ─proj→ Primitives, ─pkg→ Humanizer.Core (nuget.org)
   pricing/    LrSample.Pricing.Models  1.4.2.7      lib  ─pkg→  Primitives
               LrSample.Pricing         1.4          lib  ─proj→ Pricing.Models, ─pkg→ Logging
-  trading/    LrSample.OrderGateway    3.0.0        exe  ─pkg→  Pricing, Logging
-              LrSample.RiskService     0.9.0-rc.1   exe  ─pkg→  Pricing.Models, Primitives
+  trading/    LrSample.OrderGateway    3.0.0        svc  ─pkg→  Pricing, Logging          (localhost:5101)
+              LrSample.RiskService     0.9.0-rc.1   svc  ─pkg→  Pricing.Models, Primitives (localhost:5102)
   reporting/  LrSample.Reports         1.1.0        lib  ─pkg→  Pricing.Models, ─proj→ tools/Orphan
               LrSample.ReportCli       1.1.0        exe  ─proj→ Reports
               tools/LrSample.Orphan    0.0.1        lib  (in no .sln)
@@ -35,6 +35,7 @@ What each part is there to exercise:
 | `--include-external` | Orphan is in no solution, so the Reports → Orphan edge is dropped unless asked |
 | Version edge cases | `2.3.1-beta` (prerelease), `1.4.2.7` (4 parts), `1.4` (short), `0.9.0-rc.1` (dotted label) |
 | Executables for `run` | OrderGateway, RiskService, ReportCli, Island.App print the version of every LrSample library they loaded |
+| Services vs jobs under `run` | OrderGateway and RiskService (`svc`) are long-running HTTP services that stop on Ctrl+C; ReportCli and Island.App are one-shot jobs |
 
 `edge-cases/` holds graphs that are *meant* to misbehave. It sits outside `workspace/` so it never
 breaks a normal run.
@@ -111,25 +112,53 @@ lrun run
 - `pack --go` packs depth by depth (the three trees in parallel) and puts 11 packages in `.feed/`.
 - Each package declares the *planned* version of what it references, e.g.
   `LrSample.Pricing.1.4.1-dev` depends on `Pricing.Models 1.4.3-dev` and `Logging 2.3.2-dev`.
-- `run` starts the executables in dependency order, one after the other. OrderGateway prints:
+- `run` builds the 4 executables one by one, then starts them side by side. Island.App and ReportCli
+  print their result and exit with code 0. The two services keep running, each line prefixed:
 
   ```
-  LrSample.OrderGateway 3.0.0 started
-    uses LrSample.Pricing 1.4.1-dev
-    uses LrSample.Pricing.Models 1.4.3-dev
-    uses LrSample.Logging 2.3.2-dev
-    uses LrSample.Primitives 1.0.1-dev
-    EURUSD mid 100.0, pricer up 1 hour
+  [LrSample.OrderGateway] LrSample.OrderGateway 3.0.0 started
+  [LrSample.OrderGateway]   uses LrSample.Pricing 1.4.1-dev
+  [LrSample.OrderGateway]   uses LrSample.Pricing.Models 1.4.3-dev
+  [LrSample.OrderGateway]   uses LrSample.Logging 2.3.2-dev
+  [LrSample.OrderGateway]   uses LrSample.Primitives 1.0.1-dev
+  [LrSample.OrderGateway] OrderGateway listening on http://localhost:5101/ (try http://localhost:5101/health)
+  [LrSample.RiskService ] RiskService listening on http://localhost:5102/ (try http://localhost:5102/health)
+  [LrSample.RiskService ] RiskService alive, 0 request(s) served
   ```
 
   ReportCli shows `Reports 1.1.0`: it uses Reports through a project reference, so it builds it from source.
+- While they run, from another terminal:
+
+  ```powershell
+  curl.exe http://localhost:5101/        # EURUSD mid 100.0, pricer up 1 hour
+  curl.exe http://localhost:5102/        # exposure 100,000,000
+  curl.exe http://localhost:5101/health  # ok
+  ```
+
+- **Ctrl+C** in the `lrun run` terminal stops both: `[■] Stopping all processes...`, each service
+  prints `… stopped` and exits with code 0, and `run` exits with code 0. No `LrSample.*` process is
+  left in Task Manager.
 
 Variations worth trying:
 
 - `pack` without `--go`, edit `repack.config.json` (change a `ToVersion`, delete a project), then `lrun go`.
 - Set `"SkipRepack": true` on a project in `localrun.config.json` before `pack`: it disappears from the plan.
 - After a reset, `lrun pack --patch --suffix dev --clean --go` shows the `Cleaning` step.
-- `lrun-repl`, then the same commands without the `lrun` prefix (`cd`, `pwd` work too).
+- `lrun-repl`, then the same commands without the `lrun` prefix (`cd`, `pwd` work too). In the REPL,
+  Ctrl+C during `run` stops the services but keeps the REPL.
+- **A service failing at startup**: occupy RiskService's port from another PowerShell window first:
+
+  ```powershell
+  $l = [System.Net.HttpListener]::new(); $l.Prefixes.Add('http://localhost:5102/'); $l.Start()   # $l.Stop() to free it
+  ```
+
+  Then `lrun run`: RiskService logs `cannot listen on http://localhost:5102/ … (port already in use?)`
+  and exits with code 1, while the others keep running. After Ctrl+C, `run` fails with
+  `LrSample.RiskService (exit code 1) failed` (exit code 1). Running `lrun run` twice doesn't show this:
+  the second one fails earlier, building executables the first one is running.
+- **Another port**: `$env:LRSAMPLE_ORDERGATEWAY_PORT = 6101` (or `LRSAMPLE_RISKSERVICE_PORT`) before `lrun run`.
+- **`SkipRun`**: set `"SkipRun": true` on `LrSample.RiskService` in `localrun.config.json`, then
+  `lrun run`: only 3 processes start.
 
 ### 5. Edge cases
 
