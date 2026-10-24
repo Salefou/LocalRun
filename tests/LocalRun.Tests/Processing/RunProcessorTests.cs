@@ -2,6 +2,7 @@ namespace LocalRun.Tests.Processing;
 
 using LocalRun.Core.Model;
 using LocalRun.Core.Processing;
+using LocalRun.Options;
 
 public class RunProcessorTests
 {
@@ -15,22 +16,45 @@ public class RunProcessorTests
         SkipRun = skipRun,
     };
 
+    private static LocalRunConfig Config() => new()
+    {
+        Projects =
+        [
+            Project("Gateway", "executable", dependencies: ["Pricing", "Risk"]),
+            Project("Pricing", "library"),
+            Project("Risk", "executable", dependencies: ["Pricing"]),
+            Project("Reports", "executable", skipRun: true, dependencies: ["Pricing"]),
+            Project("Batch", "executable"),
+        ],
+    };
+
     [Fact]
     public void PlanRun_KeepsExecutablesInDependencyOrder_WithoutSkipRun()
     {
-        var config = new LocalRunConfig
-        {
-            Projects =
-            [
-                Project("Gateway", "executable", dependencies: ["Pricing", "Risk"]),
-                Project("Pricing", "library"),
-                Project("Risk", "executable", dependencies: ["Pricing"]),
-                Project("Reports", "executable", skipRun: true, dependencies: ["Pricing"]),
-                Project("Batch", "executable"),
-            ],
-        };
+        Assert.Equal(["Batch", "Risk", "Gateway"], RunProcessor.PlanRun(Config()).Select(p => p.Name));
+    }
 
-        Assert.Equal(["Batch", "Risk", "Gateway"], RunProcessor.PlanRun(config).Select(p => p.Name));
+    [Fact]
+    public void PlanRun_LeavesOutExcludedExecutables_InAnyCase()
+    {
+        Assert.Equal(["Batch", "Gateway"], RunProcessor.PlanRun(Config(), ["risk"]).Select(p => p.Name));
+    }
+
+    [Fact]
+    public void PlanRun_AcceptsExcludingASkipRunExecutable()
+    {
+        Assert.Equal(["Batch", "Risk", "Gateway"], RunProcessor.PlanRun(Config(), ["Reports"]).Select(p => p.Name));
+    }
+
+    [Theory]
+    [InlineData("Pricing")] // a library
+    [InlineData("Nope")]
+    public void PlanRun_RejectsExcludingWhatIsNotAnExecutable(string name)
+    {
+        var ex = Assert.Throws<UsageException>(() => RunProcessor.PlanRun(Config(), [name]));
+
+        Assert.Contains($"not an executable of this config: {name}.", ex.Message);
+        Assert.Contains("Executables: Batch, Reports, Risk, Gateway.", ex.Message);
     }
 
     [Fact]
