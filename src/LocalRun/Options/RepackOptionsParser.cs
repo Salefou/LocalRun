@@ -4,6 +4,8 @@ using System.Text.RegularExpressions;
 
 internal partial class RepackOptionsParser
 {
+    internal const string DefaultSuffix = "local";
+
     public static RepackOptions Parse(CommandLineArgs args)
     {
         BumpType bumpType = BumpType.None;
@@ -38,6 +40,10 @@ internal partial class RepackOptionsParser
         }
         if (bumpFlags.Count > 1)
             throw new UsageException($"Only one version bump can be given, got {string.Join(", ", bumpFlags)}.");
+
+        // Never plan stable versions for the local feed: a local 1.4.3 would sit in ~/.nuget/packages and
+        // shadow the official 1.4.3 once it is published, since NuGet never downloads a cached version again
+        suffix ??= DefaultSuffix;
 
         return new RepackOptions()
         {

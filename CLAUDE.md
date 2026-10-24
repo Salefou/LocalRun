@@ -92,8 +92,11 @@ shell escaping.
   `RemoveCycles()` (Tarjan SCC) after the filters, so cycles are left out with a warning instead of
   failing; the throw in `TopologicalClassOrder` stays as the safety net for hand-edited configs.
 - Version bump rules (a bump resets lower components and replaces the prerelease label; no bump
-  keeps the version and only `--suffix` replaces the label) are the README "Versioning rules" table,
-  mirrored case by case in `tests/LocalRun.Tests/Options/BumpOptionsTests.cs`. Change both together.
+  keeps the version and only `--suffix` replaces the label) are mirrored case by case in
+  `tests/LocalRun.Tests/Options/BumpOptionsTests.cs` (BumpOptions level, null suffix = drop the label).
+  The CLI never passes a null suffix: `RepackOptionsParser` defaults it to `local`, so `pack` never
+  plans a stable version (cache trap: a local 1.4.3 in ~/.nuget/packages shadows the official one).
+  The README "Versioning rules" table shows the CLI-level result; change it with either.
 
 ## Conventions
 

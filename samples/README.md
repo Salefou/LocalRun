@@ -99,10 +99,12 @@ Rebuild the full config (step 1), then compare the `Writing repack config of …
 
 | Command | Logging `2.3.1-beta` | Pricing.Models `1.4.2.7` | Pricing `1.4` | RiskService `0.9.0-rc.1` |
 |---|---|---|---|---|
-| `lrun pack` | 2.3.1-beta | 1.4.2.7 | 1.4.0 | 0.9.0-rc.1 |
+| `lrun pack` | 2.3.1-local | 1.4.2.7-local | 1.4.0-local | 0.9.0-local |
+| `lrun pack --patch` | 2.3.2-local | 1.4.3-local | 1.4.1-local | 0.9.1-local |
 | `lrun pack --suffix dev` | 2.3.1-dev | 1.4.2.7-dev | 1.4.0-dev | 0.9.0-dev |
 | `lrun pack --patch --suffix dev` | 2.3.2-dev | 1.4.3-dev | 1.4.1-dev | 0.9.1-dev |
-| `lrun pack --minor` | 2.4.0 | 1.5.0 | 1.5.0 | 0.10.0 |
+| `lrun pack --minor` | 2.4.0-local | 1.5.0-local | 1.5.0-local | 0.10.0-local |
+| `lrun pack --alpha` | 2.3.2-alpha | 1.4.3-alpha | 1.4.1-alpha | 0.9.1-alpha |
 | `lrun pack --major --suffix rc.1` | 3.0.0-rc.1 | 2.0.0-rc.1 | 2.0.0-rc.1 | 1.0.0-rc.1 |
 | `lrun pack --suffix -dev` | rejected, exit code 2 | | | |
 

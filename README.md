@@ -277,7 +277,7 @@ Builds nothing, unless `--go` is given: then the plan is still written, and exec
 | `--config <file>` | `localrun.config.json` | Config file to read. |
 | `--repack-config <file>` | `repack.config.json` | Repack config file to write. |
 | `--patch` / `--minor` / `--major` | no bump | Version component to increment. At most one. |
-| `--suffix <text>` | — | Prerelease label to set, without the dash: `--suffix dev` → `1.4.3-dev`. Letters, digits, `-` and `.`-separated parts. |
+| `--suffix <text>` | `local` | Prerelease label to set, without the dash: `--suffix dev` → `1.4.3-dev`. Letters, digits, `-` and `.`-separated parts. Never empty: see [why](#versioning-rules). |
 | `--alpha` | — | Shorthand for `--patch --suffix alpha`. Cannot be combined with another bump or `--suffix`. |
 | `--remote` | off | Take the current version from the highest version found across your enabled NuGet sources instead of the csproj. |
 | `--clean` | off | Make `go` run `dotnet clean` before restoring. |
@@ -422,24 +422,30 @@ A version is stored as `Major`, `Minor` and `PatchAndSuffix` (everything after t
 short versions are completed with zeros, `1.4` → `1.4.0`), or the highest version on your NuGet
 sources with `--remote`, prerelease label included (`1.0.0` when the package is not found).
 
-The rules: **a bump resets the lower components and replaces the prerelease label** with `--suffix`,
-or drops it. **Without a bump, the version is kept**, and only a given `--suffix` replaces its label.
+The rules: **a bump resets the lower components**; without one, the version is kept. **The prerelease
+label is always replaced** by `--suffix`, which defaults to **`local`**: `pack` never plans a stable
+version.
 
 | Options | `1.4.2` becomes | `1.4.2-beta` becomes | `1.4.2.7` becomes |
 |---|---|---|---|
-| *(none)* | `1.4.2` | `1.4.2-beta` | `1.4.2.7` |
+| *(none)* | `1.4.2-local` | `1.4.2-local` | `1.4.2.7-local` |
 | `--suffix dev` | `1.4.2-dev` | `1.4.2-dev` | `1.4.2.7-dev` |
-| `--patch` | `1.4.3` | `1.4.3` | `1.4.3` |
+| `--patch` | `1.4.3-local` | `1.4.3-local` | `1.4.3-local` |
 | `--patch --suffix dev` | `1.4.3-dev` | `1.4.3-dev` | `1.4.3-dev` |
 | `--alpha` | `1.4.3-alpha` | `1.4.3-alpha` | `1.4.3-alpha` |
-| `--minor` | `1.5.0` | `1.5.0` | `1.5.0` |
+| `--minor` | `1.5.0-local` | `1.5.0-local` | `1.5.0-local` |
 | `--major --suffix dev` | `2.0.0-dev` | `2.0.0-dev` | `2.0.0-dev` |
 
 A floating patch (`1.4.*`) is treated as `0`. A suffix must be a valid prerelease label: letters,
 digits and `-`, optionally in dot-separated parts (`dev`, `beta.2`, `ci-42`), without the leading dash.
 
-**Tip:** a suffix keeps your local packages ordered *below* the real release of the same number
-(`1.4.3-dev` < `1.4.3`), so a later official release always wins.
+**Why never stable:** NuGet never re-downloads a version already in `~/.nuget/packages`. A local
+`1.4.3` would keep shadowing the official `1.4.3` after CI publishes it, and you'd run your local build
+under the official number. A prerelease label also orders your local packages *below* the real release
+of the same number (`1.4.3-local` < `1.4.3`), so a later official release always wins.
+
+Consumers only pick prereleases up through a version that allows them: a floating `*-*` or `1.4.*-*`,
+an exact prerelease version, or a project reference. A floating `1.4.*` ignores prereleases.
 
 ---
 
