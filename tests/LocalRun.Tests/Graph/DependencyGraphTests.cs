@@ -285,6 +285,39 @@ public class DependencyGraphTests
         Assert.Equal(["Nope"], FilterGraph().FindUnknown(["x", "Nope", "BASE"]));
     }
 
+    [Fact]
+    public void SameName_AllAreLeftOut_DependentsKeptWithoutTheEdge()
+    {
+        // Two "Shared" (one spelt "shared"), Consumer uses the name, Base is unrelated
+        var graph = Graph(
+            Project("Base"),
+            Project("Shared"),
+            new ProjectNode
+            {
+                Name = "shared",
+                Path = "repo-two/shared/shared.csproj",
+                Type = "library",
+                Version = new ProjectVersion { Major = 2, Minor = 0, PatchAndSuffix = "0" },
+                Dependencies = [],
+            },
+            Project("Consumer", "Shared", "Base"));
+
+        var collision = Assert.Single(graph.Collisions);
+        Assert.Equal("Shared", collision.Name, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(["repo-two/shared/shared.csproj", "Shared/Shared.csproj"], collision.Paths);
+        Assert.Equal(["Consumer"], collision.Dependents);
+
+        Assert.Equal(["Base", "Consumer"], graph.TopologicalOrder().Select(p => p.Name));
+        Assert.Equal(1, graph.ComputeNameToDepth()["Consumer"]);
+        Assert.Equal(["shared"], graph.FindCollided(["shared", "Base", "Nope"]));
+    }
+
+    [Fact]
+    public void UniqueNames_HaveNoCollision()
+    {
+        Assert.Empty(FilterGraph().Collisions);
+    }
+
     private static ProjectNode Service(string name, params string[] dependencies) => new()
     {
         Name = name,

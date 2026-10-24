@@ -33,13 +33,31 @@ public class DependencyGraph
 
     public IEnumerable<ProjectNode> Roots => [.. RootsNodes.Select(n => n.Project)];
 
+    /// <summary>A name shared by several projects, and the kept projects that depended on that name.</summary>
+    public sealed record NameCollision(string Name, IReadOnlyList<string> Paths, IReadOnlyList<string> Dependents);
+
+    /// <summary>
+    /// Names shared by several projects. Dependencies are matched by name, so none of those projects can be
+    /// told apart: they are all left out of the graph, and projects depending on the name keep no edge to it.
+    /// </summary>
+    public IReadOnlyList<NameCollision> Collisions { get; }
+
     private DependencyGraph(List<ProjectNode> projects)
     {
-        foreach (var proj in projects)
+        var byName = projects.GroupBy(proj => proj.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var proj in byName.Where(group => group.Count() == 1).Select(group => group.Single()))
         {
             Node projNode = new(proj);
             _nodesPerName[proj.Name] = projNode;
         }
+        Collisions = [.. byName.Where(group => group.Count() > 1)
+            .Select(group => new NameCollision(
+                group.Key,
+                [.. group.Select(proj => proj.Path).Order(StringComparer.OrdinalIgnoreCase)],
+                [.. _nodesPerName.Values
+                    .Where(node => node.Project.Dependencies.Contains(group.Key, StringComparer.OrdinalIgnoreCase))
+                    .Select(node => node.Project.Name).Order(StringComparer.OrdinalIgnoreCase)]))
+            .OrderBy(collision => collision.Name, StringComparer.OrdinalIgnoreCase)];
 
         foreach (var node in _nodesPerName.Values)
         {
@@ -160,8 +178,12 @@ public class DependencyGraph
         return added;
     }
 
-    /// <summary>The names, among those given, that match no project of the graph.</summary>
+    /// <summary>The names, among those given, that match no project of the graph (including collided names).</summary>
     public List<string> FindUnknown(IEnumerable<string> names) => [.. names.Where(name => !_nodesPerName.ContainsKey(name))];
+
+    /// <summary>The names, among those given, that were left out because several projects share them.</summary>
+    public List<string> FindCollided(IEnumerable<string> names)
+        => [.. names.Where(name => Collisions.Any(collision => collision.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))];
 
     private HashSet<Node> Collect(IEnumerable<string> names, Action<Node, HashSet<Node>> collect)
     {

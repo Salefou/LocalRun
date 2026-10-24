@@ -58,7 +58,7 @@ public class RunProcessor : IRunProcessor
 
         int prefixWidth = executables.Max(exe => exe.Name.Length);
         var running = new List<RunningProcess>();
-        // Processes that failed on their own, before any stop was requested: those make `run` fail
+        // Processes that failed on their own, before any stop was requested: those make `up` fail
         List<RunningProcess> failed = [];
         try
         {
@@ -98,7 +98,7 @@ public class RunProcessor : IRunProcessor
         }
     }
 
-    /// <summary>The executables to run, dependencies first, without those marked SkipRun.</summary>
+    /// <summary>The executables to run, dependencies first, without the excluded ones.</summary>
     internal static List<ProjectNode> PlanRun(LocalRunConfig config, IReadOnlyCollection<string>? exclude = null)
     {
         var executables = DependencyGraph.FromConfig(config).TopologicalOrder()
@@ -114,7 +114,7 @@ public class RunProcessor : IRunProcessor
                 $"Executables: {string.Join(", ", executables.Select(exe => exe.Name))}.");
         }
 
-        return [.. executables.Where(project => !project.SkipRun && !excluded.Contains(project.Name))];
+        return [.. executables.Where(project => !excluded.Contains(project.Name))];
     }
 
     /// <summary>

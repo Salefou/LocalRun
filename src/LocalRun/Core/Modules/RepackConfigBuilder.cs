@@ -31,7 +31,6 @@ internal class RepackConfigBuilder
 
             foreach (var proj in projTree)
             {
-                if (proj.SkipRepack) continue;
                 ProjectVersion version;
                 if (repackOptions.UseRemoteAsVersionReference)
                 {

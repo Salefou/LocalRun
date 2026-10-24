@@ -6,7 +6,7 @@ LocalRun is a .NET command-line tool for working across many repositories whose 
 each other through NuGet packages. It scans a directory tree of repositories, builds the dependency
 graph between their projects, and then:
 
-- **visualizes** that graph as an SVG,
+- **plots** that graph as an SVG,
 - **bumps versions** and **repacks** the libraries you changed into a local NuGet feed, in dependency order,
 - **runs** the executables that consume them, in dependency order.
 
@@ -46,7 +46,7 @@ so you can **inspect or hand-edit** the plan between steps.
               build                          pack                           go
  repos/ ───────────────► localrun.config.json ───────────────► repack.config.json ──────────► local NuGet feed
                                │      │         └──────────── pack --go ─────────────┘        (~/.localnuget)
-                     visualize │      │ run
+                          plot │      │ up
                                ▼      ▼
                 dependencies.svg    dotnet run, executables in dependency order
 ```
@@ -55,14 +55,14 @@ so you can **inspect or hand-edit** the plan between steps.
    `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
    that reference them. Optional filters keep only the part of the graph you care about. The result
    is written in topological order to `localrun.config.json`.
-2. **`visualize`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
+2. **`plot`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
 3. **`pack`** decides, for every project, its current version (from the csproj, or from
    your NuGet sources with `--remote`) and the bumped version it will be packed as. Nothing is built
    yet: the plan is written to `repack.config.json` for you to review.
 4. **`go`** executes the plan: `dotnet restore` with the local feed added to your sources, then
    `dotnet pack --no-restore -o <feed>`, each project getting its planned version.
    `pack --go` does steps 3 and 4 in one command, when you don't need to review the plan.
-5. **`run`** builds the executables of the config, then starts them all side by side, dependencies
+5. **`up`** builds the executables of the config, then starts them all side by side, dependencies
    first, until they exit or you press Ctrl+C.
 
 ### The dependency graph
@@ -79,6 +79,11 @@ so you can **inspect or hand-edit** the plan between steps.
   warning naming them, and carries on with the rest. Projects that depended on the cycle are kept
   without that dependency, and named in a second warning: packing or running them may fail.
   (A cycle written into a config by hand still fails the command that reads it.)
+- Projects are identified **by file name**, since that's all a dependency names. When several projects
+  share a name (e.g. a library copied into two repos), `build` can't tell which one a dependency means,
+  so it logs an **error** listing their paths and leaves all of them out. The rest of the config is
+  still written, and projects that depended on the name are kept without it, named in a warning.
+  Naming such a project in `--users-of` or `--deps-of` fails with exit code `2`.
 - Independent sub-graphs (**connected components**) are repacked in parallel; within a component,
   all projects of the same depth are packed in parallel, depth by depth.
 
@@ -127,7 +132,7 @@ directly: the `.cmd` waits for a key press when it thinks it was double-clicked.
 
 **Why use the installed tool rather than `bin/`?** The tool runs from the .NET tool store
 (`~/.dotnet/tools`), and the script builds in `artifacts/` rather than `bin/`. So the LocalRun you
-*use* never locks the build output of the LocalRun you're *working on*: you can keep an `lrun run`
+*use* never locks the build output of the LocalRun you're *working on*: you can keep an `lrun up`
 going while you build, test or debug in Visual Studio. The only thing that can block an update is a
 running installed `lrun` — exit it and re-run the script.
 
@@ -170,11 +175,11 @@ Say your repositories are checked out under `~/work/repos`, and you changed `Sha
 ```sh
 cd ~/work
 
-# 1. Graph everything that depends on the library you changed
-lrun build --root ./repos --users-of Shared.Pricing
+# 1. Graph everything that depends on the library you changed, and plot it (Ctrl+click the printed link)
+lrun build --root ./repos --users-of Shared.Pricing --plot
 
-# 2. Look at it
-lrun visualize --open
+# 2. Or plot the current config again, opening the SVG directly
+lrun plot --open
 
 # 3. Plan a patch bump with a "dev" suffix, then review repack.config.json
 lrun pack --patch --suffix dev
@@ -184,7 +189,7 @@ lrun go
 #    (steps 3 and 4 at once, without the review: lrun pack --patch --suffix dev --go)
 
 # 5. Start the executables
-lrun run
+lrun up
 ```
 
 For your consumers to pick the new packages up, the local feed must be one of their NuGet sources,
@@ -202,8 +207,8 @@ General form: `lrun <command> [options]`.
 
 > Renamed on 2026-10-24: the tool was `localrun` (now `lrun`; the `localrun-repl` prompt has since been
 > removed), and `build-config`, `repack-preview` and `repack-go` are now `build`, `pack` and `go`. The `build` filters
-> `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`. The old names
-> are gone: update scripts that call them. Config file names are unchanged.
+> `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`; `visualize`
+> is now `plot` and `run` is now `up`. The old names are gone: update scripts that call them. Config file names are unchanged.
 
 - Options are `--name` followed by zero or more values; values run until the next `--option`.
 - Unknown options, repeated options, missing values and extra values are **rejected** (exit code `2`)
@@ -224,8 +229,10 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--users-of <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
 | `--deps-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
 | `--union` | off | With both filters: keep the users of `--users-of` **or** the dependencies of `--deps-of`, instead of the projects between them. |
-| `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of` and/or `--deps-of`. |
+| `--git-changes` | off | Add the projects with pending git changes to the `--users-of` names (see below), so they're kept with everything that uses them. |
+| `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
+| `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.svg`, printed as a link). |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
 The two flags are AND'ed: with `--users-of X --deps-of Y` you get **the projects between X and Y**,
@@ -249,7 +256,30 @@ what the flag added.
 
 Names are matched case-insensitively against the scanned projects. An unknown name fails with exit code `2`.
 
-### `visualize`
+**`--git-changes`** answers "what did I change, and what does it affect?" without naming anything:
+
+```sh
+lrun build --root ./repos --git-changes --plot              # my changes and all their users
+lrun build --root ./repos --git-changes --deps-of OrderGateway  # only what OrderGateway needs of them
+```
+
+A project counts as **changed** when its repository has, under the project's folder:
+
+- uncommitted changes, staged or not, or untracked files (git-ignored files don't count), or
+- changes in commits that are on `HEAD` but not on origin's default branch (`origin/HEAD`, else
+  `origin/main`, else `origin/master`), pushed or not. Being *behind* that branch is not a change.
+
+When in doubt it counts more, not less: an extra project is easy to spot in the plot and delete from
+`localrun.config.json` before `pack`, a missing one isn't. So a change **outside every project folder**
+(`Directory.Build.props`, `global.json`, …) marks every project of that repository, and so does a
+repository with no origin default branch to compare with, or one LocalRun can't read (with a warning).
+A project in no git repository counts as changed too.
+`build` logs, for each changed repository, why and which projects (`[🔀] …\repo-two: 2 uncommitted
+file(s), 1 commit(s) on feature not on origin/main -> LrSample.Pricing`).
+Nothing is fetched: run `git fetch` first if origin may have moved. With no change at all, `build`
+warns and writes an empty config.
+
+### `plot`
 
 Render the graph of a config file as `<output>.dot` and `<output>.svg`. Nodes show the project name
 and version, edges point from a dependency to its dependent, and colours darken with depth.
@@ -309,14 +339,14 @@ a depth in parallel:
 
 The first failing `dotnet` command fails the whole command (exit code `1`); its output is in the log.
 
-### `run`
+### `up`
 
 Run every project of type `executable` in the config **side by side**, like a local deployment of
-the services:
+the services, as `docker compose up` does for containers:
 
 1. **Build** each executable with `dotnet build`, one at a time, in dependency order. Executables
    sharing a project reference would otherwise build it concurrently and collide on its output. A
-   build failure stops `run` before anything starts, and only then is the build output shown. As with
+   build failure stops `up` before anything starts, and only then is the build output shown. As with
    `go`, the config's local feed is added to the restore sources, so the packages `go` produced are
    found even if your `NuGet.config` doesn't list that feed.
 2. **Start** them all, in dependency order, with `dotnet run --no-build --project <csproj>`, without
@@ -326,8 +356,8 @@ the services:
    **Ctrl+C**. They all receive it (they share the console). Whatever is still running 10 seconds later
    is killed, with its child processes.
 
-Projects with `"SkipRun": true` in the config are not run. A process that fails *on its own* (non-zero
-exit code before Ctrl+C) doesn't stop the others, but makes `run` exit with code `1` once everything
+A process that fails *on its own* (non-zero
+exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
 has stopped. Processes stopped by Ctrl+C never count as failures.
 
 ```
@@ -341,16 +371,16 @@ has stopped. Processes stopped by Ctrl+C never count as failures.
 [■] LrSample.RiskService exited with code 0
 ```
 
-Processes are started in dependency order, but `run` doesn't wait for one to be *ready* before
+Processes are started in dependency order, but `up` doesn't wait for one to be *ready* before
 starting the next. A service that needs another one at startup should retry.
 
 | Option | Default | Description |
 |---|---|---|
 | `--config <file>` | `localrun.config.json` | Config file to read. |
-| `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `run` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). Unlike `SkipRun`, nothing to edit in the config. |
+| `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `up` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). |
 
 ```sh
-lrun run --exclude OrderGateway     # everything but OrderGateway, which you start under the debugger
+lrun up --exclude OrderGateway     # everything but OrderGateway, which you start under the debugger
 ```
 
 ### `help`
@@ -377,16 +407,16 @@ All files are indented JSON, safe to commit, diff or edit by hand between steps.
       "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // null if no solution references it
       "Type": "library",                        // "executable" when <OutputType>Exe</OutputType>
       "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // first <Version>, else 1.0.0
-      "Dependencies": [],                       // names of other projects in the graph
-      "SkipRepack": false,                      // set to true by hand to leave it out of pack
-      "SkipRun": false                          // set to true by hand to leave it out of run
+      "Dependencies": []                        // names of other projects in the graph
     }
   ]
 }
 ```
 
-Useful hand edits: set `"SkipRepack": true` on projects you don't want repacked, `"SkipRun": true`
-on executables you don't want started, or change `LocalNugetPath` before `pack`.
+`build` rewrites this file from scratch, so hand edits last until the next `build`. To leave a project
+out of a repack, delete it from `repack.config.json` before `go`. To leave an executable out of `up`,
+use `up --exclude`. (Configs from before 2026-10-24 may still hold `SkipRepack` / `SkipRun` fields:
+they are ignored.)
 
 ### `repack.config.json` — written by `pack`
 
@@ -412,9 +442,9 @@ on executables you don't want started, or change `LocalNugetPath` before `pack`.
 
 Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`.
 
-### `lrun-visuals/dependencies-<date-time>.dot` / `.svg` — written by `visualize`
+### `lrun-visuals/dependencies-<date-time>.dot` / `.svg` — written by `plot` (or `build --plot`)
 
-Plain Graphviz DOT and its rendering, one pair per `visualize` run (delete the folder when you're done). The DOT file can be re-rendered or post-processed with any
+Plain Graphviz DOT and its rendering, one pair per graph (delete the folder when you're done). The DOT file can be re-rendered or post-processed with any
 Graphviz tooling.
 
 ---
@@ -461,11 +491,11 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 
 | | |
 |---|---|
-| Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `run` inherit the console.) |
+| Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `up` inherit the console.) |
 | Exit codes | `0` success · `1` the command failed (missing file, `dotnet` failure, dependency cycle, …) · `2` invalid command line. |
 | Output | Human-readable log lines on **stdout**. Warnings and errors are prefixed `[WRN] ` / `[ERR] `; ANSI colours are dropped when output is redirected. Output of child `dotnet` processes is forwarded line by line (stderr lines as warnings). |
 | Results | The JSON / DOT / SVG files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
-| Side effects | `--open` launches a viewer; `go` writes packages to the feed; `run` starts processes. |
+| Side effects | `--open` launches a viewer; `go` writes packages to the feed; `up` starts processes. |
 
 Do not parse the log lines — they are for humans and may change. Read the JSON files instead.
 
@@ -518,7 +548,7 @@ $plan.RepackTrees.Projects | Format-Table Name, Depth
 set -e                                   # any non-zero exit code stops the job
 export LOCALRUN_LOG_LEVEL=Debug          # full stack traces on failure
 lrun build --root "$WORKSPACE/repos" --config "$WORKSPACE/out/localrun.config.json"
-lrun visualize --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/out/dependencies"
+lrun plot --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/out/dependencies"
 ```
 
 ---
@@ -553,7 +583,7 @@ src/
    │  ├─ Model/                  JSON-serialised types: LocalRunConfig, RepackConfig, ProjectNode, …
    │  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphVisualizer,
    │  │                          NugetVersionChecker, SolutionScanner
-   │  └─ Processing/             RunProcessor: the `run` command
+   │  └─ Processing/             RunProcessor: the `up` command
    └─ Logger/                    Logger factory and console formatter
 tests/
 └─ LocalRun.Tests/               xUnit tests, one folder per area of src/LocalRun (Graph, Options, …)
@@ -640,12 +670,12 @@ Exit it and re-run the script.
 
 ## Known limitations
 
-- **`run` doesn't wait for readiness**: processes start in dependency order, but not one after the
+- **`up` doesn't wait for readiness**: processes start in dependency order, but not one after the
   other being *ready*. Processes killed from outside (e.g. Task Manager on `lrun`) are not stopped
   with it; Ctrl+C or closing the terminal stops them.
-- **`--git-changes`** is accepted by `build` but does nothing yet (intended: keep only repos
-  with uncommitted changes).
+- **`--git-changes`** compares with your last fetch and only knows `origin`; files changed outside
+  project folders mark the whole repository, even when only docs changed.
 - `--remote` reads the user/machine `NuGet.Config`, not repository-level ones, and queries sources one
   at a time.
-- Dependencies are matched **by name**: two projects with the same file name in different repos collide,
-  and one of them silently disappears from the graph (no warning yet).
+- Dependencies are matched **by name**: projects with the same file name in different repos can't be
+  told apart, so they're all left out of the graph (with an error), rather than handled.

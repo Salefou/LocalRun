@@ -6,44 +6,38 @@ using LocalRun.Options;
 
 public class RunProcessorTests
 {
-    private static ProjectNode Project(string name, string type, bool skipRun = false, params string[] dependencies) => new()
+    private static ProjectNode Project(string name, string type, params string[] dependencies) => new()
     {
         Name = name,
         Path = $"{name}/{name}.csproj",
         Type = type,
         Version = ProjectVersion.Parse("1.0.0"),
         Dependencies = [.. dependencies],
-        SkipRun = skipRun,
     };
 
     private static LocalRunConfig Config() => new()
     {
         Projects =
         [
-            Project("Gateway", "executable", dependencies: ["Pricing", "Risk"]),
+            Project("Gateway", "executable", "Pricing", "Risk"),
             Project("Pricing", "library"),
-            Project("Risk", "executable", dependencies: ["Pricing"]),
-            Project("Reports", "executable", skipRun: true, dependencies: ["Pricing"]),
+            Project("Risk", "executable", "Pricing"),
+            Project("Reports", "executable", "Pricing"),
             Project("Batch", "executable"),
         ],
     };
 
     [Fact]
-    public void PlanRun_KeepsExecutablesInDependencyOrder_WithoutSkipRun()
+    public void PlanRun_KeepsExecutablesInDependencyOrder()
     {
-        Assert.Equal(["Batch", "Risk", "Gateway"], RunProcessor.PlanRun(Config()).Select(p => p.Name));
+        Assert.Equal(["Batch", "Reports", "Risk", "Gateway"], RunProcessor.PlanRun(Config()).Select(p => p.Name));
     }
 
     [Fact]
     public void PlanRun_LeavesOutExcludedExecutables_InAnyCase()
     {
-        Assert.Equal(["Batch", "Gateway"], RunProcessor.PlanRun(Config(), ["risk"]).Select(p => p.Name));
-    }
-
-    [Fact]
-    public void PlanRun_AcceptsExcludingASkipRunExecutable()
-    {
-        Assert.Equal(["Batch", "Risk", "Gateway"], RunProcessor.PlanRun(Config(), ["Reports"]).Select(p => p.Name));
+        Assert.Equal(["Batch", "Reports", "Gateway"], RunProcessor.PlanRun(Config(), ["risk"]).Select(p => p.Name));
+        Assert.Equal(["Batch", "Gateway"], RunProcessor.PlanRun(Config(), ["Reports", "RISK"]).Select(p => p.Name));
     }
 
     [Theory]

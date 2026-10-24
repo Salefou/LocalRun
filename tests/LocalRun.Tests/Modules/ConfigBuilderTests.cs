@@ -32,6 +32,16 @@ public class ConfigBuilderTests
     }
 
     [Fact]
+    public void CollidedFilterName_IsAUsageError_SayingItIsAmbiguous()
+    {
+        var ex = Assert.Throws<UsageException>(() =>
+            ConfigBuilder.ValidateFilterNames(Graph("Core", "Shared", "Shared"), Options("--users-of", "shared")));
+
+        Assert.Contains("Ambiguous", ex.Message);
+        Assert.Contains("--users-of", ex.Message);
+    }
+
+    [Fact]
     public void KnownFilterNames_PassInAnyCase()
     {
         ConfigBuilder.ValidateFilterNames(Graph("Core", "Api"), Options("--users-of", "core", "--deps-of", "API"));
