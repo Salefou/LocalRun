@@ -211,4 +211,77 @@ public class DependencyGraphTests
         Assert.Equal(["B", "C"], graph.TopologicalOrder().Select(p => p.Name));
         Assert.Equal(0, graph.ComputeNameToDepth()["B"]);
     }
+
+    // Base <- X <- Mid <- Y, Base <- Other <- Y, X <- Side:
+    // Other and Base are dependencies of Y that aren't users of X; Side is a user of X that Y doesn't need
+    private static DependencyGraph FilterGraph() => Graph(
+        Project("Base"),
+        Project("X", "Base"),
+        Project("Mid", "X"),
+        Project("Other", "Base"),
+        Project("Y", "Mid", "Other"),
+        Project("Side", "X"));
+
+    private static IEnumerable<string> Names(DependencyGraph graph) => graph.AllProjects.Select(p => p.Name).Order();
+
+    [Fact]
+    public void Retain_BothFlags_KeepsOnlyTheProjectsBetweenThem()
+    {
+        var graph = FilterGraph();
+
+        graph.Retain(usersOf: ["X"], depsOf: ["Y"], union: false);
+
+        Assert.Equal(["Mid", "X", "Y"], Names(graph));
+    }
+
+    [Fact]
+    public void Retain_BothFlagsWithUnion_KeepsBothCones()
+    {
+        var graph = FilterGraph();
+
+        graph.Retain(usersOf: ["X"], depsOf: ["Y"], union: true);
+
+        Assert.Equal(["Base", "Mid", "Other", "Side", "X", "Y"], Names(graph));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Retain_OneFlag_KeepsItsConeInBothModes(bool union)
+    {
+        var users = FilterGraph();
+        var dependencies = FilterGraph();
+
+        users.Retain(usersOf: ["X"], depsOf: null, union);
+        dependencies.Retain(usersOf: null, depsOf: ["Y"], union);
+
+        Assert.Equal(["Mid", "Side", "X", "Y"], Names(users));
+        Assert.Equal(["Base", "Mid", "Other", "X", "Y"], Names(dependencies));
+    }
+
+    [Fact]
+    public void Retain_NamesWithinAFlag_AreOred()
+    {
+        var graph = FilterGraph();
+
+        graph.Retain(usersOf: ["X", "Other"], depsOf: null, union: false);
+
+        Assert.Equal(["Mid", "Other", "Side", "X", "Y"], Names(graph));
+    }
+
+    [Fact]
+    public void Retain_DisjointFlags_LeaveNothing()
+    {
+        var graph = FilterGraph();
+
+        graph.Retain(usersOf: ["Side"], depsOf: ["Y"], union: false);
+
+        Assert.Empty(graph.AllProjects);
+    }
+
+    [Fact]
+    public void FindUnknown_IgnoresCase()
+    {
+        Assert.Equal(["Nope"], FilterGraph().FindUnknown(["x", "Nope", "BASE"]));
+    }
 }

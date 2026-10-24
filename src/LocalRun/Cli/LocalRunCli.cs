@@ -225,6 +225,8 @@ public static class LocalRunCli
         Console.WriteLine($"        --config <file>         Config file to write (default: {DefaultConfigPath})");
         Console.WriteLine("        --users-of <names>      Keep the given projects and all that depend on them, transitively");
         Console.WriteLine("        --deps-of <names>       Keep the given projects and all they depend on, transitively");
+        Console.WriteLine("                                With both: only the projects between them (AND)");
+        Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
         Console.WriteLine();
 

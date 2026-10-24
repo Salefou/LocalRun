@@ -37,4 +37,21 @@ public class BuildConfigOptionsParserTests
     {
         Assert.Throws<UsageException>(() => Parse(option, "A"));
     }
+
+    [Fact]
+    public void Union_IsReadWithBothFilters()
+    {
+        Assert.True(Parse("--users-of", "X", "--deps-of", "Y", "--union").Union);
+        Assert.False(Parse("--users-of", "X", "--deps-of", "Y").Union);
+    }
+
+    [Theory]
+    [InlineData("--union")]
+    [InlineData("--union", "--users-of", "X")]
+    [InlineData("--union", "--deps-of", "Y")]
+    public void Union_WithoutBothFilters_IsRejected(params string[] argv)
+    {
+        var ex = Assert.Throws<UsageException>(() => Parse(argv));
+        Assert.Contains("--union", ex.Message);
+    }
 }

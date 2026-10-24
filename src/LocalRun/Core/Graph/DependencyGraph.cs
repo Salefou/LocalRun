@@ -106,30 +106,51 @@ public class DependencyGraph
         return new DependencyGraph(config.Projects);
     }
 
-    public void RetainDependsOn(IEnumerable<string> names)
+    public void RetainDependsOn(IEnumerable<string> names) => Retain(usersOf: names, depsOf: null, union: false);
+
+    public void RetainIsDependencyOf(IEnumerable<string> names) => Retain(usersOf: null, depsOf: names, union: false);
+
+    /// <summary>
+    /// Keeps the given projects with all their users (<paramref name="usersOf"/>) and/or with all their
+    /// dependencies (<paramref name="depsOf"/>), transitively. Names within one list are OR'ed. When both
+    /// lists are given, the two sets are intersected (the projects between them), or united with
+    /// <paramref name="union"/>. Both sets come from the full graph, before anything is pruned.
+    /// </summary>
+    public void Retain(IEnumerable<string>? usersOf, IEnumerable<string>? depsOf, bool union)
     {
-        var toKeep = new HashSet<Node>();
-        foreach (var name in names)
+        HashSet<Node>? users = usersOf == null ? null : Collect(usersOf, CollectDependents);
+        HashSet<Node>? dependencies = depsOf == null ? null : Collect(depsOf, CollectDependencies);
+
+        HashSet<Node> keep;
+        if (users == null || dependencies == null)
         {
-            if (_nodesPerName.TryGetValue(name, out var target))
-            {
-                CollectDependents(target, toKeep);
-            }
+            keep = users ?? dependencies ?? [.. _nodesPerName.Values];
         }
-        Prune(toKeep);
+        else
+        {
+            keep = users;
+            if (union)
+                keep.UnionWith(dependencies);
+            else
+                keep.IntersectWith(dependencies);
+        }
+        Prune(keep);
     }
 
-    public void RetainIsDependencyOf(IEnumerable<string> names)
+    /// <summary>The names, among those given, that match no project of the graph.</summary>
+    public List<string> FindUnknown(IEnumerable<string> names) => [.. names.Where(name => !_nodesPerName.ContainsKey(name))];
+
+    private HashSet<Node> Collect(IEnumerable<string> names, Action<Node, HashSet<Node>> collect)
     {
-        var toKeep = new HashSet<Node>();
+        var collected = new HashSet<Node>();
         foreach (var name in names)
         {
             if (_nodesPerName.TryGetValue(name, out var target))
             {
-                CollectDependencies(target, toKeep);
+                collect(target, collected);
             }
         }
-        Prune(toKeep);
+        return collected;
     }
 
     private void Traverse(Node start, Func<Node, IEnumerable<Node>> neighborSelector, HashSet<Node> visited)

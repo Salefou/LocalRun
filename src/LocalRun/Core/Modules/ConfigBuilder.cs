@@ -19,10 +19,13 @@ public class ConfigBuilder
         // TODO if git repo and stuff
         var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal);
 
-        if (options.RetainDependsOn != null)
-            graph.RetainDependsOn(options.RetainDependsOn);
-        if (options.RetainIsDependencyOf != null)
-            graph.RetainIsDependencyOf(options.RetainIsDependencyOf);
+        ValidateFilterNames(graph, options);
+        graph.Retain(options.RetainDependsOn, options.RetainIsDependencyOf, options.Union);
+        if (options.RetainDependsOn != null && options.RetainIsDependencyOf != null && !options.Union && !graph.AllProjects.Any())
+        {
+            logger.LogWarning("No project is both a user of {UsersOf} and needed by {DepsOf}: the latter doesn't depend on the former. Use --union, or one flag alone.",
+                string.Join(", ", options.RetainDependsOn), string.Join(", ", options.RetainIsDependencyOf));
+        }
 
         // After the filters, so they still see the real graph; a cycle cannot be ordered, so it is left out
         foreach (var cycle in graph.RemoveCycles())
@@ -42,5 +45,17 @@ public class ConfigBuilder
             Projects = [.. graph.TopologicalOrder()]
         };
         return config;
+    }
+
+    /// <summary>A misspelt name would silently filter everything out: reject it, checked against the full graph.</summary>
+    internal static void ValidateFilterNames(DependencyGraph graph, BuildConfigOptions options)
+    {
+        foreach (var (flag, names) in new[] { ("--users-of", options.RetainDependsOn), ("--deps-of", options.RetainIsDependencyOf) })
+        {
+            if (names == null) continue;
+            var unknown = graph.FindUnknown(names);
+            if (unknown.Count != 0)
+                throw new UsageException($"Unknown project(s) for '{flag}': {string.Join(", ", unknown)}.");
+        }
     }
 }
