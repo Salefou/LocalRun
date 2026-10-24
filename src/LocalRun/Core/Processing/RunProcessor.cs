@@ -13,7 +13,8 @@ using System.Threading.Tasks;
 /// <summary>
 /// Builds the executables of a config one by one, then starts them all side by side and waits until they
 /// have all exited. Ctrl+C stops them: they receive it too (same console), and whatever is still running
-/// after <see cref="StopGracePeriod"/> is killed with its child processes.
+/// after <see cref="StopGracePeriod"/> is killed with its child processes. On Windows they also run in a
+/// <see cref="ProcessJob"/>, so they are stopped when LocalRun is killed.
 /// </summary>
 public class RunProcessor : IRunProcessor
 {
@@ -56,6 +57,8 @@ public class RunProcessor : IRunProcessor
         };
         Console.CancelKeyPress += onCancel;
 
+        // Stops the processes even when LocalRun is killed, when the stopping code below can't run
+        using var job = ProcessJob.TryCreate();
         int prefixWidth = executables.Max(exe => exe.Name.Length);
         var running = new List<RunningProcess>();
         // Processes that failed on their own, before any stop was requested: those make `up` fail
@@ -66,7 +69,7 @@ public class RunProcessor : IRunProcessor
             {
                 logger.LogInformation("[▶] Starting {Project}", exe.Name);
                 running.Add(RunningProcess.Start(exe.Name.PadRight(prefixWidth),
-                    "dotnet", $"run --no-build --project \"{FullPath(config, exe)}\""));
+                    "dotnet", $"run --no-build --project \"{FullPath(config, exe)}\"", job: job));
             }
             logger.LogInformation("[✔ ] {Count} process(es) started. Press Ctrl+C to stop them all.", running.Count);
 
@@ -163,7 +166,9 @@ public class RunProcessor : IRunProcessor
         public Task<int> Exited { get; }
 
         /// <param name="capture">When given, receives the output lines instead of the log.</param>
-        public static RunningProcess Start(string? prefix, string fileName, string args, Action<string>? capture = null)
+        /// <param name="job">When given, the process is added to it.</param>
+        public static RunningProcess Start(string? prefix, string fileName, string args, Action<string>? capture = null,
+            ProcessJob? job = null)
         {
             var process = Process.Start(new ProcessStartInfo(fileName, args)
             {
@@ -171,6 +176,7 @@ public class RunProcessor : IRunProcessor
                 RedirectStandardError = true,
                 UseShellExecute = false,
             })!;
+            job?.Add(process, prefix?.Trim() ?? fileName);
             string tag = prefix == null ? string.Empty : $"[{prefix}] ";
             process.OutputDataReceived += (_, e) =>
             {

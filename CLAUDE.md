@@ -73,7 +73,10 @@ shell escaping.
 - **`up` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
   references would collide), start all with `dotnet run --no-build` without awaiting, Ctrl+C →
   `e.Cancel = true` + children get Ctrl+C themselves (same console) + kill the process tree after
-  `StopGracePeriod`. Exit code 1 only for processes that failed before a stop was requested. To test
+  `StopGracePeriod`. On Windows the `dotnet run` processes (not the builds: MSBuild nodes outlive them) go
+  into a kill-on-close `ProcessJob`, so they die with `lrun` even when it is killed from outside; failing
+  to create/assign it only warns. No readiness checks, by design (user, 2026-10-24): services are
+  expected to wait for/retry their dependencies. Exit code 1 only for processes that failed before a stop was requested. To test
   Ctrl+C from automation, start `lrun up` in its own console and send a real `CTRL_C_EVENT`
   (AttachConsole + GenerateConsoleCtrlEvent from a separate process); a `cmd` wrapper reporting the exit
   code needs `/v:on` and `!ERRORLEVEL!`.
@@ -154,15 +157,16 @@ shell escaping.
   `RunProcessor` keeps its name. Then removed the `SkipRepack` / `SkipRun` config fields (user's choice):
   `build` rewrites the config, so they never survived a rebuild, and `up --exclude` / deleting from
   `repack.config.json` do the same job. Old configs holding them still load (unknown JSON fields are ignored).
+- 2026-10-24, branch `claude/job-object`: `up` puts its processes in a Windows job object, so a forced kill of
+  `lrun` no longer leaves services running. Separate console windows per service were floated for later
+  (they would need another way to stop services gracefully, since Ctrl+C no longer reaches them).
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks
 
 Listed for the user in README "Known limitations". Do not fix silently; propose them:
 
-- `up` has no readiness checks between dependent services, and processes outlive an `lrun` that is
-  killed from outside (a Windows job object would tie them together).
 - Batch git operations across the repos of a config (`lrun git …`, keep going on failure, summary):
-  floated by the user on 2026-10-24, not decided. Never stash/reset on the user's behalf.
+  floated by the user on 2026-10-24, postponed until they hit enough real use cases. Never stash/reset on the user's behalf.
 - `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
   `IsNewerThanRemoteAsync`).
