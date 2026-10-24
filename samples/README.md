@@ -37,8 +37,8 @@ What each part is there to exercise:
 | Independent trees, packed in parallel | `island/` shares nothing with the rest; so does Orphan without `--include-external` |
 | `--include-external` | Orphan is in no solution, so the Reports → Orphan edge is dropped unless asked |
 | Version edge cases | `2.3.1-beta` (prerelease), `1.4.2.7` (4 parts), `1.4` (short), `0.9.0-rc.1` (dotted label) |
-| Executables for `run` | OrderGateway, RiskService, ReportCli, Island.App print the version of every LrSample library they loaded |
-| Services vs jobs under `run` | OrderGateway and RiskService (`svc`) are long-running HTTP services that stop on Ctrl+C; ReportCli and Island.App are one-shot jobs |
+| Executables for `up` | OrderGateway, RiskService, ReportCli, Island.App print the version of every LrSample library they loaded |
+| Services vs jobs under `up` | OrderGateway and RiskService (`svc`) are long-running HTTP services that stop on Ctrl+C; ReportCli and Island.App are one-shot jobs |
 
 `edge-cases/` holds graphs that are *meant* to misbehave. It sits outside `workspace/` so it never
 breaks a normal run.
@@ -120,13 +120,13 @@ Rebuild the full config (step 1), then compare the `Writing repack config of …
 .\reset.cmd
 lrun build --root workspace --local-nuget .feed
 lrun pack --patch --suffix dev --go
-lrun run
+lrun up
 ```
 
 - `pack --go` packs depth by depth (the three trees in parallel) and puts 11 packages in `.feed/`.
 - Each package declares the *planned* version of what it references, e.g.
   `LrSample.Pricing.1.4.1-dev` depends on `Pricing.Models 1.4.3-dev` and `Logging 2.3.2-dev`.
-- `run` builds the 4 executables one by one, then starts them side by side. Island.App and ReportCli
+- `up` builds the 4 executables one by one, then starts them side by side. Island.App and ReportCli
   print their result and exit with code 0. The two services keep running, each line prefixed:
 
   ```
@@ -149,8 +149,8 @@ lrun run
   curl.exe http://localhost:5101/health  # ok
   ```
 
-- **Ctrl+C** in the `lrun run` terminal stops both: `[■] Stopping all processes...`, each service
-  prints `… stopped` and exits with code 0, and `run` exits with code 0. No `LrSample.*` process is
+- **Ctrl+C** in the `lrun up` terminal stops both: `[■] Stopping all processes...`, each service
+  prints `… stopped` and exits with code 0, and `up` exits with code 0. No `LrSample.*` process is
   left in Task Manager.
 
 Variations worth trying:
@@ -164,14 +164,14 @@ Variations worth trying:
   $l = [System.Net.HttpListener]::new(); $l.Prefixes.Add('http://localhost:5102/'); $l.Start()   # $l.Stop() to free it
   ```
 
-  Then `lrun run`: RiskService logs `cannot listen on http://localhost:5102/ … (port already in use?)`
-  and exits with code 1, while the others keep running. After Ctrl+C, `run` fails with
-  `LrSample.RiskService (exit code 1) failed` (exit code 1). Running `lrun run` twice doesn't show this:
+  Then `lrun up`: RiskService logs `cannot listen on http://localhost:5102/ … (port already in use?)`
+  and exits with code 1, while the others keep running. After Ctrl+C, `up` fails with
+  `LrSample.RiskService (exit code 1) failed` (exit code 1). Running `lrun up` twice doesn't show this:
   the second one fails earlier, building executables the first one is running.
-- **Another port**: `$env:LRSAMPLE_ORDERGATEWAY_PORT = 6101` (or `LRSAMPLE_RISKSERVICE_PORT`) before `lrun run`.
+- **Another port**: `$env:LRSAMPLE_ORDERGATEWAY_PORT = 6101` (or `LRSAMPLE_RISKSERVICE_PORT`) before `lrun up`.
 - **`SkipRun`**: set `"SkipRun": true` on `LrSample.RiskService` in `localrun.config.json`, then
-  `lrun run`: only 3 processes start.
-- **Debugging one service**: `lrun run --exclude LrSample.RiskService` logs `Not running
+  `lrun up`: only 3 processes start.
+- **Debugging one service**: `lrun up --exclude LrSample.RiskService` logs `Not running
   LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
   IDE (`:5102` stays free for it). `--exclude LrSample.Pricing` is rejected (exit code 2): it's a library.
 - **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `lrun-visuals/dependencies-<date-time>.svg` and prints

@@ -58,7 +58,7 @@ public class RunProcessor : IRunProcessor
 
         int prefixWidth = executables.Max(exe => exe.Name.Length);
         var running = new List<RunningProcess>();
-        // Processes that failed on their own, before any stop was requested: those make `run` fail
+        // Processes that failed on their own, before any stop was requested: those make `up` fail
         List<RunningProcess> failed = [];
         try
         {

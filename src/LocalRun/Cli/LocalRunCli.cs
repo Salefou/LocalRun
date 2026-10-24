@@ -63,7 +63,7 @@ public static class LocalRunCli
                 case "go":
                     await GoAsync(options);
                     break;
-                case "run":
+                case "up":
                     await RunExecutablesAsync(options);
                     break;
                 case "help" or "--help" or "-h":
@@ -286,7 +286,7 @@ public static class LocalRunCli
         Console.WriteLine($"        --repack-config <file>  Repack config file to read (default: {DefaultRepackConfigPath})");
         Console.WriteLine();
 
-        Console.WriteLine("  run [options]");
+        Console.WriteLine("  up [options]");
         Console.WriteLine("      Build the executables of a config file, then run them side by side; Ctrl+C stops them all.");
         Console.WriteLine("      Options:");
         Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
@@ -303,6 +303,6 @@ public static class LocalRunCli
         Console.WriteLine($"  {CommandName} pack --patch --suffix dev       (review repack.config.json, then:)");
         Console.WriteLine($"  {CommandName} go");
         Console.WriteLine($"  {CommandName} pack --patch --suffix dev --go  (both steps at once)");
-        Console.WriteLine($"  {CommandName} run");
+        Console.WriteLine($"  {CommandName} up");
     }
 }

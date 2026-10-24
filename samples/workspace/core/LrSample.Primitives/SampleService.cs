@@ -4,7 +4,7 @@ using System.Net;
 using System.Text;
 
 /// <summary>
-/// A minimal long-running service for hand testing `lrun run`: serves /health and one endpoint on a
+/// A minimal long-running service for hand testing `lrun up`: serves /health and one endpoint on a
 /// localhost port, prints a heartbeat, and stops cleanly on Ctrl+C (or when its process is stopped).
 /// The port can be overridden with LRSAMPLE_&lt;NAME&gt;_PORT, e.g. LRSAMPLE_ORDERGATEWAY_PORT=6101.
 /// </summary>

@@ -17,7 +17,7 @@ The repository root holds only repo-wide files (solution, docs, `.github/`, git 
 `tests/` and into `LocalRun.sln`.
 
 Pipeline: `build` → `localrun.config.json` → `pack` → `repack.config.json` →
-`go`. `plot` and `run` read `localrun.config.json`. The JSON files are the hand-editable
+`go`. `plot` and `up` read `localrun.config.json`. The JSON files are the hand-editable
 contract between steps.
 
 ## Commands
@@ -70,11 +70,11 @@ shell escaping.
   `MSBuildProjectFullPath`). Never go back to `-p:PackageVersion`: as a global property it flows into
   project references, and packages then declare their own version for every project they reference
   (NU1107 in consumers). `samples/` reproduces this: Logging project-references Primitives.
-- **`run` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
+- **`up` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
   references would collide), start all with `dotnet run --no-build` without awaiting, Ctrl+C →
   `e.Cancel = true` + children get Ctrl+C themselves (same console) + kill the process tree after
   `StopGracePeriod`. Exit code 1 only for processes that failed before a stop was requested. To test
-  Ctrl+C from automation, start `lrun run` in its own console and send a real `CTRL_C_EVENT`
+  Ctrl+C from automation, start `lrun up` in its own console and send a real `CTRL_C_EVENT`
   (AttachConsole + GenerateConsoleCtrlEvent from a separate process); a `cmd` wrapper reporting the exit
   code needs `/v:on` and `!ERRORLEVEL!`.
 - **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
@@ -149,14 +149,16 @@ shell escaping.
 - 2026-10-24, branch `claude/plot`: `visualize` → `plot` (dropped, not aliased), and `build --plot`
   plots the config it just wrote with `plot`'s defaults. `GraphVisualizer` and `lrun-visuals/` keep their names.
 - 2026-10-24, branch `claude/git-changes`: re-shipped the `plot` commit (#18 had merged into the
-  already-merged `claude/remove-repl`), name collisions left out with an error, `--git-changes` implemented.
+  already-merged `claude/remove-repl`), name collisions left out with an error, `--git-changes` implemented,
+  `run` → `up` (`lrun run` read oddly; `start` was rejected as ambiguous; dropped, not aliased).
+  `RunProcessor` and the `SkipRun` config field keep their names.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks
 
 Listed for the user in README "Known limitations". Do not fix silently; propose them:
 
-- `run` has no readiness checks between dependent services, and processes outlive an `lrun` that is
+- `up` has no readiness checks between dependent services, and processes outlive an `lrun` that is
   killed from outside (a Windows job object would tie them together).
 - Batch git operations across the repos of a config (`lrun git …`, keep going on failure, summary):
   floated by the user on 2026-10-24, not decided. Never stash/reset on the user's behalf.

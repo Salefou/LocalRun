@@ -46,7 +46,7 @@ so you can **inspect or hand-edit** the plan between steps.
               build                          pack                           go
  repos/ ───────────────► localrun.config.json ───────────────► repack.config.json ──────────► local NuGet feed
                                │      │         └──────────── pack --go ─────────────┘        (~/.localnuget)
-                          plot │      │ run
+                          plot │      │ up
                                ▼      ▼
                 dependencies.svg    dotnet run, executables in dependency order
 ```
@@ -62,7 +62,7 @@ so you can **inspect or hand-edit** the plan between steps.
 4. **`go`** executes the plan: `dotnet restore` with the local feed added to your sources, then
    `dotnet pack --no-restore -o <feed>`, each project getting its planned version.
    `pack --go` does steps 3 and 4 in one command, when you don't need to review the plan.
-5. **`run`** builds the executables of the config, then starts them all side by side, dependencies
+5. **`up`** builds the executables of the config, then starts them all side by side, dependencies
    first, until they exit or you press Ctrl+C.
 
 ### The dependency graph
@@ -132,7 +132,7 @@ directly: the `.cmd` waits for a key press when it thinks it was double-clicked.
 
 **Why use the installed tool rather than `bin/`?** The tool runs from the .NET tool store
 (`~/.dotnet/tools`), and the script builds in `artifacts/` rather than `bin/`. So the LocalRun you
-*use* never locks the build output of the LocalRun you're *working on*: you can keep an `lrun run`
+*use* never locks the build output of the LocalRun you're *working on*: you can keep an `lrun up`
 going while you build, test or debug in Visual Studio. The only thing that can block an update is a
 running installed `lrun` — exit it and re-run the script.
 
@@ -189,7 +189,7 @@ lrun go
 #    (steps 3 and 4 at once, without the review: lrun pack --patch --suffix dev --go)
 
 # 5. Start the executables
-lrun run
+lrun up
 ```
 
 For your consumers to pick the new packages up, the local feed must be one of their NuGet sources,
@@ -207,8 +207,8 @@ General form: `lrun <command> [options]`.
 
 > Renamed on 2026-10-24: the tool was `localrun` (now `lrun`; the `localrun-repl` prompt has since been
 > removed), and `build-config`, `repack-preview` and `repack-go` are now `build`, `pack` and `go`. The `build` filters
-> `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`, and `visualize`
-> is now `plot`. The old names are gone: update scripts that call them. Config file names are unchanged.
+> `--retain-depends-on` and `--retain-is-dependency-of` are now `--users-of` and `--deps-of`; `visualize`
+> is now `plot` and `run` is now `up`. The old names are gone: update scripts that call them. Config file names are unchanged.
 
 - Options are `--name` followed by zero or more values; values run until the next `--option`.
 - Unknown options, repeated options, missing values and extra values are **rejected** (exit code `2`)
@@ -339,14 +339,14 @@ a depth in parallel:
 
 The first failing `dotnet` command fails the whole command (exit code `1`); its output is in the log.
 
-### `run`
+### `up`
 
 Run every project of type `executable` in the config **side by side**, like a local deployment of
-the services:
+the services, as `docker compose up` does for containers:
 
 1. **Build** each executable with `dotnet build`, one at a time, in dependency order. Executables
    sharing a project reference would otherwise build it concurrently and collide on its output. A
-   build failure stops `run` before anything starts, and only then is the build output shown. As with
+   build failure stops `up` before anything starts, and only then is the build output shown. As with
    `go`, the config's local feed is added to the restore sources, so the packages `go` produced are
    found even if your `NuGet.config` doesn't list that feed.
 2. **Start** them all, in dependency order, with `dotnet run --no-build --project <csproj>`, without
@@ -357,7 +357,7 @@ the services:
    is killed, with its child processes.
 
 Projects with `"SkipRun": true` in the config are not run. A process that fails *on its own* (non-zero
-exit code before Ctrl+C) doesn't stop the others, but makes `run` exit with code `1` once everything
+exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
 has stopped. Processes stopped by Ctrl+C never count as failures.
 
 ```
@@ -371,16 +371,16 @@ has stopped. Processes stopped by Ctrl+C never count as failures.
 [■] LrSample.RiskService exited with code 0
 ```
 
-Processes are started in dependency order, but `run` doesn't wait for one to be *ready* before
+Processes are started in dependency order, but `up` doesn't wait for one to be *ready* before
 starting the next. A service that needs another one at startup should retry.
 
 | Option | Default | Description |
 |---|---|---|
 | `--config <file>` | `localrun.config.json` | Config file to read. |
-| `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `run` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). Unlike `SkipRun`, nothing to edit in the config. |
+| `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `up` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). Unlike `SkipRun`, nothing to edit in the config. |
 
 ```sh
-lrun run --exclude OrderGateway     # everything but OrderGateway, which you start under the debugger
+lrun up --exclude OrderGateway     # everything but OrderGateway, which you start under the debugger
 ```
 
 ### `help`
@@ -491,11 +491,11 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 
 | | |
 |---|---|
-| Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `run` inherit the console.) |
+| Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `up` inherit the console.) |
 | Exit codes | `0` success · `1` the command failed (missing file, `dotnet` failure, dependency cycle, …) · `2` invalid command line. |
 | Output | Human-readable log lines on **stdout**. Warnings and errors are prefixed `[WRN] ` / `[ERR] `; ANSI colours are dropped when output is redirected. Output of child `dotnet` processes is forwarded line by line (stderr lines as warnings). |
 | Results | The JSON / DOT / SVG files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
-| Side effects | `--open` launches a viewer; `go` writes packages to the feed; `run` starts processes. |
+| Side effects | `--open` launches a viewer; `go` writes packages to the feed; `up` starts processes. |
 
 Do not parse the log lines — they are for humans and may change. Read the JSON files instead.
 
@@ -583,7 +583,7 @@ src/
    │  ├─ Model/                  JSON-serialised types: LocalRunConfig, RepackConfig, ProjectNode, …
    │  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphVisualizer,
    │  │                          NugetVersionChecker, SolutionScanner
-   │  └─ Processing/             RunProcessor: the `run` command
+   │  └─ Processing/             RunProcessor: the `up` command
    └─ Logger/                    Logger factory and console formatter
 tests/
 └─ LocalRun.Tests/               xUnit tests, one folder per area of src/LocalRun (Graph, Options, …)
@@ -670,7 +670,7 @@ Exit it and re-run the script.
 
 ## Known limitations
 
-- **`run` doesn't wait for readiness**: processes start in dependency order, but not one after the
+- **`up` doesn't wait for readiness**: processes start in dependency order, but not one after the
   other being *ready*. Processes killed from outside (e.g. Task Manager on `lrun`) are not stopped
   with it; Ctrl+C or closing the terminal stops them.
 - **`--git-changes`** compares with your last fetch and only knows `origin`; files changed outside
