@@ -42,53 +42,45 @@ public static class GraphVisualizer
         return svgPath;
     }
 
-    private static string ToDot(DependencyGraph graph)
+    internal static string ToDot(DependencyGraph graph)
     {
-        //var sb = new StringBuilder();
-        //sb.AppendLine("digraph Dependencies {");
-        //sb.AppendLine("  rankdir=LR;");
-        //sb.AppendLine("  node [shape=box, style=filled, fontname=\"Consolas\", fontsize=10];");
-        //sb.AppendLine("  edge [color=gray50];");
-
         var sb = new StringBuilder();
         sb.AppendLine("digraph Dependencies {");
         sb.AppendLine("  rankdir=LR;");
-        //sb.AppendLine("  bgcolor=\"#1e1e1e\";");
         sb.AppendLine("  node [shape=box, style=\"filled, rounded\", color=\"#333333\", fontname=\"Consolas\", fontcolor=\"white\", fontsize=10];");
         sb.AppendLine("  edge [color=\"#999999\", arrowsize=0.7];");
-        //sb.AppendLine("}");
-
-        //var nodes = graph.AllProjects.ToDictionary(p => p.Name, p => p);
 
         // Compute depth for each node (max distance from a root)
         var nameToDepth = graph.ComputeNameToDepth();
 
         var projs = graph.TopologicalOrder().ToList();
-
-        List<string> solutions = [.. projs.Select(proj => proj.SolutionPath)
-             .Where(solution => solution is not null)
-             .Distinct()
-             .Cast<string>()];
-
-        //var solutionToProjects = projs.GroupBy(proj => proj.SolutionPath ?? String.Empty)
-        //    .ToDictionary(group => group.Key, group => group.ToList());
-        var nameToProj = projs.ToDictionary(proj => proj.Name);
-        //string dummy = "Dummy";
+        var inConfig = projs.Select(proj => proj.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var proj in projs)
         {
             string label = $"{proj.Name}\\n{proj.Version}\\n";
-            string color = DepthColor(nameToDepth[proj.Name]);
+            string color = DepthColor(nameToDepth[proj.Name], proj.Type == "executable");
             sb.AppendLine($"  \"{proj.Name}\" [label=\"{label}\", fillcolor=\"{color}\"];");
-            //sb.AppendLine($"  \"{dummy}\" -> \"{proj.Name}\";");
+        }
 
+        // A dependency that is no project of the config (left out by a filter, a name collision or a cycle, or a package
+        // outside every solution kept by --include-external) is drawn dashed and unfilled: the commands leave it alone,
+        // the projects of the config consume it as it is
+        var outside = projs.SelectMany(proj => proj.Dependencies)
+            .Where(dep => !inConfig.Contains(dep))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase);
+        foreach (var dep in outside)
+        {
+            sb.AppendLine($"  \"{dep}\" [style=\"dashed, rounded\", color=\"#999999\", fontcolor=\"#777777\"];");
+        }
+
+        foreach (var proj in projs)
+        {
             foreach (var dep in proj.Dependencies)
             {
-                sb.AppendLine($"  \"{dep}\" -> \"{proj.Name}\";");
-                //if (!nameToProj.TryGetValue(dep, out var projNode))/* && !string.IsNullOrEmpty(projNode.SolutionPath)*/
-                //{
-                //    sb.AppendLine($"  \"{dep}\" -> \"{dummy}\";");
-                //}
+                string style = inConfig.Contains(dep) ? "" : " [style=dashed]";
+                sb.AppendLine($"  \"{dep}\" -> \"{proj.Name}\"{style};");
             }
         }
 
@@ -97,10 +89,10 @@ public static class GraphVisualizer
     }
 
     // Compute color based on depth (HSV -> RGB)
-    private static string DepthColor(int depth)
+    private static string DepthColor(int depth, bool executable)
     {
         // Base hue for libraries: 210° blue, executables: 120° green
-        int hue = 210;
+        int hue = executable ? 120 : 210;
         double saturation = 0.6;
         double value = Math.Max(0.3, 0.9 - depth * 0.1); // darken with depth
         return HsvToHex(hue, saturation, value);

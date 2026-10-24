@@ -304,7 +304,14 @@ warns and writes an empty config.
 ### `plot`
 
 Render the graph of a config file as `<output>.dot` and `<output>.svg`. Nodes show the project name
-and version, edges point from a dependency to its dependent, and colours darken with depth.
+and version, edges point from a dependency to its dependent, and colours darken with depth:
+libraries are blue, executables green.
+
+Dependencies that aren't projects of the config are drawn with a grey dashed outline and dashed
+edges: projects a `build` filter left out, a name collision or a cycle, and with `--include-external`
+packages outside every solution. The other commands leave them alone; the projects of the config
+consume them as they are (the published package, for a project left out). The solid part of the
+plot is what `pack`, `go` and `up` act on.
 
 | Option | Default | Description |
 |---|---|---|
@@ -725,6 +732,9 @@ Exit it and re-run the script.
   at a time.
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
   told apart, so they're all left out of the graph (with an error), rather than handled.
+- **`plot` draws a static SVG** with the bundled Graphviz, so it only works on win-x64 and linux-x64. A
+  candidate replacement: an interactive HTML page (layered layout with elkjs embedded in the page),
+  highlighting a project's users and dependencies on hover, with search and zoom, and no native code.
 
 ---
 
