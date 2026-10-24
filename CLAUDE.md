@@ -60,6 +60,13 @@ shell escaping.
   `MSBuildProjectFullPath`). Never go back to `-p:PackageVersion`: as a global property it flows into
   project references, and packages then declare their own version for every project they reference
   (NU1107 in consumers). `samples/` reproduces this: Logging project-references Primitives.
+- **`run` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
+  references would collide), start all with `dotnet run --no-build` without awaiting, Ctrl+C →
+  `e.Cancel = true` + children get Ctrl+C themselves (same console) + kill the process tree after
+  `StopGracePeriod`. Exit code 1 only for processes that failed before a stop was requested. To test
+  Ctrl+C from automation, start `lrun run` in its own console and send a real `CTRL_C_EVENT`
+  (AttachConsole + GenerateConsoleCtrlEvent from a separate process); a `cmd` wrapper reporting the exit
+  code needs `/v:on` and `!ERRORLEVEL!`.
 - **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
   rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
 - **Exit codes** (`LocalRunCli`): `0` success, `1` command failed, `2` invalid command line
@@ -124,7 +131,8 @@ shell escaping.
 
 Listed for the user in README "Known limitations". Do not fix silently; propose them:
 
-- `RunProcessor` awaits each executable sequentially and ignores `SkipRun`.
+- `run` has no readiness checks between dependent services, and processes outlive an `lrun` that is
+  killed from outside (a Windows job object would tie them together).
 - `--git-changes` (`BuildConfigOptions.RetainDirtyGitRepos`) is parsed but unused; LibGit2Sharp is
   referenced for it.
 - Projects are keyed by file name: same-named projects in different repos collide, and one silently
