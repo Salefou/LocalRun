@@ -116,7 +116,13 @@ public class DependencyGraph
     /// lists are given, the two sets are intersected (the projects between them), or united with
     /// <paramref name="union"/>. Both sets come from the full graph, before anything is pruned.
     /// </summary>
-    public void Retain(IEnumerable<string>? usersOf, IEnumerable<string>? depsOf, bool union)
+    /// <param name="withServices">
+    /// Also keep every executable that has a kept project in its dependency tree, with the libraries between
+    /// them: those executables would otherwise not run the change (a library they get as a package would
+    /// not be repacked). Libraries using the kept projects but leading to no executable stay out.
+    /// </param>
+    /// <returns>The projects added by <paramref name="withServices"/>, sorted by name.</returns>
+    public List<string> Retain(IEnumerable<string>? usersOf, IEnumerable<string>? depsOf, bool union, bool withServices = false)
     {
         HashSet<Node>? users = usersOf == null ? null : Collect(usersOf, CollectDependents);
         HashSet<Node>? dependencies = depsOf == null ? null : Collect(depsOf, CollectDependencies);
@@ -134,7 +140,24 @@ public class DependencyGraph
             else
                 keep.IntersectWith(dependencies);
         }
+
+        List<string> added = [];
+        if (withServices)
+        {
+            var usersOfKept = new HashSet<Node>();
+            foreach (var node in keep)
+                CollectDependents(node, usersOfKept);
+            var neededByServices = new HashSet<Node>();
+            foreach (var service in usersOfKept.Where(node => node.Project.Type == "executable"))
+                CollectDependencies(service, neededByServices);
+
+            usersOfKept.IntersectWith(neededByServices);
+            added = [.. usersOfKept.Where(node => !keep.Contains(node))
+                .Select(node => node.Project.Name).Order(StringComparer.OrdinalIgnoreCase)];
+            keep.UnionWith(usersOfKept);
+        }
         Prune(keep);
+        return added;
     }
 
     /// <summary>The names, among those given, that match no project of the graph.</summary>

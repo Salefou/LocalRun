@@ -54,4 +54,19 @@ public class BuildConfigOptionsParserTests
         var ex = Assert.Throws<UsageException>(() => Parse(argv));
         Assert.Contains("--union", ex.Message);
     }
+
+    [Theory]
+    [InlineData("--with-services", "--users-of", "X")]
+    [InlineData("--with-services", "--deps-of", "Y")]
+    public void WithServices_IsReadWithAtLeastOneFilter(params string[] argv)
+    {
+        Assert.True(Parse(argv).WithServices);
+    }
+
+    [Fact]
+    public void WithServices_WithoutAnyFilter_IsRejected()
+    {
+        var ex = Assert.Throws<UsageException>(() => Parse("--with-services"));
+        Assert.Contains("--with-services", ex.Message);
+    }
 }

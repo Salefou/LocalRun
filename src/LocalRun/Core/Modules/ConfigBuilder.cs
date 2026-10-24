@@ -20,7 +20,12 @@ public class ConfigBuilder
         var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal);
 
         ValidateFilterNames(graph, options);
-        graph.Retain(options.RetainDependsOn, options.RetainIsDependencyOf, options.Union);
+        var addedForServices = graph.Retain(options.RetainDependsOn, options.RetainIsDependencyOf, options.Union, options.WithServices);
+        if (options.WithServices)
+        {
+            logger.LogInformation("[⚙ ] --with-services added: {Projects}",
+                addedForServices.Count == 0 ? "nothing (no other service uses the kept projects)" : string.Join(", ", addedForServices));
+        }
         if (options.RetainDependsOn != null && options.RetainIsDependencyOf != null && !options.Union && !graph.AllProjects.Any())
         {
             logger.LogWarning("No project is both a user of {UsersOf} and needed by {DepsOf}: the latter doesn't depend on the former. Use --union, or one flag alone.",

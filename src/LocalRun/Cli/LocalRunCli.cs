@@ -227,6 +227,7 @@ public static class LocalRunCli
         Console.WriteLine("        --deps-of <names>       Keep the given projects and all they depend on, transitively");
         Console.WriteLine("                                With both: only the projects between them (AND)");
         Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
+        Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
         Console.WriteLine();
 
@@ -247,7 +248,7 @@ public static class LocalRunCli
         Console.WriteLine("        --minor                 Increment minor version (resets patch)");
         Console.WriteLine("        --patch                 Increment patch version");
         Console.WriteLine("        --alpha                 Shorthand for --patch --suffix alpha");
-        Console.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (e.g., 'dev', 'beta.2')");
+        Console.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (default: local; e.g., 'dev', 'beta.2')");
         Console.WriteLine("        --remote                Query the configured NuGet sources for version info");
         Console.WriteLine("        --clean                 Clean projects before restoring them");
         Console.WriteLine("        --go                    Execute the plan right away, as 'go' does (default: only write it)");

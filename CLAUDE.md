@@ -59,6 +59,9 @@ shell escaping.
   the two flags are AND'ed (the projects between X and Y, what to repack to try X in Y), or OR'ed
   with `--union`. Both cones are computed on the full graph before pruning. Unknown names → exit 2;
   an empty intersection only warns. Chosen deliberately by the user (2026-10-24).
+  `--with-services` then adds S's affected executables *with the libraries in between*:
+  S ∪ (users-of(S) ∩ deps-of(executables among users-of(S))). The in-between libraries are on purpose
+  (user's choice): without them, a service consuming a library as a package keeps the old build.
 
 - **Planned versions reach referenced projects**: `RepackExecutor` sets each project's `PackageVersion`
   through a generated props file (`CustomBeforeMicrosoftCommonProps`, matched by
@@ -89,8 +92,11 @@ shell escaping.
   `RemoveCycles()` (Tarjan SCC) after the filters, so cycles are left out with a warning instead of
   failing; the throw in `TopologicalClassOrder` stays as the safety net for hand-edited configs.
 - Version bump rules (a bump resets lower components and replaces the prerelease label; no bump
-  keeps the version and only `--suffix` replaces the label) are the README "Versioning rules" table,
-  mirrored case by case in `tests/LocalRun.Tests/Options/BumpOptionsTests.cs`. Change both together.
+  keeps the version and only `--suffix` replaces the label) are mirrored case by case in
+  `tests/LocalRun.Tests/Options/BumpOptionsTests.cs` (BumpOptions level, null suffix = drop the label).
+  The CLI never passes a null suffix: `RepackOptionsParser` defaults it to `local`, so `pack` never
+  plans a stable version (cache trap: a local 1.4.3 in ~/.nuget/packages shadows the official one).
+  The README "Versioning rules" table shows the CLI-level result; change it with either.
 
 ## Conventions
 

@@ -230,6 +230,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--users-of <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
 | `--deps-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
 | `--union` | off | With both filters: keep the users of `--users-of` **or** the dependencies of `--deps-of`, instead of the projects between them. |
+| `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
@@ -243,7 +244,14 @@ empty and `build` warns.
 lrun build --root ./repos --users-of Shared.Pricing --deps-of OrderGateway          # between them
 lrun build --root ./repos --users-of Shared.Pricing --deps-of OrderGateway --union  # both cones
 lrun build --root ./repos --deps-of OrderGateway RiskService                        # what both need
+lrun build --root ./repos --users-of Shared.Pricing --deps-of OrderGateway --with-services
 ```
+
+**`--with-services`** answers "which other services does this touch?". It adds every executable using
+any kept project, **and the libraries between them**, so `pack --go` repacks those libraries and the
+added services really run the change. (A service getting a library as a package would otherwise keep
+the old build.) Libraries that use the kept projects but lead to no service stay out. `build` logs
+what the flag added.
 
 Names are matched case-insensitively against the scanned projects. An unknown name fails with exit code `2`.
 
@@ -269,7 +277,7 @@ Builds nothing, unless `--go` is given: then the plan is still written, and exec
 | `--config <file>` | `localrun.config.json` | Config file to read. |
 | `--repack-config <file>` | `repack.config.json` | Repack config file to write. |
 | `--patch` / `--minor` / `--major` | no bump | Version component to increment. At most one. |
-| `--suffix <text>` | — | Prerelease label to set, without the dash: `--suffix dev` → `1.4.3-dev`. Letters, digits, `-` and `.`-separated parts. |
+| `--suffix <text>` | `local` | Prerelease label to set, without the dash: `--suffix dev` → `1.4.3-dev`. Letters, digits, `-` and `.`-separated parts. Never empty: see [why](#versioning-rules). |
 | `--alpha` | — | Shorthand for `--patch --suffix alpha`. Cannot be combined with another bump or `--suffix`. |
 | `--remote` | off | Take the current version from the highest version found across your enabled NuGet sources instead of the csproj. |
 | `--clean` | off | Make `go` run `dotnet clean` before restoring. |
@@ -311,7 +319,9 @@ the services:
 
 1. **Build** each executable with `dotnet build`, one at a time, in dependency order. Executables
    sharing a project reference would otherwise build it concurrently and collide on its output. A
-   build failure stops `run` before anything starts, and only then is the build output shown.
+   build failure stops `run` before anything starts, and only then is the build output shown. As with
+   `go`, the config's local feed is added to the restore sources, so the packages `go` produced are
+   found even if your `NuGet.config` doesn't list that feed.
 2. **Start** them all, in dependency order, with `dotnet run --no-build --project <csproj>`, without
    waiting for each one. `dotnet run` still applies the project's `launchSettings.json` (URLs,
    environment variables). Every output line is prefixed with the project name.
@@ -414,24 +424,30 @@ A version is stored as `Major`, `Minor` and `PatchAndSuffix` (everything after t
 short versions are completed with zeros, `1.4` → `1.4.0`), or the highest version on your NuGet
 sources with `--remote`, prerelease label included (`1.0.0` when the package is not found).
 
-The rules: **a bump resets the lower components and replaces the prerelease label** with `--suffix`,
-or drops it. **Without a bump, the version is kept**, and only a given `--suffix` replaces its label.
+The rules: **a bump resets the lower components**; without one, the version is kept. **The prerelease
+label is always replaced** by `--suffix`, which defaults to **`local`**: `pack` never plans a stable
+version.
 
 | Options | `1.4.2` becomes | `1.4.2-beta` becomes | `1.4.2.7` becomes |
 |---|---|---|---|
-| *(none)* | `1.4.2` | `1.4.2-beta` | `1.4.2.7` |
+| *(none)* | `1.4.2-local` | `1.4.2-local` | `1.4.2.7-local` |
 | `--suffix dev` | `1.4.2-dev` | `1.4.2-dev` | `1.4.2.7-dev` |
-| `--patch` | `1.4.3` | `1.4.3` | `1.4.3` |
+| `--patch` | `1.4.3-local` | `1.4.3-local` | `1.4.3-local` |
 | `--patch --suffix dev` | `1.4.3-dev` | `1.4.3-dev` | `1.4.3-dev` |
 | `--alpha` | `1.4.3-alpha` | `1.4.3-alpha` | `1.4.3-alpha` |
-| `--minor` | `1.5.0` | `1.5.0` | `1.5.0` |
+| `--minor` | `1.5.0-local` | `1.5.0-local` | `1.5.0-local` |
 | `--major --suffix dev` | `2.0.0-dev` | `2.0.0-dev` | `2.0.0-dev` |
 
 A floating patch (`1.4.*`) is treated as `0`. A suffix must be a valid prerelease label: letters,
 digits and `-`, optionally in dot-separated parts (`dev`, `beta.2`, `ci-42`), without the leading dash.
 
-**Tip:** a suffix keeps your local packages ordered *below* the real release of the same number
-(`1.4.3-dev` < `1.4.3`), so a later official release always wins.
+**Why never stable:** NuGet never re-downloads a version already in `~/.nuget/packages`. A local
+`1.4.3` would keep shadowing the official `1.4.3` after CI publishes it, and you'd run your local build
+under the official number. A prerelease label also orders your local packages *below* the real release
+of the same number (`1.4.3-local` < `1.4.3`), so a later official release always wins.
+
+Consumers only pick prereleases up through a version that allows them: a floating `*-*` or `1.4.*-*`,
+an exact prerelease version, or a project reference. A floating `1.4.*` ignores prereleases.
 
 ---
 

@@ -5,7 +5,10 @@ both project and package references, and use awkward versions, so every command 
 to show. All expected results below were observed on a real run.
 
 Everything stays inside this folder: packages are packed into `.feed/` and NuGet caches them in
-`.packages/` (see `NuGet.config`), so your own `~/.nuget/packages` is never touched.
+`.packages/` (see `NuGet.config`), so your own `~/.nuget/packages` is never touched. `NuGet.config` also
+clears your user-level sources, keeping only `.feed/` and nuget.org: otherwise `LrSample.*` packages
+left in another local feed (such as `~/.localnuget`, after packing without `--local-nuget .feed`) would
+win over this workspace's builds.
 
 ## The graph
 
@@ -82,6 +85,11 @@ Rebuild the config with each line and check the `Name`s in `localrun.config.json
 | `… --users-of LrSample.Logging --deps-of LrSample.RiskService` | nothing, with a warning: RiskService doesn't use Logging |
 | `… --users-of LrSample.Logging --deps-of LrSample.RiskService --union` | Primitives, Logging, Pricing.Models, Pricing, RiskService, OrderGateway |
 | `… --union --users-of LrSample.Logging` | rejected, exit code 2: `--union` needs both flags |
+| `… --users-of LrSample.Pricing.Models --deps-of LrSample.RiskService` | Pricing.Models, RiskService |
+| … same `--with-services` | + Pricing, Reports, OrderGateway, ReportCli (logged as `--with-services added: …`) |
+| `… --users-of LrSample.Primitives --deps-of LrSample.RiskService --with-services` | Primitives, Logging, Pricing.Models, Pricing, Reports, RiskService, OrderGateway, ReportCli: not the island, not Orphan |
+| `… --deps-of LrSample.RiskService --with-services` | the same 8 |
+| `… --with-services` | rejected, exit code 2: nothing to extend |
 | `… --users-of LrSample.Primitives` | everything except Orphan and the island |
 | `… --users-of LrSample.Orphan` | Orphan only (the edge from Reports is dropped) |
 | `… --include-external --users-of LrSample.Orphan` | Orphan, Reports, ReportCli |
@@ -94,10 +102,12 @@ Rebuild the full config (step 1), then compare the `Writing repack config of …
 
 | Command | Logging `2.3.1-beta` | Pricing.Models `1.4.2.7` | Pricing `1.4` | RiskService `0.9.0-rc.1` |
 |---|---|---|---|---|
-| `lrun pack` | 2.3.1-beta | 1.4.2.7 | 1.4.0 | 0.9.0-rc.1 |
+| `lrun pack` | 2.3.1-local | 1.4.2.7-local | 1.4.0-local | 0.9.0-local |
+| `lrun pack --patch` | 2.3.2-local | 1.4.3-local | 1.4.1-local | 0.9.1-local |
 | `lrun pack --suffix dev` | 2.3.1-dev | 1.4.2.7-dev | 1.4.0-dev | 0.9.0-dev |
 | `lrun pack --patch --suffix dev` | 2.3.2-dev | 1.4.3-dev | 1.4.1-dev | 0.9.1-dev |
-| `lrun pack --minor` | 2.4.0 | 1.5.0 | 1.5.0 | 0.10.0 |
+| `lrun pack --minor` | 2.4.0-local | 1.5.0-local | 1.5.0-local | 0.10.0-local |
+| `lrun pack --alpha` | 2.3.2-alpha | 1.4.3-alpha | 1.4.1-alpha | 0.9.1-alpha |
 | `lrun pack --major --suffix rc.1` | 3.0.0-rc.1 | 2.0.0-rc.1 | 2.0.0-rc.1 | 1.0.0-rc.1 |
 | `lrun pack --suffix -dev` | rejected, exit code 2 | | | |
 

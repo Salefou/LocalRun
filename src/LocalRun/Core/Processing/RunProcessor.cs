@@ -31,10 +31,11 @@ public class RunProcessor : IRunProcessor
 
         // One at a time, dependencies first: executables sharing a project reference would otherwise
         // build it concurrently and collide on its output files
+        string feedSource = LocalFeedRestoreArgument(config);
         foreach (var exe in executables)
         {
             logger.LogInformation("[🔨] Building {Project}...", exe.Name);
-            await RunToCompletionAsync("dotnet", $"build \"{FullPath(config, exe)}\" --nologo --verbosity quiet");
+            await RunToCompletionAsync("dotnet", $"build \"{FullPath(config, exe)}\" --nologo --verbosity quiet{feedSource}");
         }
 
         using var stopping = new CancellationTokenSource();
@@ -96,6 +97,18 @@ public class RunProcessor : IRunProcessor
     {
         return [.. DependencyGraph.FromConfig(config).TopologicalOrder()
             .Where(project => project.Type == "executable" && !project.SkipRun)];
+    }
+
+    /// <summary>
+    /// Adds the config's local feed to the restore sources, as `go` does, so the executables find the packages
+    /// `go` just packed even when their NuGet.config doesn't list that feed. Empty when the feed doesn't exist
+    /// (nothing packed yet): NuGet fails on a missing local source.
+    /// </summary>
+    internal static string LocalFeedRestoreArgument(LocalRunConfig config)
+    {
+        return !string.IsNullOrEmpty(config.LocalNugetPath) && Directory.Exists(config.LocalNugetPath)
+            ? $" -p:RestoreAdditionalProjectSources=\"{config.LocalNugetPath}\""
+            : string.Empty;
     }
 
     // Project paths are relative to the scanned root, not to the current directory
