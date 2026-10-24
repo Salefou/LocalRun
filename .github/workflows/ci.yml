@@ -34,6 +34,10 @@ jobs:
       - name: Test
         run: dotnet test LocalRun.sln -c Release --no-build --verbosity normal
 
+      # As the release workflow packs it, so packaging problems show up in PRs
+      - name: Pack the release package
+        run: dotnet pack src/LocalRun/LocalRun.csproj -c Release --no-build -o artifacts/release
+
       # Windows PowerShell 5.1 ('powershell', not 'pwsh'), as when running install-tools.cmd locally
       - name: Install the tools with the install script
         shell: powershell
@@ -43,3 +47,5 @@ jobs:
           # Not piped: Select-Object -First would stop lrun early and fake a non-zero exit code
           & (Join-Path $toolPath 'lrun.exe') help
           if ($LASTEXITCODE -ne 0) { throw "lrun help failed with exit code $LASTEXITCODE" }
+          & (Join-Path $toolPath 'lrun.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw "lrun --version failed with exit code $LASTEXITCODE" }
