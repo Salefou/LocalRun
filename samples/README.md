@@ -77,11 +77,15 @@ Rebuild the config with each line and check the `Name`s in `localrun.config.json
 |---|---|
 | `lrun build --root workspace --local-nuget .feed --users-of LrSample.Pricing.Models` | Pricing.Models, Pricing, Reports, RiskService, OrderGateway, ReportCli |
 | `… --deps-of LrSample.OrderGateway` | Primitives, Logging, Pricing.Models, Pricing, OrderGateway |
-| `… --users-of LrSample.Logging --deps-of LrSample.OrderGateway` | Logging, Pricing, OrderGateway |
+| `… --users-of LrSample.Logging --deps-of LrSample.OrderGateway` | Logging, Pricing, OrderGateway: the projects between them |
+| `… --users-of LrSample.Logging --deps-of LrSample.OrderGateway --union` | Primitives, Logging, Pricing.Models, Pricing, OrderGateway: both cones |
+| `… --users-of LrSample.Logging --deps-of LrSample.RiskService` | nothing, with a warning: RiskService doesn't use Logging |
+| `… --users-of LrSample.Logging --deps-of LrSample.RiskService --union` | Primitives, Logging, Pricing.Models, Pricing, RiskService, OrderGateway |
+| `… --union --users-of LrSample.Logging` | rejected, exit code 2: `--union` needs both flags |
 | `… --users-of LrSample.Primitives` | everything except Orphan and the island |
 | `… --users-of LrSample.Orphan` | Orphan only (the edge from Reports is dropped) |
 | `… --include-external --users-of LrSample.Orphan` | Orphan, Reports, ReportCli |
-| `… --users-of Nope` | nothing: unknown names are ignored |
+| `… --users-of Nope` | rejected, exit code 2: `Unknown project(s) for '--users-of': Nope` |
 | `… --retain-depends-on LrSample.Logging` | rejected, exit code 2 (old flag name) |
 
 ### 3. Version planning (nothing is built)

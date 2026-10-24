@@ -229,15 +229,23 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--config <file>` | `localrun.config.json` | Config file to write. Parent directories are created. |
 | `--users-of <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
 | `--deps-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
+| `--union` | off | With both filters: keep the users of `--users-of` **or** the dependencies of `--deps-of`, instead of the projects between them. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 
-Both filters can be combined; they are applied one after the other (`--users-of` first).
-Unknown names are ignored, so double-check the spelling against the generated config if the result is empty.
+**Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
+The two flags are AND'ed: with `--users-of X --deps-of Y` you get **the projects between X and Y**,
+which are exactly what you need to repack to try your change to X in Y. Y's other dependencies haven't
+changed, and other users of X aren't loaded by Y. Add `--union` to get both cones instead: everything
+your change may affect **and** everything Y needs. If X and Y aren't connected, the intersection is
+empty and `build` warns.
 
 ```sh
-lrun build --root ./repos --deps-of OrderGateway RiskService
-lrun build --root ./repos --config ./plans/pricing.json --users-of Shared.Pricing
+lrun build --root ./repos --users-of Shared.Pricing --deps-of OrderGateway          # between them
+lrun build --root ./repos --users-of Shared.Pricing --deps-of OrderGateway --union  # both cones
+lrun build --root ./repos --deps-of OrderGateway RiskService                        # what both need
 ```
+
+Names are matched case-insensitively against the scanned projects. An unknown name fails with exit code `2`.
 
 ### `visualize`
 

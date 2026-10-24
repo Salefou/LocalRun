@@ -55,6 +55,11 @@ shell escaping.
 
 ## Contracts to preserve
 
+- **Filter semantics** (`DependencyGraph.Retain`): names within `--users-of` / `--deps-of` are OR'ed;
+  the two flags are AND'ed (the projects between X and Y, what to repack to try X in Y), or OR'ed
+  with `--union`. Both cones are computed on the full graph before pruning. Unknown names → exit 2;
+  an empty intersection only warns. Chosen deliberately by the user (2026-10-24).
+
 - **Planned versions reach referenced projects**: `RepackExecutor` sets each project's `PackageVersion`
   through a generated props file (`CustomBeforeMicrosoftCommonProps`, matched by
   `MSBuildProjectFullPath`). Never go back to `-p:PackageVersion`: as a global property it flows into
