@@ -82,6 +82,11 @@ Rebuild the config with each line and check the `Name`s in `localrun.config.json
 | `… --users-of LrSample.Logging --deps-of LrSample.RiskService` | nothing, with a warning: RiskService doesn't use Logging |
 | `… --users-of LrSample.Logging --deps-of LrSample.RiskService --union` | Primitives, Logging, Pricing.Models, Pricing, RiskService, OrderGateway |
 | `… --union --users-of LrSample.Logging` | rejected, exit code 2: `--union` needs both flags |
+| `… --users-of LrSample.Pricing.Models --deps-of LrSample.RiskService` | Pricing.Models, RiskService |
+| … same `--with-services` | + Pricing, Reports, OrderGateway, ReportCli (logged as `--with-services added: …`) |
+| `… --users-of LrSample.Primitives --deps-of LrSample.RiskService --with-services` | Primitives, Logging, Pricing.Models, Pricing, Reports, RiskService, OrderGateway, ReportCli: not the island, not Orphan |
+| `… --deps-of LrSample.RiskService --with-services` | the same 8 |
+| `… --with-services` | rejected, exit code 2: nothing to extend |
 | `… --users-of LrSample.Primitives` | everything except Orphan and the island |
 | `… --users-of LrSample.Orphan` | Orphan only (the edge from Reports is dropped) |
 | `… --include-external --users-of LrSample.Orphan` | Orphan, Reports, ReportCli |

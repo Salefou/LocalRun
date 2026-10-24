@@ -59,6 +59,9 @@ shell escaping.
   the two flags are AND'ed (the projects between X and Y, what to repack to try X in Y), or OR'ed
   with `--union`. Both cones are computed on the full graph before pruning. Unknown names → exit 2;
   an empty intersection only warns. Chosen deliberately by the user (2026-10-24).
+  `--with-services` then adds S's affected executables *with the libraries in between*:
+  S ∪ (users-of(S) ∩ deps-of(executables among users-of(S))). The in-between libraries are on purpose
+  (user's choice): without them, a service consuming a library as a package keeps the old build.
 
 - **Planned versions reach referenced projects**: `RepackExecutor` sets each project's `PackageVersion`
   through a generated props file (`CustomBeforeMicrosoftCommonProps`, matched by

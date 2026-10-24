@@ -284,4 +284,67 @@ public class DependencyGraphTests
     {
         Assert.Equal(["Nope"], FilterGraph().FindUnknown(["x", "Nope", "BASE"]));
     }
+
+    private static ProjectNode Service(string name, params string[] dependencies) => new()
+    {
+        Name = name,
+        Path = $"{name}/{name}.csproj",
+        Type = "executable",
+        Version = new ProjectVersion { Major = 1, Minor = 0, PatchAndSuffix = "0" },
+        Dependencies = [.. dependencies],
+    };
+
+    // Base <- Lib <- Mid <- Svc (service), Lib <- Api (service), Lib <- DeadEnd (library, no service), Unrelated (service)
+    private static DependencyGraph ServicesGraph() => Graph(
+        Project("Base"),
+        Project("Lib", "Base"),
+        Project("Mid", "Lib"),
+        Service("Svc", "Mid"),
+        Service("Api", "Lib"),
+        Project("DeadEnd", "Lib"),
+        Service("Unrelated"));
+
+    [Fact]
+    public void WithServices_AddsAffectedServicesAndTheLibrariesOnTheWay()
+    {
+        var graph = ServicesGraph();
+
+        var added = graph.Retain(usersOf: ["Lib"], depsOf: ["Api"], union: false, withServices: true);
+
+        Assert.Equal(["Mid", "Svc"], added);
+        Assert.Equal(["Api", "Lib", "Mid", "Svc"], Names(graph));
+    }
+
+    [Fact]
+    public void WithServices_OnDepsOfAlone_KeepsWhatReachesAService()
+    {
+        var graph = ServicesGraph();
+
+        var added = graph.Retain(usersOf: null, depsOf: ["Api"], union: false, withServices: true);
+
+        Assert.Equal(["Mid", "Svc"], added);
+        Assert.Equal(["Api", "Base", "Lib", "Mid", "Svc"], Names(graph));
+    }
+
+    [Fact]
+    public void WithServices_WhenTheAffectedServicesAreAlreadyKept_AddsNothing()
+    {
+        var graph = ServicesGraph();
+
+        var added = graph.Retain(usersOf: ["Mid"], depsOf: ["Api"], union: true, withServices: true);
+
+        Assert.Empty(added);
+        Assert.Equal(["Api", "Base", "Lib", "Mid", "Svc"], Names(graph));
+    }
+
+    [Fact]
+    public void WithoutServices_NothingIsAdded()
+    {
+        var graph = ServicesGraph();
+
+        var added = graph.Retain(usersOf: ["Lib"], depsOf: ["Api"], union: false);
+
+        Assert.Empty(added);
+        Assert.Equal(["Api", "Lib"], Names(graph));
+    }
 }

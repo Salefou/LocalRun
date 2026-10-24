@@ -227,6 +227,7 @@ public static class LocalRunCli
         Console.WriteLine("        --deps-of <names>       Keep the given projects and all they depend on, transitively");
         Console.WriteLine("                                With both: only the projects between them (AND)");
         Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
+        Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
         Console.WriteLine();
 

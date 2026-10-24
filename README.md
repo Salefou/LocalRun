@@ -230,6 +230,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--users-of <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
 | `--deps-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
 | `--union` | off | With both filters: keep the users of `--users-of` **or** the dependencies of `--deps-of`, instead of the projects between them. |
+| `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
@@ -243,7 +244,14 @@ empty and `build` warns.
 lrun build --root ./repos --users-of Shared.Pricing --deps-of OrderGateway          # between them
 lrun build --root ./repos --users-of Shared.Pricing --deps-of OrderGateway --union  # both cones
 lrun build --root ./repos --deps-of OrderGateway RiskService                        # what both need
+lrun build --root ./repos --users-of Shared.Pricing --deps-of OrderGateway --with-services
 ```
+
+**`--with-services`** answers "which other services does this touch?". It adds every executable using
+any kept project, **and the libraries between them**, so `pack --go` repacks those libraries and the
+added services really run the change. (A service getting a library as a package would otherwise keep
+the old build.) Libraries that use the kept projects but lead to no service stay out. `build` logs
+what the flag added.
 
 Names are matched case-insensitively against the scanned projects. An unknown name fails with exit code `2`.
 
