@@ -28,7 +28,7 @@ public static class LocalRunCli
 
     private const string DefaultConfigPath = "localrun.config.json";
     private const string DefaultRepackConfigPath = "repack.config.json";
-    private const string DefaultVisualsPath = "dependencies";
+    private const string DefaultVisualsFolder = "lrun-visuals";
 
     private static readonly ILogger logger = Log.For(typeof(LocalRunCli).FullName!);
 
@@ -107,7 +107,7 @@ public static class LocalRunCli
     private static async Task VisualizeAsync(CommandLineArgs args)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
-        string outputPath = args.Value("--output") ?? DefaultVisualsPath;
+        string outputPath = args.Value("--output") ?? UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now);
         bool open = args.Flag("--open");
         args.EnsureAllConsumed();
 
@@ -119,6 +119,19 @@ public static class LocalRunCli
         });
         if (open)
             OpenWithDefaultApp(svgPath);
+    }
+
+    /// <summary>
+    /// <c>&lt;folder&gt;/dependencies-&lt;yyyyMMdd-HHmmss&gt;</c> (without extension), so successive graphs are kept side by
+    /// side; a counter is appended when that name is already taken within the same second.
+    /// </summary>
+    internal static string UniqueVisualsPath(string folder, DateTime now)
+    {
+        string basePath = Path.Combine(folder, $"dependencies-{now:yyyyMMdd-HHmmss}");
+        string path = basePath;
+        for (int counter = 2; File.Exists($"{path}.svg") || File.Exists($"{path}.dot"); counter++)
+            path = $"{basePath}-{counter}";
+        return path;
     }
 
     private static async Task PackAsync(CommandLineArgs args)
@@ -151,10 +164,11 @@ public static class LocalRunCli
     private static async Task RunExecutablesAsync(CommandLineArgs args)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
+        List<string>? exclude = args.Values("--exclude");
         args.EnsureAllConsumed();
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
-        await new RunProcessor().RunAsync(config);
+        await new RunProcessor().RunAsync(config, exclude);
     }
 
     private static async Task<T> ReadFromFile<T>(string pathToFile, string producingCommand)
@@ -235,7 +249,7 @@ public static class LocalRunCli
         Console.WriteLine("      Render the dependency graph of a config file as DOT and SVG.");
         Console.WriteLine("      Options:");
         Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
-        Console.WriteLine($"        --output <path>         Output path without extension (default: {DefaultVisualsPath})");
+        Console.WriteLine($"        --output <path>         Output path without extension (default: {DefaultVisualsFolder}/dependencies-<date-time>)");
         Console.WriteLine("        --open                  Open the SVG with the default application");
         Console.WriteLine();
 
@@ -261,9 +275,10 @@ public static class LocalRunCli
         Console.WriteLine();
 
         Console.WriteLine("  run [options]");
-        Console.WriteLine("      Launch the executables of a config file, in dependency order.");
+        Console.WriteLine("      Build the executables of a config file, then run them side by side; Ctrl+C stops them all.");
         Console.WriteLine("      Options:");
         Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
+        Console.WriteLine("        --exclude <names>       Executables not to run, e.g. the one you debug from your IDE");
         Console.WriteLine();
 
         Console.WriteLine("  help");

@@ -36,7 +36,9 @@ public static class GraphVisualizer
         logger.LogInformation("[📄] DOT file generated: {Path}", dotPath);
 
         RenderSvg(dotPath, svgPath);
-        logger.LogInformation("[🖼️] SVG graph generated: {Path}", svgPath);
+        // As a file:// URI, which terminals (Windows Terminal, VS Code, ...) turn into a link: Ctrl+click opens
+        // the SVG with its default app, usually the browser
+        logger.LogInformation("[🖼️] SVG graph generated: {Uri}", new Uri(svgPath).AbsoluteUri);
         return svgPath;
     }
 
