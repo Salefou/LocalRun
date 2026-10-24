@@ -67,7 +67,8 @@ so you can **inspect or hand-edit** the plan between steps.
 4. **`go`** executes the plan: `dotnet restore` with the local feed added to your sources, then
    `dotnet pack --no-restore -o <feed>`, each project getting its planned version.
    `pack --go` does steps 3 and 4 in one command, when you don't need to review the plan.
-5. **`run`** starts the executables of the config with `dotnet run`, dependencies first.
+5. **`run`** builds the executables of the config, then starts them all side by side, dependencies
+   first, until they exit or you press Ctrl+C.
 
 ### The dependency graph
 
@@ -297,9 +298,36 @@ The first failing `dotnet` command fails the whole command (exit code `1`); its 
 
 ### `run`
 
-Start every project of type `executable` in the config with `dotnet run --project <csproj>`, in
-dependency order. Each executable is awaited before the next one starts (see
-[Known limitations](#known-limitations)).
+Run every project of type `executable` in the config **side by side**, like a local deployment of
+the services:
+
+1. **Build** each executable with `dotnet build`, one at a time, in dependency order. Executables
+   sharing a project reference would otherwise build it concurrently and collide on its output. A
+   build failure stops `run` before anything starts, and only then is the build output shown.
+2. **Start** them all, in dependency order, with `dotnet run --no-build --project <csproj>`, without
+   waiting for each one. `dotnet run` still applies the project's `launchSettings.json` (URLs,
+   environment variables). Every output line is prefixed with the project name.
+3. **Wait** until they have all exited. One-shot jobs simply finish; services run until you press
+   **Ctrl+C**. They all receive it (they share the console). Whatever is still running 10 seconds later
+   is killed, with its child processes. Inside the REPL, Ctrl+C stops the processes, not the REPL.
+
+Projects with `"SkipRun": true` in the config are not run. A process that fails *on its own* (non-zero
+exit code before Ctrl+C) doesn't stop the others, but makes `run` exit with code `1` once everything
+has stopped. Processes stopped by Ctrl+C never count as failures.
+
+```
+[▶] Starting LrSample.RiskService
+[▶] Starting LrSample.OrderGateway
+[✔ ] 2 process(es) started. Press Ctrl+C to stop them all.
+[LrSample.RiskService ] RiskService listening on http://localhost:5102/
+[LrSample.OrderGateway] OrderGateway listening on http://localhost:5101/
+[■] Stopping all processes...
+[■] LrSample.OrderGateway exited with code 0
+[■] LrSample.RiskService exited with code 0
+```
+
+Processes are started in dependency order, but `run` doesn't wait for one to be *ready* before
+starting the next. A service that needs another one at startup should retry.
 
 | Option | Default | Description |
 |---|---|---|
@@ -331,14 +359,14 @@ All files are indented JSON, safe to commit, diff or edit by hand between steps.
       "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // first <Version>, else 1.0.0
       "Dependencies": [],                       // names of other projects in the graph
       "SkipRepack": false,                      // set to true by hand to leave it out of pack
-      "SkipRun": false                          // reserved, not honoured yet
+      "SkipRun": false                          // set to true by hand to leave it out of run
     }
   ]
 }
 ```
 
-Useful hand edits: set `"SkipRepack": true` on projects you don't want repacked, or change
-`LocalNugetPath` before `pack`.
+Useful hand edits: set `"SkipRepack": true` on projects you don't want repacked, `"SkipRun": true`
+on executables you don't want started, or change `LocalNugetPath` before `pack`.
 
 ### `repack.config.json` — written by `pack`
 
@@ -627,9 +655,9 @@ Exit it and re-run the script.
 
 ## Known limitations
 
-- **`run` is sequential and blocking**: each executable is awaited before the next one starts, so a
-  long-running service blocks the ones after it.
-- **`SkipRun` is not honoured** by `run` yet (only `SkipRepack` is used).
+- **`run` doesn't wait for readiness**: processes start in dependency order, but not one after the
+  other being *ready*. Processes killed from outside (e.g. Task Manager on `lrun`) are not stopped
+  with it; Ctrl+C or closing the terminal stops them.
 - **`--git-changes`** is accepted by `build` but does nothing yet (intended: keep only repos
   with uncommitted changes).
 - `--remote` reads the user/machine `NuGet.Config`, not repository-level ones, and queries sources one
