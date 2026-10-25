@@ -14,13 +14,13 @@ public sealed class RepackConfigBuilderTests : IDisposable
 
     public void Dispose() => Directory.Delete(root, recursive: true);
 
-    private static ProjectNode Project(string name, string version, string? remoteVersion = null, params string[] dependencies) => new()
+    private static ProjectNode Project(string name, string version, string? latestVersion = null, params string[] dependencies) => new()
     {
         Name = name,
         Path = $"{name}/{name}.csproj",
         Type = "library",
         Version = ProjectVersion.Parse(version),
-        RemoteVersion = remoteVersion == null ? null : ProjectVersion.Parse(remoteVersion),
+        LatestVersion = latestVersion == null ? null : ProjectVersion.Parse(latestVersion),
         Dependencies = [.. dependencies],
     };
 
@@ -33,10 +33,10 @@ public sealed class RepackConfigBuilderTests : IDisposable
     }
 
     [Fact]
-    public async Task RemoteVersion_IsTheBase_WhenRecorded()
+    public async Task LatestVersion_IsTheBase_WhenRecorded()
     {
         var plan = await Plan(new BumpOptions { BumpType = BumpType.Minor, Suffix = "alpha" },
-            Project("Lib", "1.4.2", remoteVersion: "1.5.0"),
+            Project("Lib", "1.4.2", latestVersion: "1.5.0"),
             Project("New", "0.1.0"));
 
         Assert.Equal("1.5.0", plan["Lib"].FromVersion.AsVersionString());
@@ -57,6 +57,18 @@ public sealed class RepackConfigBuilderTests : IDisposable
 
         Assert.Equal("1.5.0-alpha.3", plan["Lib"].ToVersion.AsVersionString());
         Assert.Equal("2.1.0-alpha.3", plan["App"].ToVersion.AsVersionString());
+    }
+
+    [Fact]
+    public async Task Alpha_ContinuesTheLatestAlpha_AndStartsOneAfterARelease()
+    {
+        // Day 2: build found your alpha.9 for Lib; Logging joins the plan with its last release
+        var plan = await Plan(new BumpOptions { BumpType = BumpType.Next, Suffix = "alpha" },
+            Project("Lib", "1.4.2", latestVersion: "1.5.0-alpha.9"),
+            Project("Logging", "2.3.1", latestVersion: "2.3.1"));
+
+        Assert.Equal("1.5.0-alpha.10", plan["Lib"].ToVersion.AsVersionString());
+        Assert.Equal("2.3.2-alpha.10", plan["Logging"].ToVersion.AsVersionString());
     }
 
     [Fact]

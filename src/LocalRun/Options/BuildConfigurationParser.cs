@@ -12,11 +12,8 @@ public static class BuildConfigOptionsParser
             IncludeExternal = args.Flag("--include-external"),
             Union = args.Flag("--union"),
             WithServices = args.Flag("--with-services"),
-            RemoteVersions = args.Flag("--remote"),
-            RemoteAllSources = args.Flag("--all-sources"),
+            CsprojVersionsOnly = args.Flag("--csproj"),
         };
-        if (options.RemoteAllSources && !options.RemoteVersions)
-            throw new UsageException("'--all-sources' widens '--remote': give both.");
         // --git-changes adds to the --users-of side
         bool hasUsersOf = options.RetainDependsOn != null || options.RetainGitChanges;
         if (options.Union && (!hasUsersOf || options.RetainIsDependencyOf == null))

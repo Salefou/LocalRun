@@ -58,9 +58,9 @@ public static class GraphVisualizer
 
         foreach (var proj in projs)
         {
-            // The remote version, when 'build --remote' found a different one, is what 'pack' will start from
-            string remote = proj.RemoteVersion is { } remoteVersion && remoteVersion != proj.Version ? $"remote {remoteVersion}\\n" : "";
-            string label = $"{proj.Name}\\n{proj.Version}\\n{remote}";
+            // The latest version on the NuGet sources, when it differs from the csproj, is what 'pack' will start from
+            string latest = proj.LatestVersion is { } latestVersion && latestVersion != proj.Version ? $"latest {latestVersion}\\n" : "";
+            string label = $"{proj.Name}\\n{proj.Version}\\n{latest}";
             string color = DepthColor(nameToDepth[proj.Name], proj.Type == "executable");
             sb.AppendLine($"  \"{proj.Name}\" [label=\"{label}\", fillcolor=\"{color}\"];");
         }

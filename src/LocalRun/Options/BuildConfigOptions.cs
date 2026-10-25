@@ -17,9 +17,6 @@ public class BuildConfigOptions
     /// <summary>Also keep the executables affected by the kept projects, with the libraries in between.</summary>
     public bool WithServices { get; internal set; }
 
-    /// <summary>Record each project's highest version on its NuGet sources, for <c>pack</c> to start from.</summary>
-    public bool RemoteVersions { get; internal set; }
-
-    /// <summary>With <see cref="RemoteVersions"/>: query the local feed too, when a NuGet.Config lists it.</summary>
-    public bool RemoteAllSources { get; internal set; }
+    /// <summary>Skip querying the NuGet sources: <c>pack</c> then starts from the csproj versions.</summary>
+    public bool CsprojVersionsOnly { get; internal set; }
 }

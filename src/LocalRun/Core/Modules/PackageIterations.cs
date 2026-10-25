@@ -6,19 +6,23 @@ using System.Globalization;
 
 /// <summary>
 /// The iteration number <c>pack</c> appends to the prerelease label (<c>1.5.0-alpha.3</c>): one more than the highest
-/// iteration of the planned versions already in the given folders, so repacking never reuses a version NuGet has cached.
-/// One number for the whole plan, so the projects of an attempt share it.
+/// iteration of the planned versions already in the given folders or as a base, so repacking never reuses a version
+/// NuGet has cached. One number for the whole plan, so the projects of an attempt share it.
 /// </summary>
 internal static class PackageIterations
 {
-    public static int Next(IEnumerable<(string PackageId, ProjectVersion Target)> plan, IEnumerable<string> folders)
+    /// <param name="plan">Each package with its planned version (before the iteration) and the version it starts from,
+    /// which may come from a source none of the folders mirrors (1.5.0-alpha.9 as a base → at least .10).</param>
+    public static int Next(IEnumerable<(string PackageId, ProjectVersion Target, ProjectVersion Base)> plan, IEnumerable<string> folders)
     {
         var existingFolders = folders.Where(Directory.Exists).ToList();
         int highest = 0;
-        foreach (var (packageId, target) in plan)
+        foreach (var (packageId, target, baseVersion) in plan)
         {
             if (!NuGetVersion.TryParse(target.AsVersionString(), out var targetVersion))
                 continue;
+            if (NuGetVersion.TryParse(baseVersion.AsVersionString(), out var parsedBase) && IterationOf(parsedBase, targetVersion) is int baseIteration)
+                highest = Math.Max(highest, baseIteration);
             foreach (var folder in existingFolders)
             {
                 foreach (var packed in PackedVersions(folder, packageId))

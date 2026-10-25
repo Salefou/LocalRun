@@ -86,24 +86,18 @@ public class BuildConfigOptionsParserTests
     }
 
     [Fact]
-    public void Remote_IsOffByDefault()
+    public void Sources_AreQueriedUnlessCsproj()
     {
-        Assert.False(Parse().RemoteVersions);
-        Assert.True(Parse("--remote").RemoteVersions);
-        Assert.False(Parse("--remote").RemoteAllSources);
+        Assert.False(Parse().CsprojVersionsOnly);
+        Assert.True(Parse("--csproj").CsprojVersionsOnly);
     }
 
-    [Fact]
-    public void AllSources_IsReadWithRemote()
+    [Theory]
+    [InlineData("--remote")]
+    [InlineData("--all-sources")]
+    public void SourceFlagsOfEarlierDrafts_AreRejected(string option)
     {
-        Assert.True(Parse("--remote", "--all-sources").RemoteAllSources);
-    }
-
-    [Fact]
-    public void AllSources_WithoutRemote_IsRejected()
-    {
-        var ex = Assert.Throws<UsageException>(() => Parse("--all-sources"));
-        Assert.Contains("--remote", ex.Message);
+        Assert.Throws<UsageException>(() => Parse(option));
     }
 
     [Fact]

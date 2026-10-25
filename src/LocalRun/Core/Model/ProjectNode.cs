@@ -15,9 +15,9 @@ public class ProjectNode
 
     public required ProjectVersion Version { get; init; }
 
-    /// <summary>Highest version on the project's NuGet sources, set by <c>build --remote</c>; <c>pack</c> starts from it when present.</summary>
+    /// <summary>Highest version on the project's NuGet sources (unless <c>build --csproj</c>); <c>pack</c> starts from it when present.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public ProjectVersion? RemoteVersion { get; set; }
+    public ProjectVersion? LatestVersion { get; set; }
 
     public required List<string> Dependencies { get; init; }
 

@@ -30,8 +30,8 @@ internal class RepackConfigBuilder
         logger.LogInformation("[⚙ ] Building repack config in dependency order...");
         var dependencyGraph = DependencyGraph.FromConfig(config);
 
-        // The remote version recorded by 'build --remote' wins: it is what the csproj version may lag behind
-        var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => proj.RemoteVersion ?? proj.Version, StringComparer.OrdinalIgnoreCase);
+        // The latest version on the sources recorded by 'build' wins: the csproj version may lag behind releases and your builds
+        var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => proj.LatestVersion ?? proj.Version, StringComparer.OrdinalIgnoreCase);
         var toVersions = fromVersions.ToDictionary(
             entry => entry.Key,
             entry => repackOptions.BumpOptions?.Bump(entry.Value) ?? entry.Value with { },
@@ -40,9 +40,9 @@ internal class RepackConfigBuilder
         // Only a label set by the suffix is known to end the version (a kept label may carry +metadata)
         if (repackOptions.BumpOptions?.Suffix != null && toVersions.Count != 0)
         {
-            int iteration = PackageIterations.Next(toVersions.Select(entry => (entry.Key, entry.Value)), PackageFolders(config));
+            int iteration = PackageIterations.Next(toVersions.Select(entry => (entry.Key, entry.Value, fromVersions[entry.Key])), PackageFolders(config));
             logger.LogInformation("[🔢] Iteration {Iteration} ({Reason})", iteration,
-                iteration == 1 ? "first pack of these versions" : $"up to .{iteration - 1} found in the local feed or the NuGet cache");
+                iteration == 1 ? "first pack of these versions" : $"up to .{iteration - 1} found on the sources, in the local feed or in the NuGet cache");
             foreach (var name in toVersions.Keys.ToList())
                 toVersions[name] = toVersions[name] with { PatchAndSuffix = $"{toVersions[name].PatchAndSuffix}.{iteration}" };
         }

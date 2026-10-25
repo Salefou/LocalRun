@@ -48,16 +48,16 @@ public class GraphVisualizerTests
     }
 
     [Fact]
-    public void RemoteVersion_IsShownOnlyWhenItDiffers()
+    public void LatestVersion_IsShownOnlyWhenItDiffers()
     {
         var behind = Project("Behind", "library");
-        behind.RemoteVersion = ProjectVersion.Parse("1.2.0");
+        behind.LatestVersion = ProjectVersion.Parse("1.2.0");
         var upToDate = Project("UpToDate", "library");
-        upToDate.RemoteVersion = ProjectVersion.Parse("1.0.0");
+        upToDate.LatestVersion = ProjectVersion.Parse("1.0.0");
 
         var dot = Dot(behind, upToDate);
 
-        Assert.Contains(dot, line => line.StartsWith("\"Behind\" [label=\"Behind\\n1.0.0\\nremote 1.2.0\\n\""));
+        Assert.Contains(dot, line => line.StartsWith("\"Behind\" [label=\"Behind\\n1.0.0\\nlatest 1.2.0\\n\""));
         Assert.Contains(dot, line => line.StartsWith("\"UpToDate\" [label=\"UpToDate\\n1.0.0\\n\""));
     }
 

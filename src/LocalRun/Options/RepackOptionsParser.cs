@@ -8,9 +8,9 @@ internal partial class RepackOptionsParser
 
     public static RepackOptions Parse(CommandLineArgs args)
     {
-        // Moved in 0.2.0: point at the new place rather than only rejecting it as unknown
+        // Gone in 0.2.0: point at what replaced it rather than only rejecting it as unknown
         if (args.Flag("--remote"))
-            throw new UsageException($"'--remote' moved to 'build': run '{Cli.LocalRunCli.CommandName} build --remote', then pack from that config.");
+            throw new UsageException($"'--remote' is gone: '{Cli.LocalRunCli.CommandName} build' now records the latest versions on your NuGet sources, and pack starts from them.");
 
         BumpType bumpType = BumpType.None;
         string? suffix = args.Value("--suffix");
@@ -33,12 +33,17 @@ internal partial class RepackOptionsParser
             bumpType = BumpType.Major;
             bumpFlags.Add("--major");
         }
+        if (args.Flag("--next"))
+        {
+            bumpType = BumpType.Next;
+            bumpFlags.Add("--next");
+        }
         if (args.Flag("--alpha"))
         {
             // convenience
             if (suffix != null)
                 throw new UsageException("'--alpha' cannot be combined with '--suffix'.");
-            bumpType = BumpType.Patch;
+            bumpType = BumpType.Next;
             suffix = "alpha";
             bumpFlags.Add("--alpha");
         }

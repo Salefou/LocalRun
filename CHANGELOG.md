@@ -9,14 +9,16 @@ bumps the minor version, anything else the patch.
 
 ### Changed
 
-- **Breaking:** `--remote` moved from `pack` to `build`. `build --remote` records each project's highest
-  version on its NuGet sources in the config (`RemoteVersion`), `pack` starts from it, and `plot` shows it
-  when it differs from the csproj. The sources are those that apply to each project's folder (repository
-  `NuGet.Config` files included), without the local feed unless `--all-sources` is given. `pack --remote`
-  is rejected with a pointer.
+- **Breaking:** `build` records each project's latest version on its NuGet sources in the config
+  (`LatestVersion`), `pack` starts from it, and `plot` shows it when it differs from the csproj. The sources
+  are those a restore from the project's folder would use (repository `NuGet.Config` files and your local
+  feed included). `build --csproj` skips this, and `pack --remote` is gone (rejected with a pointer).
 - **Breaking:** `pack` ends the prerelease label with an iteration number, shared by the plan: one more
-  than the highest already in the local feed or the NuGet cache for the same versions. Packing again
-  gives `1.5.0-alpha.2` after `1.5.0-alpha.1`, instead of the same version, which the cache shadowed.
+  than the highest known for the same versions (as a base, in the local feed or in the NuGet cache).
+  Packing again gives `1.5.0-alpha.2` after `1.5.0-alpha.1`, instead of the same version, which the cache shadowed.
+- **Breaking:** `--alpha` is now `--next --suffix alpha`. New `pack --next`: continues a prerelease
+  (`1.5.0-alpha.9` → `1.5.0-alpha.10`), patch-bumps a release or a prerelease it would sort below
+  (`1.4.2` or `1.4.2-beta` → `1.4.3-alpha.1`, as before).
 
 ## [0.1.1] - 2026-10-24
 

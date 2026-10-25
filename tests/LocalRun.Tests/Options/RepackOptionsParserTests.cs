@@ -24,20 +24,29 @@ public class RepackOptionsParserTests
     }
 
     [Fact]
-    public void Remote_IsRejectedWithItsNewPlace()
+    public void Remote_IsRejectedWithAPointer()
     {
         var ex = Assert.Throws<UsageException>(() => Parse("--patch", "--remote"));
 
-        Assert.Contains("build --remote", ex.Message);
+        Assert.Contains("build' now records the latest versions", ex.Message);
     }
 
     [Fact]
-    public void Alpha_IsAPatchWithAlphaSuffix()
+    public void Alpha_IsNextWithAlphaSuffix()
     {
         var options = Parse("--alpha");
 
-        Assert.Equal(BumpType.Patch, options.BumpOptions!.BumpType);
+        Assert.Equal(BumpType.Next, options.BumpOptions!.BumpType);
         Assert.Equal("alpha", options.BumpOptions.Suffix);
+    }
+
+    [Fact]
+    public void Next_IsReadWithTheSuffix()
+    {
+        var options = Parse("--next", "--suffix", "beta");
+
+        Assert.Equal(BumpType.Next, options.BumpOptions!.BumpType);
+        Assert.Equal("beta", options.BumpOptions.Suffix);
     }
 
     [Theory]
@@ -84,6 +93,8 @@ public class RepackOptionsParserTests
     [InlineData("--patch", "--minor")]
     [InlineData("--alpha", "--major")]
     [InlineData("--alpha", "--suffix", "dev")]
+    [InlineData("--next", "--minor")]
+    [InlineData("--next", "--alpha")]
     public void ConflictingBumps_AreRejected(params string[] argv)
     {
         Assert.Throws<UsageException>(() => Parse(argv));

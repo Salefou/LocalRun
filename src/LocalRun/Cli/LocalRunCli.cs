@@ -110,8 +110,8 @@ public static class LocalRunCli
 
         var configBuilder = new ConfigBuilder();
         LocalRunConfig localRunConfig = configBuilder.BuildConfig(rootPath, configOptions, localNugetPath);
-        if (configOptions.RemoteVersions)
-            await configBuilder.FetchRemoteVersionsAsync(localRunConfig, includeLocalFeed: configOptions.RemoteAllSources);
+        if (!configOptions.CsprojVersionsOnly)
+            await configBuilder.FetchLatestVersionsAsync(localRunConfig);
         await WriteToFile(configPath, localRunConfig);
         logger.LogInformation("[✔ ] Configuration written to {Path}", configPath);
 
@@ -266,10 +266,9 @@ public static class LocalRunCli
         Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
         Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
-        Console.WriteLine("        --remote                Record each project's highest version on its NuGet sources (local feed");
-        Console.WriteLine("                                excepted); pack then starts from it instead of the csproj version");
-        Console.WriteLine("        --all-sources           With --remote: query the local feed too, when a NuGet.Config lists it");
-        Console.WriteLine("        --plot                Then plot the graph, as 'plot' does with its defaults");
+        Console.WriteLine("        --csproj                Don't query your NuGet sources for each project's latest version:");
+        Console.WriteLine("                                pack then starts from the csproj versions (default: from the latest)");
+        Console.WriteLine("        --plot                  Then plot the graph, as 'plot' does with its defaults");
         Console.WriteLine();
 
         Console.WriteLine("  plot [options]");
@@ -288,7 +287,8 @@ public static class LocalRunCli
         Console.WriteLine("        --major                 Increment major version (resets minor/patch)");
         Console.WriteLine("        --minor                 Increment minor version (resets patch)");
         Console.WriteLine("        --patch                 Increment patch version");
-        Console.WriteLine("        --alpha                 Shorthand for --patch --suffix alpha");
+        Console.WriteLine("        --next                  Continue a prerelease (1.5.0-alpha.9 -> 1.5.0-alpha.10), or patch a release");
+        Console.WriteLine("        --alpha                 Shorthand for --next --suffix alpha");
         Console.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (default: local; e.g., 'dev', 'beta.2')");
         Console.WriteLine("                                An iteration number follows it: 1.4.3-dev.1, then .2 when packed again");
         Console.WriteLine("        --clean                 Clean projects before restoring them");

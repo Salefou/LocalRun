@@ -20,7 +20,16 @@ public sealed class PackageIterationsTests : IDisposable
     private void Cached(string packageId, string version) => Directory.CreateDirectory(Path.Combine(cache, packageId.ToLowerInvariant(), version));
 
     private int Next(params (string PackageId, string Target)[] plan)
-        => PackageIterations.Next(plan.Select(p => (p.PackageId, ProjectVersion.Parse(p.Target))), [feed, cache, Path.Combine(feed, "missing")]);
+        => PackageIterations.Next(plan.Select(p => (p.PackageId, ProjectVersion.Parse(p.Target), ProjectVersion.Parse("1.0.0"))), [feed, cache, Path.Combine(feed, "missing")]);
+
+    [Fact]
+    public void ABaseOnTheTargetLine_CountsToo()
+    {
+        // 1.5.0-alpha.9 found on a remote source only
+        var plan = new[] { ("Lib", ProjectVersion.Parse("1.5.0-alpha"), ProjectVersion.Parse("1.5.0-alpha.9")) };
+
+        Assert.Equal(10, PackageIterations.Next(plan, [feed]));
+    }
 
     [Fact]
     public void NothingPacked_StartsAtOne()

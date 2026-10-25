@@ -66,29 +66,26 @@ public class ConfigBuilder
     }
 
     /// <summary>
-    /// <c>--remote</c>: records each project's highest version across the NuGet sources that apply to its folder,
-    /// except the local feed, which only holds our own builds: starting from those would bump an iteration again.
-    /// <paramref name="includeLocalFeed"/> (<c>--all-sources</c>) queries it too, when a NuGet.Config lists it.
+    /// Records each project's highest version across the NuGet sources that apply to its folder, as a restore from
+    /// there would see them: the local feed included when a NuGet.Config lists it, so your own builds count.
+    /// Skipped with <c>--csproj</c>.
     /// </summary>
-    public async Task FetchRemoteVersionsAsync(LocalRunConfig config, bool includeLocalFeed = false)
+    public async Task FetchLatestVersionsAsync(LocalRunConfig config)
     {
-        if (includeLocalFeed)
-            logger.LogInformation("[🌐] Fetching the versions on all your NuGet sources, the local feed {LocalFeed} included...", config.LocalNugetPath);
-        else
-            logger.LogInformation("[🌐] Fetching the versions on your NuGet sources (skipping the local feed {LocalFeed}, which only holds your builds)...", config.LocalNugetPath);
+        logger.LogInformation("[🌐] Fetching the latest versions on your NuGet sources ('--csproj' skips this)...");
         var nugetVersionChecker = new NugetVersionChecker();
         foreach (var proj in config.Projects)
         {
             string projectFolder = Path.GetDirectoryName(Path.Combine(config.RootPath, proj.Path))!;
-            var remote = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name, projectFolder, includeLocalFeed ? null : config.LocalNugetPath);
-            if (remote == null)
+            var latest = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name, projectFolder);
+            if (latest == null)
             {
                 logger.LogInformation("  {Project}: not found, pack will start from the csproj version {Version}", proj.Name, proj.Version);
                 continue;
             }
             // Normalized keeps the prerelease label (1.4.2-beta); .Version would give 1.4.2.0
-            proj.RemoteVersion = ProjectVersion.Parse(remote.ToNormalizedString());
-            logger.LogInformation("  {Project}: {RemoteVersion} (csproj {Version})", proj.Name, proj.RemoteVersion, proj.Version);
+            proj.LatestVersion = ProjectVersion.Parse(latest.ToNormalizedString());
+            logger.LogInformation("  {Project}: {LatestVersion} (csproj {Version})", proj.Name, proj.LatestVersion, proj.Version);
         }
     }
 

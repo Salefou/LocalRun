@@ -71,6 +71,9 @@ lrun plot --open
 ```
 
 - Warns that `LrSample.Orphan` is referenced by no solution.
+- Logs `[🌐] Fetching the latest versions on your NuGet sources ('--csproj' skips this)...`, then
+  `not found, pack will start from the csproj version …` for every project: `.feed/` is still empty and
+  nuget.org has no `LrSample.*`.
 - `localrun.config.json` lists the 11 projects; the SVG shows the two islands and the diamond, with
   the executables in green and nothing dashed (no dependency outside the config).
 
@@ -117,7 +120,8 @@ also logs `[🔢] Iteration 1 (first pack of these versions)`: nothing is packed
 | `lrun pack --alpha` | 2.3.2-alpha.1 | 1.4.3-alpha.1 | 1.4.1-alpha.1 | 0.9.1-alpha.1 |
 | `lrun pack --major --suffix rc.1` | 3.0.0-rc.1.1 | 2.0.0-rc.1.1 | 2.0.0-rc.1.1 | 1.0.0-rc.1.1 |
 | `lrun pack --suffix -dev` | rejected, exit code 2 | | | |
-| `lrun pack --remote` | rejected, exit code 2: `'--remote' moved to 'build'` | | | |
+| `lrun pack --next --suffix dev` | 2.3.1-dev.1 | 1.4.3-dev.1 | 1.4.1-dev.1 | 0.9.1-dev.1 |
+| `lrun pack --remote` | rejected, exit code 2: `'--remote' is gone: 'lrun build' now records the latest versions…` | | | |
 
 `repack.config.json` has 3 trees (main graph, island, Orphan alone) and these depths:
 0 Island.Core, Orphan, Primitives · 1 Island.App, Logging, Pricing.Models · 2 Pricing, Reports, RiskService · 3 OrderGateway, ReportCli.
@@ -185,7 +189,7 @@ Variations worth trying:
 - **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `lrun-visuals/dependencies-<date-time>.svg` and prints
   it as a `file:///` link; Ctrl+click it (Windows Terminal, VS Code) to open it in the browser.
 
-### 5. Iterate, and start from the remote versions
+### 5. Iterate, then continue from the latest versions
 
 Right after step 4 (no reset), pack again with the same command:
 
@@ -193,28 +197,32 @@ Right after step 4 (no reset), pack again with the same command:
 lrun pack --patch --suffix dev --go
 ```
 
-- Logs `[🔢] Iteration 2 (up to .1 found in the local feed or the NuGet cache)` and packs
+- Logs `[🔢] Iteration 2 (up to .1 found on the sources, in the local feed or in the NuGet cache)` and packs
   `LrSample.Primitives (1.0.0) to (1.0.1-dev.2)`, and so on: `.feed/` now holds 22 packages, both iterations.
 - Known limitation: RiskService's `.2` package still depends on `Pricing.Models 1.4.3-dev.1` and
   `Primitives 1.0.1-dev.1`. Its `*-*` references were resolved by the first restore, and the second one is a
   no-op (`dotnet restore --force` would pick `.2`).
 
-Then record the versions on the NuGet sources:
+Then rebuild, as on another day, and continue the line:
 
 ```powershell
-lrun build --root workspace --local-nuget .feed --remote
-lrun build --root workspace --local-nuget .feed --remote --all-sources --plot
+lrun build --root workspace --local-nuget .feed --plot
+lrun pack --next --suffix dev
 lrun pack --patch --suffix dev
+lrun build --root workspace --local-nuget .feed --csproj
+lrun pack --next --suffix dev
 ```
 
-- The first `build` logs `[🌐] Fetching the versions on your NuGet sources (skipping the local feed …\.feed,
-  which only holds your builds)...`, then `not found, pack will start from the csproj version …` for every
-  project: `.feed/` is a source in `NuGet.config`, but as the local feed it is skipped, and nuget.org has no `LrSample.*`.
-- With `--all-sources`, `.feed/` is queried too: `LrSample.Primitives: 1.0.1-dev.2 (csproj 1.0.0)`,
-  `LrSample.Logging: 2.3.2-dev.2 (csproj 2.3.1-beta)`, recorded as `RemoteVersion` in the config. The plot
-  shows `remote 1.0.1-dev.2` under Primitives' `1.0.0`.
-- `pack` then starts from them: `LrSample.Primitives (1.0.1-dev.2) to (1.0.2-dev.1)`, iteration 1 since
+- `build` finds your packages in `.feed/` (a source in `NuGet.config`): `LrSample.Primitives: 1.0.1-dev.2
+  (csproj 1.0.0)`, `LrSample.Logging: 2.3.2-dev.2 (csproj 2.3.1-beta)`, recorded as `LatestVersion` in the
+  config. The plot shows `latest 1.0.1-dev.2` under Primitives' `1.0.0`.
+- `pack --next --suffix dev` continues the line: `LrSample.Primitives (1.0.1-dev.2) to (1.0.1-dev.3)`,
+  `LrSample.Logging (2.3.2-dev.2) to (2.3.2-dev.3)`, iteration 3.
+- `pack --patch --suffix dev` now bumps past it: `(1.0.1-dev.2) to (1.0.2-dev.1)`, iteration 1 since
   `1.0.2-dev` was never packed.
+- With `--csproj`, `build` logs no `[🌐]` line and records no `LatestVersion`: `pack --next --suffix dev`
+  starts from the csproj versions, `LrSample.Primitives (1.0.0) to (1.0.1-dev.3)` (still iteration 3, shared
+  with what `.feed/` holds) and `LrSample.Logging (2.3.1-beta) to (2.3.1-dev.3)`.
 
 ### 6. Edge cases
 

@@ -1,6 +1,8 @@
 ﻿namespace LocalRun.Options;
 
 using LocalRun.Core.Model;
+using LocalRun.Core.Modules;
+using NuGet.Versioning;
 using System.Text.RegularExpressions;
 
 public partial class BumpOptions
@@ -13,6 +15,7 @@ public partial class BumpOptions
     /// <summary>
     /// A bump resets the lower components and replaces the prerelease label with <see cref="Suffix"/>
     /// (or drops it). Without a bump, the version is kept and only a given suffix replaces its label.
+    /// <see cref="BumpType.Next"/> is no bump on a prerelease it continues or sorts above, a patch bump otherwise.
     /// </summary>
     internal ProjectVersion Bump(ProjectVersion version)
     {
@@ -28,14 +31,32 @@ public partial class BumpOptions
         string label = match.Groups["label"].Value;
         string newLabel = Suffix == null ? string.Empty : $"-{Suffix}";
 
-        return BumpType switch
+        var kept = version with { PatchAndSuffix = $"{patch}{revision}{(Suffix == null ? label : newLabel)}" };
+
+        // Next continues a prerelease (1.5.0-alpha.9 stays 1.5.0, the iteration then goes up) and starts one after a
+        // release, which a prerelease of the same version would sort below (1.4.2-alpha < 1.4.2). Same for a
+        // prerelease whose label sorts above the new one (2.3.1-beta → 2.3.2-alpha, not 2.3.1-alpha)
+        var bumpType = BumpType;
+        if (BumpType == BumpType.Next)
+            bumpType = label.StartsWith('-') && (Suffix == null || ContinuesOrSortsAbove(version, kept)) ? BumpType.None : BumpType.Patch;
+
+        return bumpType switch
         {
             BumpType.Major => new ProjectVersion { Major = version.Major + 1, Minor = 0, PatchAndSuffix = $"0{newLabel}" },
             BumpType.Minor => version with { Minor = version.Minor + 1, PatchAndSuffix = $"0{newLabel}" },
             BumpType.Patch => version with { PatchAndSuffix = $"{patch + 1}{newLabel}" },
-            BumpType.None => version with { PatchAndSuffix = $"{patch}{revision}{(Suffix == null ? label : newLabel)}" },
+            BumpType.None => kept,
             _ => throw new InvalidOperationException($"Unsupported bumptype: {BumpType}"),
         };
+    }
+
+    /// <summary>Whether <paramref name="kept"/>, once given its iteration, is on the line of the prerelease <paramref name="version"/> or above it.</summary>
+    private static bool ContinuesOrSortsAbove(ProjectVersion version, ProjectVersion kept)
+    {
+        if (!NuGetVersion.TryParse(version.AsVersionString(), out var current) || !NuGetVersion.TryParse($"{kept.AsVersionString()}.1", out var first))
+            return true;
+        var keptVersion = NuGetVersion.Parse(kept.AsVersionString());
+        return keptVersion == current || PackageIterations.IterationOf(current, keptVersion) != null || first > current;
     }
 
     [GeneratedRegex(@"^(?<patch>\d+|\*)(?<revision>\.\d+)?(?<label>[-+].*)?$")]
