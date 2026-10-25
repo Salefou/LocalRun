@@ -97,8 +97,9 @@ public class RepackExecutor
         {
             logger.LogInformation("[🔁] [Depth {Depth}] Restoring {Project}...", depth, proj.Name);
             // The local feed is added to the sources from NuGet.config (--source would replace them all,
-            // breaking restore of any third-party package that isn't in the global packages folder yet)
-            await RunProcessAsync("dotnet", $"restore \"{proj.PathToCsproj}\" -p:RestoreAdditionalProjectSources=\"{nugetRepoPath}\" --verbosity minimal");
+            // breaking restore of any third-party package that isn't in the global packages folder yet).
+            // --force: a no-op restore would keep floating *-* references on the previous iteration
+            await RunProcessAsync("dotnet", $"restore \"{proj.PathToCsproj}\" --force -p:RestoreAdditionalProjectSources=\"{nugetRepoPath}\" --verbosity minimal");
         });
         await Task.WhenAll(levelCleanAndRestoreTasks);
     }

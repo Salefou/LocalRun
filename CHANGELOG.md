@@ -20,6 +20,11 @@ bumps the minor version, anything else the patch.
   (`1.5.0-alpha.9` → `1.5.0-alpha.10`), patch-bumps a release or a prerelease it would sort below
   (`1.4.2` or `1.4.2-beta` → `1.4.3-alpha.1`, as before).
 
+### Fixed
+
+- `go` restores with `--force`: a consumer with a floating `*-*` reference no longer keeps the version it
+  resolved on the previous run, since NuGet skipped the unchanged restore.
+
 ## [0.1.1] - 2026-10-24
 
 ### Changed

@@ -198,7 +198,5 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
   via elkjs embedded in the page (Graphviz's `dot` layout is fine; the costs are the ~20 MB native binaries,
   win-x64/linux-x64 only, and a static image), hover to highlight a project's users-of / deps-of cones, search,
   zoom. MSAGL (pure .NET) was the portability-only alternative. Not started.
-- `go` restores without `--force`, so consumers with floating `*-*` references keep the previous iteration
-  (no-op restore; observed in `samples/` on 2026-10-25). Proposed to the user, not decided.
 - `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
   `IsNewerThanRemoteAsync`).

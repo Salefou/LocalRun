@@ -358,10 +358,11 @@ Execute a repack config. For each connected component in parallel, depth by dept
 a depth in parallel:
 
 1. `dotnet clean <csproj> --verbosity minimal` (only if the plan was made with `--clean`)
-2. `dotnet restore <csproj> -p:RestoreAdditionalProjectSources=<local feed> --verbosity minimal`:
+2. `dotnet restore <csproj> --force -p:RestoreAdditionalProjectSources=<local feed> --verbosity minimal`:
    the local feed is used **in addition to** the sources of your `NuGet.config`, so packages of earlier
    depths come from the feed and third-party packages from your usual sources. The feed folder is
-   created if it doesn't exist yet.
+   created if it doesn't exist yet. `--force` re-resolves floating references (`*-*`) even when nothing
+   else changed, so a consumer picks up the iteration packed at the depth before instead of keeping the previous one.
 3. `dotnet pack <csproj> --no-restore -o <local feed> -p:CustomBeforeMicrosoftCommonProps=<versions.props>`:
    a temporary props file sets the `PackageVersion` of **every project in the plan**, matched by path.
    So a package that project-references another declares that project's planned version as its
@@ -763,9 +764,6 @@ Exit it and re-run the script.
 - **`--git-changes`** compares with your last fetch and only knows `origin`; files changed outside
   project folders mark the whole repository, even when only docs changed.
 - `build` queries projects and sources one at a time, so it takes a while on a large config (`--csproj` skips it).
-- **Floating references keep the previous iteration**: `go` restores normally, and NuGet skips a restore
-  whose inputs didn't change, so a consumer with `*-*` stays on the version it resolved last time
-  (`dotnet restore --force` re-resolves it).
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
   told apart, so they're all left out of the graph (with an error), rather than handled.
 - **`plot` draws a static SVG** with the bundled Graphviz, so it only works on win-x64 and linux-x64. A

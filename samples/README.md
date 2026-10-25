@@ -199,9 +199,8 @@ lrun pack --patch --suffix dev --go
 
 - Logs `[🔢] Iteration 2 (up to .1 found on the sources, in the local feed or in the NuGet cache)` and packs
   `LrSample.Primitives (1.0.0) to (1.0.1-dev.2)`, and so on: `.feed/` now holds 22 packages, both iterations.
-- Known limitation: RiskService's `.2` package still depends on `Pricing.Models 1.4.3-dev.1` and
-  `Primitives 1.0.1-dev.1`. Its `*-*` references were resolved by the first restore, and the second one is a
-  no-op (`dotnet restore --force` would pick `.2`).
+- RiskService's `.2` package depends on `Pricing.Models 1.4.3-dev.2` and `Primitives 1.0.1-dev.2`: `go` restores
+  with `--force`, so its `*-*` references are re-resolved rather than kept from the first run.
 
 Then rebuild, as on another day, and continue the line:
 
