@@ -108,6 +108,17 @@ shell escaping.
   The CLI never passes a null suffix: `RepackOptionsParser` defaults it to `local`, so `pack` never
   plans a stable version (cache trap: a local 1.4.3 in ~/.nuget/packages shadows the official one).
   The README "Versioning rules" table shows the CLI-level result; change it with either.
+- **Base and iteration** (user's choices, 2026-10-25): the base version lives in the config, so the plot shows
+  what `pack` starts from and `pack` is a pure function of (config, flags). By default `build` records
+  `LatestVersion` from **all** the sources a restore from the project's folder would use, plus the config's local
+  feed even when no NuGet.Config lists it (`go` restores with it as an additional source; `samples/NuGet.config`
+  clears the user sources). The user disables sources in NuGet.Config to narrow it; `--csproj` opts out. `pack` uses it over the
+  csproj `Version`. A suffix gets one iteration number `.N` appended (`PackageIterations`): 1 + the highest N
+  of the planned versions known as a base or found in the local feed and the global packages folders,
+  **shared by the whole plan**, no counter file. `--next` (`--alpha` = `--next --suffix alpha`, like npm's
+  `prerelease`) keeps a prerelease base's version and patch-bumps a release, so after a rebuild
+  `pack --alpha` turns the latest `1.5.0-alpha.9` into `.10`. The csproj is never written (it would show
+  up in `--git-changes` and in diffs).
 
 ## Conventions
 
@@ -170,6 +181,11 @@ shell escaping.
   dropped by the user: graceful stop, one-shot output and failure rules would each need a host process per window.
 - 2026-10-24, branch `claude/release`: MIT licence, third-party notices, SemVer from 0.1.0, `lrun version`,
   CHANGELOG, nuget.org package metadata and readme (`src/LocalRun/PACKAGE.md`), `release.yml`.
+- 2026-10-25, branch `claude/remote-build-counter` (0.2.0): versions on the NuGet sources read by `build`
+  (`pack --remote` rejected with a pointer), iteration number on the prerelease label, `--next`. Drafts on the
+  same PR: `build --remote` excluding the local feed, then `--all-sources`; the user replaced both with
+  "all sources by default, `--csproj` to opt out". Writing the csproj or reading the sources at pack time were
+  the rejected alternatives; colleagues pushing odd versions were judged rare (custom suffixes handle them).
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks

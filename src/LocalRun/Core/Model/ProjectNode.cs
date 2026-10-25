@@ -1,6 +1,7 @@
 ﻿namespace LocalRun.Core.Model;
 
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 public class ProjectNode
 {
@@ -13,6 +14,10 @@ public class ProjectNode
     public required string Type { get; init; }
 
     public required ProjectVersion Version { get; init; }
+
+    /// <summary>Highest version on the project's NuGet sources (unless <c>build --csproj</c>); <c>pack</c> starts from it when present.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ProjectVersion? LatestVersion { get; set; }
 
     public required List<string> Dependencies { get; init; }
 

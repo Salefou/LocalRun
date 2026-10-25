@@ -65,6 +65,32 @@ public class ConfigBuilder
         return config;
     }
 
+    /// <summary>
+    /// Records each project's highest version across the NuGet sources that apply to its folder, as a restore from
+    /// there would see them: the local feed included when a NuGet.Config lists it, so your own builds count.
+    /// Skipped with <c>--csproj</c>.
+    /// </summary>
+    public async Task FetchLatestVersionsAsync(LocalRunConfig config)
+    {
+        logger.LogInformation("[🌐] Fetching the latest versions on your NuGet sources and in {LocalNugetPath} ('--csproj' skips this)...", config.LocalNugetPath);
+        var nugetVersionChecker = new NugetVersionChecker();
+        // go restores with the local feed as an additional source, whatever the NuGet.Config files say
+        string? localFeed = Directory.Exists(config.LocalNugetPath) ? config.LocalNugetPath : null;
+        foreach (var proj in config.Projects)
+        {
+            string projectFolder = Path.GetDirectoryName(Path.Combine(config.RootPath, proj.Path))!;
+            var latest = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name, projectFolder, localFeed);
+            if (latest == null)
+            {
+                logger.LogInformation("  {Project}: not found, pack will start from the csproj version {Version}", proj.Name, proj.Version);
+                continue;
+            }
+            // Normalized keeps the prerelease label (1.4.2-beta); .Version would give 1.4.2.0
+            proj.LatestVersion = ProjectVersion.Parse(latest.ToNormalizedString());
+            logger.LogInformation("  {Project}: {LatestVersion} (csproj {Version})", proj.Name, proj.LatestVersion, proj.Version);
+        }
+    }
+
     /// <summary>The projects of the graph with pending git changes, which <c>--git-changes</c> adds to the <c>--users-of</c> names.</summary>
     private static List<string> FindGitChanges(string rootPath, string[] csprojs, DependencyGraph graph)
     {

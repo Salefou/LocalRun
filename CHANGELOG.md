@@ -7,6 +7,26 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-26
+
+### Changed
+
+- **Breaking:** `build` records each project's latest version on its NuGet sources in the config
+  (`LatestVersion`), `pack` starts from it, and `plot` shows it when it differs from the csproj. The sources
+  are those a restore from the project's folder would use (repository `NuGet.Config` files included), plus
+  the local feed, as `go` restores with it. `build --csproj` skips this, and `pack --remote` is gone (rejected with a pointer).
+- **Breaking:** `pack` ends the prerelease label with an iteration number, shared by the plan: one more
+  than the highest known for the same versions (as a base, in the local feed or in the NuGet cache).
+  Packing again gives `1.5.0-alpha.2` after `1.5.0-alpha.1`, instead of the same version, which the cache shadowed.
+- **Breaking:** `--alpha` is now `--next --suffix alpha`. New `pack --next`: continues a prerelease
+  (`1.5.0-alpha.9` → `1.5.0-alpha.10`), patch-bumps a release or a prerelease it would sort below
+  (`1.4.2` or `1.4.2-beta` → `1.4.3-alpha.1`, as before).
+
+### Fixed
+
+- `go` restores with `--force`: a consumer with a floating `*-*` reference no longer keeps the version it
+  resolved on the previous run, since NuGet skipped the unchanged restore.
+
 ## [0.1.1] - 2026-10-24
 
 ### Changed
@@ -44,6 +64,7 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Salefou/LocalRun/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Salefou/LocalRun/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Salefou/LocalRun/releases/tag/v0.1.0

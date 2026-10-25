@@ -58,7 +58,9 @@ public static class GraphVisualizer
 
         foreach (var proj in projs)
         {
-            string label = $"{proj.Name}\\n{proj.Version}\\n";
+            // The latest version on the NuGet sources, when it differs from the csproj, is what 'pack' will start from
+            string latest = proj.LatestVersion is { } latestVersion && latestVersion != proj.Version ? $"latest {latestVersion}\\n" : "";
+            string label = $"{proj.Name}\\n{proj.Version}\\n{latest}";
             string color = DepthColor(nameToDepth[proj.Name], proj.Type == "executable");
             sb.AppendLine($"  \"{proj.Name}\" [label=\"{label}\", fillcolor=\"{color}\"];");
         }

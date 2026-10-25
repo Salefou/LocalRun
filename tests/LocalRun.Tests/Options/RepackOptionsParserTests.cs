@@ -16,27 +16,43 @@ public class RepackOptionsParserTests
     [Fact]
     public void Suffix_IsReadWithTheBump()
     {
-        var options = Parse("--patch", "--suffix", "dev", "--remote");
+        var options = Parse("--patch", "--suffix", "dev");
 
         Assert.Equal(BumpType.Patch, options.BumpOptions!.BumpType);
         Assert.Equal("dev", options.BumpOptions.Suffix);
-        Assert.True(options.UseRemoteAsVersionReference);
         Assert.False(options.CleanBeforeRestore);
     }
 
     [Fact]
-    public void Alpha_IsAPatchWithAlphaSuffix()
+    public void Remote_IsRejectedWithAPointer()
+    {
+        var ex = Assert.Throws<UsageException>(() => Parse("--patch", "--remote"));
+
+        Assert.Contains("build' now records the latest versions", ex.Message);
+    }
+
+    [Fact]
+    public void Alpha_IsNextWithAlphaSuffix()
     {
         var options = Parse("--alpha");
 
-        Assert.Equal(BumpType.Patch, options.BumpOptions!.BumpType);
+        Assert.Equal(BumpType.Next, options.BumpOptions!.BumpType);
         Assert.Equal("alpha", options.BumpOptions.Suffix);
+    }
+
+    [Fact]
+    public void Next_IsReadWithTheSuffix()
+    {
+        var options = Parse("--next", "--suffix", "beta");
+
+        Assert.Equal(BumpType.Next, options.BumpOptions!.BumpType);
+        Assert.Equal("beta", options.BumpOptions.Suffix);
     }
 
     [Theory]
     [InlineData]
     [InlineData("--patch")]
-    [InlineData("--major", "--remote")]
+    [InlineData("--major")]
     public void NoSuffix_DefaultsToLocal(params string[] argv)
     {
         Assert.Equal("local", Parse(argv).BumpOptions!.Suffix);
@@ -77,6 +93,8 @@ public class RepackOptionsParserTests
     [InlineData("--patch", "--minor")]
     [InlineData("--alpha", "--major")]
     [InlineData("--alpha", "--suffix", "dev")]
+    [InlineData("--next", "--minor")]
+    [InlineData("--next", "--alpha")]
     public void ConflictingBumps_AreRejected(params string[] argv)
     {
         Assert.Throws<UsageException>(() => Parse(argv));

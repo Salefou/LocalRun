@@ -32,6 +32,18 @@ public class BumpOptionsTests
     [InlineData("1.4.2-beta", BumpType.Minor, "dev", "1.5.0-dev")]
     [InlineData("1.4.2", BumpType.Major, null, "2.0.0")]
     [InlineData("1.4.2-beta", BumpType.Major, "dev", "2.0.0-dev")]
+    // Next: a prerelease keeps its version when the new label continues it or sorts above it, else patch bump
+    [InlineData("1.5.0-alpha.9", BumpType.Next, "alpha", "1.5.0-alpha")]
+    [InlineData("1.5.0-alpha", BumpType.Next, "alpha", "1.5.0-alpha")]
+    [InlineData("1.5.0-alpha.9", BumpType.Next, "beta", "1.5.0-beta")]
+    [InlineData("2.3.1-beta", BumpType.Next, "alpha", "2.3.2-alpha")]
+    [InlineData("0.9.0-rc.1", BumpType.Next, "alpha", "0.9.1-alpha")]
+    [InlineData("1.5.0-alpha.x", BumpType.Next, "alpha", "1.5.1-alpha")]
+    [InlineData("1.5.0-alpha.9", BumpType.Next, null, "1.5.0-alpha.9")]
+    [InlineData("1.4.2.7-dev.3", BumpType.Next, "dev", "1.4.2.7-dev")]
+    [InlineData("1.4.2", BumpType.Next, "alpha", "1.4.3-alpha")]
+    [InlineData("1.4.2+sha", BumpType.Next, "alpha", "1.4.3-alpha")]
+    [InlineData("1.4.2", BumpType.Next, null, "1.4.3")]
     public void Bump_ProducesTheExpectedVersion(string version, BumpType bumpType, string? suffix, string expected)
     {
         Assert.Equal(expected, Bump(version, bumpType, suffix));

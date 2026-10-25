@@ -86,6 +86,21 @@ public class BuildConfigOptionsParserTests
     }
 
     [Fact]
+    public void Sources_AreQueriedUnlessCsproj()
+    {
+        Assert.False(Parse().CsprojVersionsOnly);
+        Assert.True(Parse("--csproj").CsprojVersionsOnly);
+    }
+
+    [Theory]
+    [InlineData("--remote")]
+    [InlineData("--all-sources")]
+    public void SourceFlagsOfEarlierDrafts_AreRejected(string option)
+    {
+        Assert.Throws<UsageException>(() => Parse(option));
+    }
+
+    [Fact]
     public void WithServices_WithoutAnyFilter_IsRejected()
     {
         var ex = Assert.Throws<UsageException>(() => Parse("--with-services"));
