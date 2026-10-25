@@ -71,7 +71,7 @@ lrun plot --open
 ```
 
 - Warns that `LrSample.Orphan` is referenced by no solution.
-- Logs `[🌐] Fetching the latest versions on your NuGet sources ('--csproj' skips this)...`, then
+- Logs `[🌐] Fetching the latest versions on your NuGet sources and in …\samples\.feed ('--csproj' skips this)...`, then
   `not found, pack will start from the csproj version …` for every project: `.feed/` is still empty and
   nuget.org has no `LrSample.*`.
 - `localrun.config.json` lists the 11 projects; the SVG shows the two islands and the diamond, with

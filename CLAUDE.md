@@ -110,8 +110,9 @@ shell escaping.
   The README "Versioning rules" table shows the CLI-level result; change it with either.
 - **Base and iteration** (user's choices, 2026-10-25): the base version lives in the config, so the plot shows
   what `pack` starts from and `pack` is a pure function of (config, flags). By default `build` records
-  `LatestVersion` from **all** the sources a restore from the project's folder would use, local feed included
-  (the user disables sources in NuGet.Config to narrow it); `--csproj` opts out. `pack` uses it over the
+  `LatestVersion` from **all** the sources a restore from the project's folder would use, plus the config's local
+  feed even when no NuGet.Config lists it (`go` restores with it as an additional source; `samples/NuGet.config`
+  clears the user sources). The user disables sources in NuGet.Config to narrow it; `--csproj` opts out. `pack` uses it over the
   csproj `Version`. A suffix gets one iteration number `.N` appended (`PackageIterations`): 1 + the highest N
   of the planned versions known as a base or found in the local feed and the global packages folders,
   **shared by the whole plan**, no counter file. `--next` (`--alpha` = `--next --suffix alpha`, like npm's

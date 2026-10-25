@@ -266,7 +266,7 @@ public static class LocalRunCli
         Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
         Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
-        Console.WriteLine("        --csproj                Don't query your NuGet sources for each project's latest version:");
+        Console.WriteLine("        --csproj                Don't query your NuGet sources and local feed for the latest versions:");
         Console.WriteLine("                                pack then starts from the csproj versions (default: from the latest)");
         Console.WriteLine("        --plot                  Then plot the graph, as 'plot' does with its defaults");
         Console.WriteLine();

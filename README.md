@@ -63,7 +63,7 @@ so you can **inspect or hand-edit** the plan between steps.
 1. **`build`** finds every `*.csproj` under the root, reads its name, `OutputType`,
    `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
    that reference them. Optional filters keep only the part of the graph you care about. It also records
-   each project's latest version on your NuGet sources (unless `--csproj`). The result
+   each project's latest version on your NuGet sources and in the local feed (unless `--csproj`). The result
    is written in topological order to `localrun.config.json`.
 2. **`plot`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
 3. **`pack`** decides, for every project, the version it will be packed as: the config's version (the
@@ -107,7 +107,8 @@ so you can **inspect or hand-edit** the plan between steps.
 - **Tested on Windows x64**, which is what CI runs. It is written to run on Linux and macOS too, but that
   is untested, and `plot` needs the Graphviz binaries bundled by `Rubjerg.Graphviz`, which exist for
   win-x64 and linux-x64 only.
-- For `build` (unless `--csproj`): the NuGet sources that apply to each project, as for a restore from its folder.
+- For `build` (unless `--csproj`): the NuGet sources that apply to each project, as for a restore from its folder,
+  plus the local feed.
 
 ---
 
@@ -256,7 +257,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--git-changes` | off | Add the projects with pending git changes to the `--users-of` names (see below), so they're kept with everything that uses them. |
 | `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
-| `--csproj` | off | Don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` records each project's highest version (prerelease included) across the NuGet sources that apply to its folder, your local feed included when a `NuGet.Config` lists it, as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
+| `--csproj` | off | Don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` records each project's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
 | `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.svg`, printed as a link). |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
@@ -492,8 +493,8 @@ Graphviz tooling.
 
 A version is stored as `Major`, `Minor` and `PatchAndSuffix` (everything after the second dot, e.g.
 `3`, `3-beta`, `3.7`, `*`). The reference version is the one in the config: the `LatestVersion` recorded
-by `build` (the highest on the NuGet sources of the project, prerelease label included, your local feed
-included when a `NuGet.Config` lists it) when there is one, else the csproj `<Version>` (or `1.0.0` when
+by `build` (the highest on the NuGet sources of the project and in the local feed, prerelease label
+included) when there is one, else the csproj `<Version>` (or `1.0.0` when
 absent; short versions are completed with zeros, `1.4` → `1.4.0`). `build --csproj` records none.
 
 The rules: **a bump resets the lower components**; without one, the version is kept. **`--next` continues

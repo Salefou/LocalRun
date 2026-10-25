@@ -72,12 +72,14 @@ public class ConfigBuilder
     /// </summary>
     public async Task FetchLatestVersionsAsync(LocalRunConfig config)
     {
-        logger.LogInformation("[🌐] Fetching the latest versions on your NuGet sources ('--csproj' skips this)...");
+        logger.LogInformation("[🌐] Fetching the latest versions on your NuGet sources and in {LocalNugetPath} ('--csproj' skips this)...", config.LocalNugetPath);
         var nugetVersionChecker = new NugetVersionChecker();
+        // go restores with the local feed as an additional source, whatever the NuGet.Config files say
+        string? localFeed = Directory.Exists(config.LocalNugetPath) ? config.LocalNugetPath : null;
         foreach (var proj in config.Projects)
         {
             string projectFolder = Path.GetDirectoryName(Path.Combine(config.RootPath, proj.Path))!;
-            var latest = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name, projectFolder);
+            var latest = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name, projectFolder, localFeed);
             if (latest == null)
             {
                 logger.LogInformation("  {Project}: not found, pack will start from the csproj version {Version}", proj.Name, proj.Version);

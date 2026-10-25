@@ -11,8 +11,8 @@ bumps the minor version, anything else the patch.
 
 - **Breaking:** `build` records each project's latest version on its NuGet sources in the config
   (`LatestVersion`), `pack` starts from it, and `plot` shows it when it differs from the csproj. The sources
-  are those a restore from the project's folder would use (repository `NuGet.Config` files and your local
-  feed included). `build --csproj` skips this, and `pack --remote` is gone (rejected with a pointer).
+  are those a restore from the project's folder would use (repository `NuGet.Config` files included), plus
+  the local feed, as `go` restores with it. `build --csproj` skips this, and `pack --remote` is gone (rejected with a pointer).
 - **Breaking:** `pack` ends the prerelease label with an iteration number, shared by the plan: one more
   than the highest known for the same versions (as a base, in the local feed or in the NuGet cache).
   Packing again gives `1.5.0-alpha.2` after `1.5.0-alpha.1`, instead of the same version, which the cache shadowed.
