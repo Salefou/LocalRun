@@ -86,6 +86,13 @@ public class BuildConfigOptionsParserTests
     }
 
     [Fact]
+    public void Remote_IsOffByDefault()
+    {
+        Assert.False(Parse().RemoteVersions);
+        Assert.True(Parse("--remote").RemoteVersions);
+    }
+
+    [Fact]
     public void WithServices_WithoutAnyFilter_IsRejected()
     {
         var ex = Assert.Throws<UsageException>(() => Parse("--with-services"));

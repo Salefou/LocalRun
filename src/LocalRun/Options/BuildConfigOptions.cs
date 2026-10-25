@@ -16,4 +16,7 @@ public class BuildConfigOptions
 
     /// <summary>Also keep the executables affected by the kept projects, with the libraries in between.</summary>
     public bool WithServices { get; internal set; }
+
+    /// <summary>Record each project's highest version on its NuGet sources, for <c>pack</c> to start from.</summary>
+    public bool RemoteVersions { get; internal set; }
 }

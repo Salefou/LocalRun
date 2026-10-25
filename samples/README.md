@@ -57,8 +57,9 @@ cd samples
 .\reset.cmd        # clean slate: empty feed, no package cache, no build output, no LocalRun files
 ```
 
-Run `.\reset.cmd` between scenarios, and **always before packing a version number you already packed**:
-NuGet keeps the first copy of a version in `.packages/` and would silently reuse it.
+Run `.\reset.cmd` between scenarios. `pack` plans a new iteration number each time, but **running `go`
+twice on the same plan** repacks the same versions: NuGet keeps the first copy of a version in
+`.packages/` and would silently reuse it.
 
 ## Walkthrough
 
@@ -103,18 +104,20 @@ out, have a grey dashed outline with dashed edges and no version.
 
 ### 3. Version planning (nothing is built)
 
-Rebuild the full config (step 1), then compare the `Writing repack config of …` lines:
+Rebuild the full config (step 1), then compare the `Writing repack config of …` lines. Each command
+also logs `[🔢] Iteration 1 (first pack of these versions)`: nothing is packed yet.
 
 | Command | Logging `2.3.1-beta` | Pricing.Models `1.4.2.7` | Pricing `1.4` | RiskService `0.9.0-rc.1` |
 |---|---|---|---|---|
-| `lrun pack` | 2.3.1-local | 1.4.2.7-local | 1.4.0-local | 0.9.0-local |
-| `lrun pack --patch` | 2.3.2-local | 1.4.3-local | 1.4.1-local | 0.9.1-local |
-| `lrun pack --suffix dev` | 2.3.1-dev | 1.4.2.7-dev | 1.4.0-dev | 0.9.0-dev |
-| `lrun pack --patch --suffix dev` | 2.3.2-dev | 1.4.3-dev | 1.4.1-dev | 0.9.1-dev |
-| `lrun pack --minor` | 2.4.0-local | 1.5.0-local | 1.5.0-local | 0.10.0-local |
-| `lrun pack --alpha` | 2.3.2-alpha | 1.4.3-alpha | 1.4.1-alpha | 0.9.1-alpha |
-| `lrun pack --major --suffix rc.1` | 3.0.0-rc.1 | 2.0.0-rc.1 | 2.0.0-rc.1 | 1.0.0-rc.1 |
+| `lrun pack` | 2.3.1-local.1 | 1.4.2.7-local.1 | 1.4.0-local.1 | 0.9.0-local.1 |
+| `lrun pack --patch` | 2.3.2-local.1 | 1.4.3-local.1 | 1.4.1-local.1 | 0.9.1-local.1 |
+| `lrun pack --suffix dev` | 2.3.1-dev.1 | 1.4.2.7-dev.1 | 1.4.0-dev.1 | 0.9.0-dev.1 |
+| `lrun pack --patch --suffix dev` | 2.3.2-dev.1 | 1.4.3-dev.1 | 1.4.1-dev.1 | 0.9.1-dev.1 |
+| `lrun pack --minor` | 2.4.0-local.1 | 1.5.0-local.1 | 1.5.0-local.1 | 0.10.0-local.1 |
+| `lrun pack --alpha` | 2.3.2-alpha.1 | 1.4.3-alpha.1 | 1.4.1-alpha.1 | 0.9.1-alpha.1 |
+| `lrun pack --major --suffix rc.1` | 3.0.0-rc.1.1 | 2.0.0-rc.1.1 | 2.0.0-rc.1.1 | 1.0.0-rc.1.1 |
 | `lrun pack --suffix -dev` | rejected, exit code 2 | | | |
+| `lrun pack --remote` | rejected, exit code 2: `'--remote' moved to 'build'` | | | |
 
 `repack.config.json` has 3 trees (main graph, island, Orphan alone) and these depths:
 0 Island.Core, Orphan, Primitives · 1 Island.App, Logging, Pricing.Models · 2 Pricing, Reports, RiskService · 3 OrderGateway, ReportCli.
@@ -130,16 +133,16 @@ lrun up
 
 - `pack --go` packs depth by depth (the three trees in parallel) and puts 11 packages in `.feed/`.
 - Each package declares the *planned* version of what it references, e.g.
-  `LrSample.Pricing.1.4.1-dev` depends on `Pricing.Models 1.4.3-dev` and `Logging 2.3.2-dev`.
+  `LrSample.Pricing.1.4.1-dev.1` depends on `Pricing.Models 1.4.3-dev.1` and `Logging 2.3.2-dev.1`.
 - `up` builds the 4 executables one by one, then starts them side by side. Island.App and ReportCli
   print their result and exit with code 0. The two services keep running, each line prefixed:
 
   ```
   [LrSample.OrderGateway] LrSample.OrderGateway 3.0.0 started
-  [LrSample.OrderGateway]   uses LrSample.Pricing 1.4.1-dev
-  [LrSample.OrderGateway]   uses LrSample.Pricing.Models 1.4.3-dev
-  [LrSample.OrderGateway]   uses LrSample.Logging 2.3.2-dev
-  [LrSample.OrderGateway]   uses LrSample.Primitives 1.0.1-dev
+  [LrSample.OrderGateway]   uses LrSample.Pricing 1.4.1-dev.1
+  [LrSample.OrderGateway]   uses LrSample.Pricing.Models 1.4.3-dev.1
+  [LrSample.OrderGateway]   uses LrSample.Logging 2.3.2-dev.1
+  [LrSample.OrderGateway]   uses LrSample.Primitives 1.0.1-dev.1
   [LrSample.OrderGateway] OrderGateway listening on http://localhost:5101/ (try http://localhost:5101/health)
   [LrSample.RiskService ] RiskService listening on http://localhost:5102/ (try http://localhost:5102/health)
   [LrSample.RiskService ] RiskService alive, 0 request(s) served
@@ -182,7 +185,38 @@ Variations worth trying:
 - **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `lrun-visuals/dependencies-<date-time>.svg` and prints
   it as a `file:///` link; Ctrl+click it (Windows Terminal, VS Code) to open it in the browser.
 
-### 5. Edge cases
+### 5. Iterate, and start from the remote versions
+
+Right after step 4 (no reset), pack again with the same command:
+
+```powershell
+lrun pack --patch --suffix dev --go
+```
+
+- Logs `[🔢] Iteration 2 (up to .1 found in the local feed or the NuGet cache)` and packs
+  `LrSample.Primitives (1.0.0) to (1.0.1-dev.2)`, and so on: `.feed/` now holds 22 packages, both iterations.
+- Known limitation: RiskService's `.2` package still depends on `Pricing.Models 1.4.3-dev.1` and
+  `Primitives 1.0.1-dev.1`. Its `*-*` references were resolved by the first restore, and the second one is a
+  no-op (`dotnet restore --force` would pick `.2`).
+
+Then record the versions on the NuGet sources:
+
+```powershell
+lrun build --root workspace --local-nuget .feed --remote
+lrun build --root workspace --local-nuget .other-feed --remote --plot
+lrun pack --patch --suffix dev
+```
+
+- The first `build` logs `[🌐] Fetching the versions on your NuGet sources...`, then `not found, pack will
+  start from the csproj version …` for every project: `.feed/` is a source in `NuGet.config`, but as the local
+  feed it is skipped, and nuget.org has no `LrSample.*`.
+- With another local feed, `.feed/` counts as an ordinary source: `LrSample.Primitives: 1.0.1-dev.2 (csproj 1.0.0)`,
+  `LrSample.Logging: 2.3.2-dev.2 (csproj 2.3.1-beta)`, recorded as `RemoteVersion` in the config. The plot
+  shows `remote 1.0.1-dev.2` under Primitives' `1.0.0`.
+- `pack` then starts from them: `LrSample.Primitives (1.0.1-dev.2) to (1.0.2-dev.1)`, iteration 1 since
+  `1.0.2-dev` was never packed.
+
+### 6. Edge cases
 
 ```powershell
 lrun build --root edge-cases/cycle --config edge.json

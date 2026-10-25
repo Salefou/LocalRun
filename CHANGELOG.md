@@ -7,6 +7,16 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `--remote` moved from `pack` to `build`. `build --remote` records each project's highest
+  version on its NuGet sources in the config (`RemoteVersion`), `pack` starts from it, and `plot` shows it
+  when it differs from the csproj. The sources are those that apply to each project's folder (repository
+  `NuGet.Config` files included), without the local feed. `pack --remote` is rejected with a pointer.
+- **Breaking:** `pack` ends the prerelease label with an iteration number, shared by the plan: one more
+  than the highest already in the local feed or the NuGet cache for the same versions. Packing again
+  gives `1.5.0-alpha.2` after `1.5.0-alpha.1`, instead of the same version, which the cache shadowed.
+
 ## [0.1.1] - 2026-10-24
 
 ### Changed

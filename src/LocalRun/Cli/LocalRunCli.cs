@@ -108,7 +108,10 @@ public static class LocalRunCli
         if (!Directory.Exists(rootPath))
             throw new DirectoryNotFoundException($"Root directory not found: {rootPath}");
 
-        LocalRunConfig localRunConfig = new ConfigBuilder().BuildConfig(rootPath, configOptions, localNugetPath);
+        var configBuilder = new ConfigBuilder();
+        LocalRunConfig localRunConfig = configBuilder.BuildConfig(rootPath, configOptions, localNugetPath);
+        if (configOptions.RemoteVersions)
+            await configBuilder.FetchRemoteVersionsAsync(localRunConfig);
         await WriteToFile(configPath, localRunConfig);
         logger.LogInformation("[✔ ] Configuration written to {Path}", configPath);
 
@@ -263,7 +266,9 @@ public static class LocalRunCli
         Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
         Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
-        Console.WriteLine("        --plot                  Then plot the graph, as 'plot' does with its defaults");
+        Console.WriteLine("        --remote                Record each project's highest version on its NuGet sources (local feed");
+        Console.WriteLine("                                excepted); pack then starts from it instead of the csproj version");
+        Console.WriteLine("        --plot                Then plot the graph, as 'plot' does with its defaults");
         Console.WriteLine();
 
         Console.WriteLine("  plot [options]");
@@ -284,7 +289,7 @@ public static class LocalRunCli
         Console.WriteLine("        --patch                 Increment patch version");
         Console.WriteLine("        --alpha                 Shorthand for --patch --suffix alpha");
         Console.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (default: local; e.g., 'dev', 'beta.2')");
-        Console.WriteLine("        --remote                Query the configured NuGet sources for version info");
+        Console.WriteLine("                                An iteration number follows it: 1.4.3-dev.1, then .2 when packed again");
         Console.WriteLine("        --clean                 Clean projects before restoring them");
         Console.WriteLine("        --go                    Execute the plan right away, as 'go' does (default: only write it)");
         Console.WriteLine();

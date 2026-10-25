@@ -8,6 +8,10 @@ internal partial class RepackOptionsParser
 
     public static RepackOptions Parse(CommandLineArgs args)
     {
+        // Moved in 0.2.0: point at the new place rather than only rejecting it as unknown
+        if (args.Flag("--remote"))
+            throw new UsageException($"'--remote' moved to 'build': run '{Cli.LocalRunCli.CommandName} build --remote', then pack from that config.");
+
         BumpType bumpType = BumpType.None;
         string? suffix = args.Value("--suffix");
         if (suffix != null && !PrereleaseLabelRegex().IsMatch(suffix))
@@ -52,7 +56,6 @@ internal partial class RepackOptionsParser
                 BumpType = bumpType,
                 Suffix = suffix,
             },
-            UseRemoteAsVersionReference = args.Flag("--remote"),
             CleanBeforeRestore = args.Flag("--clean"),
         };
     }

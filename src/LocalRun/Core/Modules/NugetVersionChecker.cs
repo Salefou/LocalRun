@@ -59,14 +59,16 @@ public class NugetVersionChecker
         }
     }
 
-    public async Task<NuGetVersion?> GetLatestVersionAcrossSourcesAsync(string packageId)
+    /// <param name="root">Folder whose NuGet.Config files apply (as for a restore from there); null for the user/machine ones only.</param>
+    /// <param name="excludedFolder">A local feed not to query.</param>
+    public async Task<NuGetVersion?> GetLatestVersionAcrossSourcesAsync(string packageId, string? root = null, string? excludedFolder = null)
     {
         Stopwatch stopwatch = new();
         stopwatch.Start();
-        var settings = Settings.LoadDefaultSettings(root: null);
+        var settings = Settings.LoadDefaultSettings(root);
         var sourceProvider = new PackageSourceProvider(settings);
         var sources = sourceProvider.LoadPackageSources()
-            .Where(s => s.IsEnabled)
+            .Where(s => s.IsEnabled && !(excludedFolder != null && s.TrySourceAsUri is { IsFile: true } uri && IsSameFolder(uri.LocalPath, excludedFolder)))
             .ToList();
 
         var nugetLogger = NullLogger.Instance;
@@ -107,6 +109,12 @@ public class NugetVersionChecker
         stopwatch.Stop();
         logger.LogDebug("Fetched latest version across sources for {PackageId} in {ElapsedMs}ms", packageId, stopwatch.ElapsedMilliseconds);
         return highest;
+    }
+
+    private static bool IsSameFolder(string a, string b)
+    {
+        static string Normalize(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        return string.Equals(Normalize(a), Normalize(b), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
     private static NuGetVersion? GetLatestFromLocalFolder(string path, string packageId)

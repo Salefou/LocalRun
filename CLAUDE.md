@@ -108,6 +108,13 @@ shell escaping.
   The CLI never passes a null suffix: `RepackOptionsParser` defaults it to `local`, so `pack` never
   plans a stable version (cache trap: a local 1.4.3 in ~/.nuget/packages shadows the official one).
   The README "Versioning rules" table shows the CLI-level result; change it with either.
+- **Base and iteration** (user's choices, 2026-10-25): the base version lives in the config, so the plot shows
+  what `pack` starts from and `pack` is a pure function of (config, flags): `build --remote` records
+  `RemoteVersion` (the local feed is excluded, else our own iterations would become the base), and
+  `pack` uses it over the csproj `Version`. A suffix gets one iteration number `.N` appended
+  (`PackageIterations`): 1 + the highest N of the planned versions found in the local feed and the global
+  packages folders, **shared by the whole plan**, no counter file. So repeating the same `pack` command plans
+  the next attempt. The csproj is never written (it would show up in `--git-changes` and in diffs).
 
 ## Conventions
 
@@ -170,6 +177,10 @@ shell escaping.
   dropped by the user: graceful stop, one-shot output and failure rules would each need a host process per window.
 - 2026-10-24, branch `claude/release`: MIT licence, third-party notices, SemVer from 0.1.0, `lrun version`,
   CHANGELOG, nuget.org package metadata and readme (`src/LocalRun/PACKAGE.md`), `release.yml`.
+- 2026-10-25, branch `claude/remote-build-counter` (0.2.0): `--remote` moved from `pack` to `build` (pointer
+  error on `pack --remote`); iteration number on the prerelease label. Writing the csproj or taking the
+  highest remote version at pack time were the rejected alternatives; colleagues pushing odd versions were
+  judged rare (custom suffixes handle them).
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
 
 ## Known issues / candidate tasks
@@ -182,5 +193,7 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
   via elkjs embedded in the page (Graphviz's `dot` layout is fine; the costs are the ~20 MB native binaries,
   win-x64/linux-x64 only, and a static image), hover to highlight a project's users-of / deps-of cones, search,
   zoom. MSAGL (pure .NET) was the portability-only alternative. Not started.
+- `go` restores without `--force`, so consumers with floating `*-*` references keep the previous iteration
+  (no-op restore; observed in `samples/` on 2026-10-25). Proposed to the user, not decided.
 - `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
   `IsNewerThanRemoteAsync`).

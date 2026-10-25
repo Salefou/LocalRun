@@ -62,12 +62,14 @@ so you can **inspect or hand-edit** the plan between steps.
 
 1. **`build`** finds every `*.csproj` under the root, reads its name, `OutputType`,
    `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
-   that reference them. Optional filters keep only the part of the graph you care about. The result
+   that reference them. Optional filters keep only the part of the graph you care about. With `--remote`,
+   it also records each project's highest version on your NuGet sources. The result
    is written in topological order to `localrun.config.json`.
 2. **`plot`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
-3. **`pack`** decides, for every project, its current version (from the csproj, or from
-   your NuGet sources with `--remote`) and the bumped version it will be packed as. Nothing is built
-   yet: the plan is written to `repack.config.json` for you to review.
+3. **`pack`** decides, for every project, the version it will be packed as: the config's version (the
+   remote one when recorded, else the csproj's), bumped, with your suffix and an iteration number that
+   goes up each time you pack the same versions again. Nothing is built yet: the plan is written to
+   `repack.config.json` for you to review.
 4. **`go`** executes the plan: `dotnet restore` with the local feed added to your sources, then
    `dotnet pack --no-restore -o <feed>`, each project getting its planned version.
    `pack --go` does steps 3 and 4 in one command, when you don't need to review the plan.
@@ -105,7 +107,7 @@ so you can **inspect or hand-edit** the plan between steps.
 - **Tested on Windows x64**, which is what CI runs. It is written to run on Linux and macOS too, but that
   is untested, and `plot` needs the Graphviz binaries bundled by `Rubjerg.Graphviz`, which exist for
   win-x64 and linux-x64 only.
-- For `--remote`: the NuGet sources configured in your user/machine `NuGet.Config`.
+- For `build --remote`: the NuGet sources that apply to each project, as for a restore from its folder.
 
 ---
 
@@ -254,6 +256,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--git-changes` | off | Add the projects with pending git changes to the `--users-of` names (see below), so they're kept with everything that uses them. |
 | `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
+| `--remote` | off | Record each project's highest version (prerelease included) across the NuGet sources that apply to its folder, as `RemoteVersion`. The local feed is skipped: it only holds your own builds. `pack` then starts from it instead of the csproj version, and `plot` shows it when it differs. Projects not found keep the csproj version. |
 | `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.svg`, printed as a link). |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
@@ -333,9 +336,8 @@ Builds nothing, unless `--go` is given: then the plan is still written, and exec
 | `--config <file>` | `localrun.config.json` | Config file to read. |
 | `--repack-config <file>` | `repack.config.json` | Repack config file to write. |
 | `--patch` / `--minor` / `--major` | no bump | Version component to increment. At most one. |
-| `--suffix <text>` | `local` | Prerelease label to set, without the dash: `--suffix dev` → `1.4.3-dev`. Letters, digits, `-` and `.`-separated parts. Never empty: see [why](#versioning-rules). |
+| `--suffix <text>` | `local` | Prerelease label to set, without the dash, followed by the iteration number: `--suffix dev` → `1.4.3-dev.1`, then `1.4.3-dev.2` the next time. Letters, digits, `-` and `.`-separated parts. Never empty: see [why](#versioning-rules). |
 | `--alpha` | — | Shorthand for `--patch --suffix alpha`. Cannot be combined with another bump or `--suffix`. |
-| `--remote` | off | Take the current version from the highest version found across your enabled NuGet sources instead of the csproj. |
 | `--clean` | off | Make `go` run `dotnet clean` before restoring. |
 | `--go` | off | Execute the plan right after writing it (`pack` then `go` in one command). |
 
@@ -343,6 +345,8 @@ Builds nothing, unless `--go` is given: then the plan is still written, and exec
 lrun pack --patch --suffix dev          # write the plan, review it, then `lrun go`
 lrun pack --patch --suffix dev --go     # plan and execute in one go
 ```
+
+`--remote` is a `build` option since 0.2.0: `pack --remote` is rejected (exit code `2`) with a pointer to it.
 
 See [Versioning rules](#versioning-rules) for exactly how versions are computed.
 
@@ -440,6 +444,7 @@ All files are indented JSON, safe to commit, diff or edit by hand between steps.
       "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // null if no solution references it
       "Type": "library",                        // "executable" when <OutputType>Exe</OutputType>
       "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // first <Version>, else 1.0.0
+      "RemoteVersion": { "Major": 1, "Minor": 5, "PatchAndSuffix": "0" },   // only with build --remote, when found
       "Dependencies": []                        // names of other projects in the graph
     }
   ]
@@ -464,7 +469,7 @@ they are ignored.)
           "Name": "Shared.Pricing",
           "Depth": 0,
           "FromVersion": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },
-          "ToVersion":   { "Major": 1, "Minor": 4, "PatchAndSuffix": "3-dev" }
+          "ToVersion":   { "Major": 1, "Minor": 4, "PatchAndSuffix": "3-dev.1" }
         }
       ]
     }
@@ -485,31 +490,51 @@ Graphviz tooling.
 ## Versioning rules
 
 A version is stored as `Major`, `Minor` and `PatchAndSuffix` (everything after the second dot, e.g.
-`3`, `3-beta`, `3.7`, `*`). The reference version is the csproj `<Version>` (or `1.0.0` when absent;
-short versions are completed with zeros, `1.4` → `1.4.0`), or the highest version on your NuGet
-sources with `--remote`, prerelease label included (`1.0.0` when the package is not found).
+`3`, `3-beta`, `3.7`, `*`). The reference version is the one in the config: the `RemoteVersion` recorded
+by `build --remote` (the highest on your NuGet sources, prerelease label included) when there is one,
+else the csproj `<Version>` (or `1.0.0` when absent; short versions are completed with zeros, `1.4` → `1.4.0`).
 
 The rules: **a bump resets the lower components**; without one, the version is kept. **The prerelease
 label is always replaced** by `--suffix`, which defaults to **`local`**: `pack` never plans a stable
-version.
+version. **An iteration number ends the label**, starting at `.1`.
 
 | Options | `1.4.2` becomes | `1.4.2-beta` becomes | `1.4.2.7` becomes |
 |---|---|---|---|
-| *(none)* | `1.4.2-local` | `1.4.2-local` | `1.4.2.7-local` |
-| `--suffix dev` | `1.4.2-dev` | `1.4.2-dev` | `1.4.2.7-dev` |
-| `--patch` | `1.4.3-local` | `1.4.3-local` | `1.4.3-local` |
-| `--patch --suffix dev` | `1.4.3-dev` | `1.4.3-dev` | `1.4.3-dev` |
-| `--alpha` | `1.4.3-alpha` | `1.4.3-alpha` | `1.4.3-alpha` |
-| `--minor` | `1.5.0-local` | `1.5.0-local` | `1.5.0-local` |
-| `--major --suffix dev` | `2.0.0-dev` | `2.0.0-dev` | `2.0.0-dev` |
+| *(none)* | `1.4.2-local.1` | `1.4.2-local.1` | `1.4.2.7-local.1` |
+| `--suffix dev` | `1.4.2-dev.1` | `1.4.2-dev.1` | `1.4.2.7-dev.1` |
+| `--patch` | `1.4.3-local.1` | `1.4.3-local.1` | `1.4.3-local.1` |
+| `--patch --suffix dev` | `1.4.3-dev.1` | `1.4.3-dev.1` | `1.4.3-dev.1` |
+| `--alpha` | `1.4.3-alpha.1` | `1.4.3-alpha.1` | `1.4.3-alpha.1` |
+| `--minor` | `1.5.0-local.1` | `1.5.0-local.1` | `1.5.0-local.1` |
+| `--major --suffix dev` | `2.0.0-dev.1` | `2.0.0-dev.1` | `2.0.0-dev.1` |
 
 A floating patch (`1.4.*`) is treated as `0`. A suffix must be a valid prerelease label: letters,
 digits and `-`, optionally in dot-separated parts (`dev`, `beta.2`, `ci-42`), without the leading dash.
+The iteration number is appended to it as one more part: `--suffix beta.2` → `…-beta.2.1`.
+
+**The iteration number** is one more than the highest iteration of the planned versions already packed,
+looked up in the local feed and in the NuGet global packages folders (where consumers restored them).
+It is shared by the whole plan: if Primitives reached `1.5.0-alpha.3` and Logging `2.4.0-alpha.1`, the
+next pack plans `alpha.4` for both. So the same command, run again, plans the next attempt at the same
+versions:
+
+```sh
+lrun build --root ./repos --users-of Shared.Pricing --remote
+lrun pack --minor --suffix alpha --go     # 1.5.0-alpha.1
+lrun pack --minor --suffix alpha --go     # after another change: 1.5.0-alpha.2
+# days later: refresh the bases from your sources, then the same command again
+lrun build --root ./repos --users-of Shared.Pricing --remote
+lrun pack --minor --suffix alpha --go     # 1.5.0-alpha.3, or 1.6.0-alpha.1 if 1.5.0 was released meanwhile
+```
+
+Use a dot before numbers in your own labels too: prerelease parts are compared as numbers only when
+they are all digits, so `alpha-10` sorts *before* `alpha-9`, while `alpha.10` sorts after `alpha.9`.
 
 **Why never stable:** NuGet never re-downloads a version already in `~/.nuget/packages`. A local
 `1.4.3` would keep shadowing the official `1.4.3` after CI publishes it, and you'd run your local build
 under the official number. A prerelease label also orders your local packages *below* the real release
-of the same number (`1.4.3-local` < `1.4.3`), so a later official release always wins.
+of the same number (`1.4.3-local.1` < `1.4.3`), so a later official release always wins. The iteration
+number avoids the same trap between your own packs: each one gets a version the cache has never seen.
 
 Consumers only pick prereleases up through a version that allows them: a floating `*-*` or `1.4.*-*`,
 an exact prerelease version, or a project reference. A floating `1.4.*` ignores prereleases.
@@ -597,7 +622,7 @@ The minimum level is `Information`. Override it with the `LOCALRUN_LOG_LEVEL` en
 full stack trace of a failing command.
 
 ```powershell
-$env:LOCALRUN_LOG_LEVEL = "Debug"; lrun pack --remote
+$env:LOCALRUN_LOG_LEVEL = "Debug"; lrun build --remote
 ```
 
 ---
@@ -696,8 +721,8 @@ and, for a LocalRun-packed dependency, that its project sits at a lower depth in
 **Consumers keep the old version** — check that the local feed is a NuGet source for them, that the
 bumped version is higher than what they reference (or that they use a floating version), and clear
 stale caches. Re-packing the **same** version number is the usual culprit: the NuGet global packages
-folder keeps the first copy, so bump the version (e.g. a new suffix) or run
-`dotnet nuget locals global-packages --clear`.
+folder keeps the first copy. `pack` plans a new iteration each time, but running `go` twice on the same
+plan repacks the same versions: run `pack` again instead, or `dotnet nuget locals global-packages --clear`.
 
 **`Dependency cycle left out of the config: A, B`** — the listed projects reference each other, possibly
 through packages, so `build` dropped them. Break the cycle to get them back. `Dependency cycle
@@ -728,8 +753,10 @@ Exit it and re-run the script.
   killed from outside; Ctrl+C or closing the terminal stops them.
 - **`--git-changes`** compares with your last fetch and only knows `origin`; files changed outside
   project folders mark the whole repository, even when only docs changed.
-- `--remote` reads the user/machine `NuGet.Config`, not repository-level ones, and queries sources one
-  at a time.
+- `build --remote` queries projects and sources one at a time, so it takes a while on a large config.
+- **Floating references keep the previous iteration**: `go` restores normally, and NuGet skips a restore
+  whose inputs didn't change, so a consumer with `*-*` stays on the version it resolved last time
+  (`dotnet restore --force` re-resolves it).
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
   told apart, so they're all left out of the graph (with an error), rather than handled.
 - **`plot` draws a static SVG** with the bundled Graphviz, so it only works on win-x64 and linux-x64. A

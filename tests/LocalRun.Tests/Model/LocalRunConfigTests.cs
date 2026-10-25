@@ -16,4 +16,15 @@ public class LocalRunConfigTests
 
         Assert.Equal("A", Assert.Single(config!.Projects).Name);
     }
+
+    [Fact]
+    public void RemoteVersion_IsWrittenOnlyWhenKnown()
+    {
+        var project = new ProjectNode { Name = "A", Path = "A/A.csproj", Type = "library", Version = ProjectVersion.Parse("1.0.0"), Dependencies = [] };
+        Assert.DoesNotContain("RemoteVersion", JsonSerializer.Serialize(project));
+
+        project.RemoteVersion = ProjectVersion.Parse("1.2.0-beta");
+        var roundTripped = JsonSerializer.Deserialize<ProjectNode>(JsonSerializer.Serialize(project));
+        Assert.Equal(ProjectVersion.Parse("1.2.0-beta"), roundTripped!.RemoteVersion);
+    }
 }

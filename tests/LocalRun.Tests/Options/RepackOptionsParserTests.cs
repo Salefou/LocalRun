@@ -16,12 +16,19 @@ public class RepackOptionsParserTests
     [Fact]
     public void Suffix_IsReadWithTheBump()
     {
-        var options = Parse("--patch", "--suffix", "dev", "--remote");
+        var options = Parse("--patch", "--suffix", "dev");
 
         Assert.Equal(BumpType.Patch, options.BumpOptions!.BumpType);
         Assert.Equal("dev", options.BumpOptions.Suffix);
-        Assert.True(options.UseRemoteAsVersionReference);
         Assert.False(options.CleanBeforeRestore);
+    }
+
+    [Fact]
+    public void Remote_IsRejectedWithItsNewPlace()
+    {
+        var ex = Assert.Throws<UsageException>(() => Parse("--patch", "--remote"));
+
+        Assert.Contains("build --remote", ex.Message);
     }
 
     [Fact]
@@ -36,7 +43,7 @@ public class RepackOptionsParserTests
     [Theory]
     [InlineData]
     [InlineData("--patch")]
-    [InlineData("--major", "--remote")]
+    [InlineData("--major")]
     public void NoSuffix_DefaultsToLocal(params string[] argv)
     {
         Assert.Equal("local", Parse(argv).BumpOptions!.Suffix);

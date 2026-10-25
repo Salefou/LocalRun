@@ -12,6 +12,7 @@ public static class BuildConfigOptionsParser
             IncludeExternal = args.Flag("--include-external"),
             Union = args.Flag("--union"),
             WithServices = args.Flag("--with-services"),
+            RemoteVersions = args.Flag("--remote"),
         };
         // --git-changes adds to the --users-of side
         bool hasUsersOf = options.RetainDependsOn != null || options.RetainGitChanges;

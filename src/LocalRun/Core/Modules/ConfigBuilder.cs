@@ -65,6 +65,29 @@ public class ConfigBuilder
         return config;
     }
 
+    /// <summary>
+    /// <c>--remote</c>: records each project's highest version across the NuGet sources that apply to its folder,
+    /// except the local feed, which only holds our own builds: starting from those would bump an iteration again.
+    /// </summary>
+    public async Task FetchRemoteVersionsAsync(LocalRunConfig config)
+    {
+        logger.LogInformation("[🌐] Fetching the versions on your NuGet sources...");
+        var nugetVersionChecker = new NugetVersionChecker();
+        foreach (var proj in config.Projects)
+        {
+            string projectFolder = Path.GetDirectoryName(Path.Combine(config.RootPath, proj.Path))!;
+            var remote = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name, projectFolder, config.LocalNugetPath);
+            if (remote == null)
+            {
+                logger.LogInformation("  {Project}: not found, pack will start from the csproj version {Version}", proj.Name, proj.Version);
+                continue;
+            }
+            // Normalized keeps the prerelease label (1.4.2-beta); .Version would give 1.4.2.0
+            proj.RemoteVersion = ProjectVersion.Parse(remote.ToNormalizedString());
+            logger.LogInformation("  {Project}: {RemoteVersion} (csproj {Version})", proj.Name, proj.RemoteVersion, proj.Version);
+        }
+    }
+
     /// <summary>The projects of the graph with pending git changes, which <c>--git-changes</c> adds to the <c>--users-of</c> names.</summary>
     private static List<string> FindGitChanges(string rootPath, string[] csprojs, DependencyGraph graph)
     {

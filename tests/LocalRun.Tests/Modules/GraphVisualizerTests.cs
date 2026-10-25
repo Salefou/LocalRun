@@ -48,6 +48,20 @@ public class GraphVisualizerTests
     }
 
     [Fact]
+    public void RemoteVersion_IsShownOnlyWhenItDiffers()
+    {
+        var behind = Project("Behind", "library");
+        behind.RemoteVersion = ProjectVersion.Parse("1.2.0");
+        var upToDate = Project("UpToDate", "library");
+        upToDate.RemoteVersion = ProjectVersion.Parse("1.0.0");
+
+        var dot = Dot(behind, upToDate);
+
+        Assert.Contains(dot, line => line.StartsWith("\"Behind\" [label=\"Behind\\n1.0.0\\nremote 1.2.0\\n\""));
+        Assert.Contains(dot, line => line.StartsWith("\"UpToDate\" [label=\"UpToDate\\n1.0.0\\n\""));
+    }
+
+    [Fact]
     public void Executables_AreGreen_LibrariesBlue()
     {
         var dot = Dot(Project("Lib", "library"), Project("Tool", "executable"));
