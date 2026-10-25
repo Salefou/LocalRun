@@ -90,6 +90,20 @@ public class BuildConfigOptionsParserTests
     {
         Assert.False(Parse().RemoteVersions);
         Assert.True(Parse("--remote").RemoteVersions);
+        Assert.False(Parse("--remote").RemoteAllSources);
+    }
+
+    [Fact]
+    public void AllSources_IsReadWithRemote()
+    {
+        Assert.True(Parse("--remote", "--all-sources").RemoteAllSources);
+    }
+
+    [Fact]
+    public void AllSources_WithoutRemote_IsRejected()
+    {
+        var ex = Assert.Throws<UsageException>(() => Parse("--all-sources"));
+        Assert.Contains("--remote", ex.Message);
     }
 
     [Fact]

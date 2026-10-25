@@ -203,14 +203,14 @@ Then record the versions on the NuGet sources:
 
 ```powershell
 lrun build --root workspace --local-nuget .feed --remote
-lrun build --root workspace --local-nuget .other-feed --remote --plot
+lrun build --root workspace --local-nuget .feed --remote --all-sources --plot
 lrun pack --patch --suffix dev
 ```
 
-- The first `build` logs `[🌐] Fetching the versions on your NuGet sources...`, then `not found, pack will
-  start from the csproj version …` for every project: `.feed/` is a source in `NuGet.config`, but as the local
-  feed it is skipped, and nuget.org has no `LrSample.*`.
-- With another local feed, `.feed/` counts as an ordinary source: `LrSample.Primitives: 1.0.1-dev.2 (csproj 1.0.0)`,
+- The first `build` logs `[🌐] Fetching the versions on your NuGet sources (skipping the local feed …\.feed,
+  which only holds your builds)...`, then `not found, pack will start from the csproj version …` for every
+  project: `.feed/` is a source in `NuGet.config`, but as the local feed it is skipped, and nuget.org has no `LrSample.*`.
+- With `--all-sources`, `.feed/` is queried too: `LrSample.Primitives: 1.0.1-dev.2 (csproj 1.0.0)`,
   `LrSample.Logging: 2.3.2-dev.2 (csproj 2.3.1-beta)`, recorded as `RemoteVersion` in the config. The plot
   shows `remote 1.0.1-dev.2` under Primitives' `1.0.0`.
 - `pack` then starts from them: `LrSample.Primitives (1.0.1-dev.2) to (1.0.2-dev.1)`, iteration 1 since

@@ -68,15 +68,19 @@ public class ConfigBuilder
     /// <summary>
     /// <c>--remote</c>: records each project's highest version across the NuGet sources that apply to its folder,
     /// except the local feed, which only holds our own builds: starting from those would bump an iteration again.
+    /// <paramref name="includeLocalFeed"/> (<c>--all-sources</c>) queries it too, when a NuGet.Config lists it.
     /// </summary>
-    public async Task FetchRemoteVersionsAsync(LocalRunConfig config)
+    public async Task FetchRemoteVersionsAsync(LocalRunConfig config, bool includeLocalFeed = false)
     {
-        logger.LogInformation("[🌐] Fetching the versions on your NuGet sources...");
+        if (includeLocalFeed)
+            logger.LogInformation("[🌐] Fetching the versions on all your NuGet sources, the local feed {LocalFeed} included...", config.LocalNugetPath);
+        else
+            logger.LogInformation("[🌐] Fetching the versions on your NuGet sources (skipping the local feed {LocalFeed}, which only holds your builds)...", config.LocalNugetPath);
         var nugetVersionChecker = new NugetVersionChecker();
         foreach (var proj in config.Projects)
         {
             string projectFolder = Path.GetDirectoryName(Path.Combine(config.RootPath, proj.Path))!;
-            var remote = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name, projectFolder, config.LocalNugetPath);
+            var remote = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name, projectFolder, includeLocalFeed ? null : config.LocalNugetPath);
             if (remote == null)
             {
                 logger.LogInformation("  {Project}: not found, pack will start from the csproj version {Version}", proj.Name, proj.Version);

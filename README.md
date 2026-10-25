@@ -257,6 +257,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 | `--remote` | off | Record each project's highest version (prerelease included) across the NuGet sources that apply to its folder, as `RemoteVersion`. The local feed is skipped: it only holds your own builds. `pack` then starts from it instead of the csproj version, and `plot` shows it when it differs. Projects not found keep the csproj version. |
+| `--all-sources` | off | With `--remote`: query the local feed too, when a `NuGet.Config` lists it. Your own builds then count as the base, so the next `--minor` bumps past your last iteration instead of iterating on it. |
 | `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.svg`, printed as a link). |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).

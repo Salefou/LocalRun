@@ -111,7 +111,7 @@ public static class LocalRunCli
         var configBuilder = new ConfigBuilder();
         LocalRunConfig localRunConfig = configBuilder.BuildConfig(rootPath, configOptions, localNugetPath);
         if (configOptions.RemoteVersions)
-            await configBuilder.FetchRemoteVersionsAsync(localRunConfig);
+            await configBuilder.FetchRemoteVersionsAsync(localRunConfig, includeLocalFeed: configOptions.RemoteAllSources);
         await WriteToFile(configPath, localRunConfig);
         logger.LogInformation("[✔ ] Configuration written to {Path}", configPath);
 
@@ -268,6 +268,7 @@ public static class LocalRunCli
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
         Console.WriteLine("        --remote                Record each project's highest version on its NuGet sources (local feed");
         Console.WriteLine("                                excepted); pack then starts from it instead of the csproj version");
+        Console.WriteLine("        --all-sources           With --remote: query the local feed too, when a NuGet.Config lists it");
         Console.WriteLine("        --plot                Then plot the graph, as 'plot' does with its defaults");
         Console.WriteLine();
 

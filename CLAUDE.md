@@ -110,7 +110,8 @@ shell escaping.
   The README "Versioning rules" table shows the CLI-level result; change it with either.
 - **Base and iteration** (user's choices, 2026-10-25): the base version lives in the config, so the plot shows
   what `pack` starts from and `pack` is a pure function of (config, flags): `build --remote` records
-  `RemoteVersion` (the local feed is excluded, else our own iterations would become the base), and
+  `RemoteVersion` (the local feed is excluded, else our own iterations would become the base;
+  `--all-sources`, user's request, includes it), and
   `pack` uses it over the csproj `Version`. A suffix gets one iteration number `.N` appended
   (`PackageIterations`): 1 + the highest N of the planned versions found in the local feed and the global
   packages folders, **shared by the whole plan**, no counter file. So repeating the same `pack` command plans

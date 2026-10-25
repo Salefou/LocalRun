@@ -19,4 +19,7 @@ public class BuildConfigOptions
 
     /// <summary>Record each project's highest version on its NuGet sources, for <c>pack</c> to start from.</summary>
     public bool RemoteVersions { get; internal set; }
+
+    /// <summary>With <see cref="RemoteVersions"/>: query the local feed too, when a NuGet.Config lists it.</summary>
+    public bool RemoteAllSources { get; internal set; }
 }
