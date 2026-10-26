@@ -61,7 +61,7 @@ so you can **inspect or hand-edit** the plan between steps.
 ```
 
 1. **`build`** finds every `*.csproj` under the root, reads its name, `OutputType`,
-   `<Version>`, `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
+   version (`<Version>`, else `<VersionPrefix>`-`<VersionSuffix>`), `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
    that reference them. Optional filters keep only the part of the graph you care about. It also records
    each project's latest version on your NuGet sources and in the local feed (unless `--csproj`). The result
    is written in topological order to `localrun.config.json`.
@@ -369,6 +369,11 @@ a depth in parallel:
    dependency (with a plain `-p:PackageVersion`, MSBuild would hand the packed project's own version to
    its references too). A project that sets `<PackageVersion>` itself in its `.csproj` overrides this.
 
+Like `up`'s, these commands get the `Solution*` properties of the project's solution (`SolutionDir`,
+`SolutionPath`, `SolutionName`, …), as when Visual Studio builds the solution. A project built on its own
+has none, so an `<OutputPath>$(SolutionDir)\bin\…` would point at the root of the drive. Projects that
+no solution references get none.
+
 | Option | Default | Description |
 |---|---|---|
 | `--repack-config <file>` | `repack.config.json` | Repack config file to read. |
@@ -384,7 +389,8 @@ the services, as `docker compose up` does for containers:
    sharing a project reference would otherwise build it concurrently and collide on its output. A
    build failure stops `up` before anything starts, and only then is the build output shown. As with
    `go`, the config's local feed is added to the restore sources, so the packages `go` produced are
-   found even if your `NuGet.config` doesn't list that feed.
+   found even if your `NuGet.config` doesn't list that feed. Builds and runs get the `Solution*`
+   properties of the project's solution, as in `go`.
 2. **Start** them all, in dependency order, with `dotnet run --no-build --project <csproj>`, without
    waiting for each one. `dotnet run` still applies the project's `launchSettings.json` (URLs,
    environment variables). Every output line is prefixed with the project name.
@@ -446,7 +452,7 @@ All files are indented JSON, safe to commit, diff or edit by hand between steps.
       "Path": "pricing\\src\\Shared.Pricing\\Shared.Pricing.csproj",
       "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // null if no solution references it
       "Type": "library",                        // "executable" when <OutputType>Exe</OutputType>
-      "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // first <Version>, else 1.0.0
+      "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // <Version>, else <VersionPrefix>[-<VersionSuffix>], else 1.0.0
       "LatestVersion": { "Major": 1, "Minor": 5, "PatchAndSuffix": "0" },   // on your NuGet sources; absent with --csproj or when not found
       "Dependencies": []                        // names of other projects in the graph
     }
@@ -470,6 +476,7 @@ they are ignored.)
         {
           "PathToCsproj": "C:\\work\\repos\\pricing\\src\\Shared.Pricing\\Shared.Pricing.csproj",
           "Name": "Shared.Pricing",
+          "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // gives the dotnet commands $(SolutionDir)
           "Depth": 0,
           "FromVersion": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },
           "ToVersion":   { "Major": 1, "Minor": 4, "PatchAndSuffix": "3-dev.1" }
@@ -495,7 +502,8 @@ Graphviz tooling.
 A version is stored as `Major`, `Minor` and `PatchAndSuffix` (everything after the second dot, e.g.
 `3`, `3-beta`, `3.7`, `*`). The reference version is the one in the config: the `LatestVersion` recorded
 by `build` (the highest on the NuGet sources of the project and in the local feed, prerelease label
-included) when there is one, else the csproj `<Version>` (or `1.0.0` when
+included) when there is one, else the csproj version: `<Version>`, else `<VersionPrefix>` with its
+`<VersionSuffix>` (dropped when written as an MSBuild property like `$(BuildNumber)`), or `1.0.0` when
 absent; short versions are completed with zeros, `1.4` → `1.4.0`). `build --csproj` records none.
 
 The rules: **a bump resets the lower components**; without one, the version is kept. **`--next` continues

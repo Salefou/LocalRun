@@ -7,6 +7,15 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Fixed
+
+- `build` reads a csproj version from `<VersionPrefix>` (and `<VersionSuffix>`) when there is no `<Version>`,
+  instead of falling back to 1.0.0, and no longer mistakes a `PackageReference`'s `<Version>` child for it.
+- `build` sends the credentials of your `NuGet.Config` (`packageSourceCredentials`) when it queries the sources
+  for the latest versions: authenticated feeds answered 401/403 and their packages were reported as not found.
+- `go` and `up` give their `dotnet` commands the `Solution*` properties of the project's solution, as Visual
+  Studio does: an `<OutputPath>` built on `$(SolutionDir)` pointed at the root of the drive (`C:\bin\…`).
+
 ## [0.2.0] - 2026-10-26
 
 ### Changed
