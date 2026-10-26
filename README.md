@@ -83,6 +83,8 @@ so you can **inspect or hand-edit** the plan between steps.
 - A dependency is kept only if **some solution under the root references a project with that name**,
   i.e. it is one of *your* projects. Third-party packages (`Newtonsoft.Json`, …) are dropped.
   `--include-external` keeps every dependency, including projects that no solution references.
+- **Test projects** (referencing `Microsoft.NET.Test.Sdk`, `<IsTestProject>true</IsTestProject>`, or the
+  `MSTest.Sdk` SDK) are left out, as nothing is packed from or run with them; `--tests` keeps them.
 - Projects are ordered with a **layered Kahn's algorithm**. A project's **depth** is the length of
   the longest path from a root (a project with no dependencies), so every dependency sits at a strictly
   lower depth than its dependents. Within a depth, projects are sorted by name so output is deterministic.
@@ -257,6 +259,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--git-changes` | off | Add the projects with pending git changes to the `--users-of` names (see below), so they're kept with everything that uses them. |
 | `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
+| `--tests` | off | Keep the test projects. By default `build` leaves them out (and lists them): projects referencing `Microsoft.NET.Test.Sdk`, setting `<IsTestProject>true</IsTestProject>`, or using the `MSTest.Sdk` project SDK. |
 | `--csproj` | off | Don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` records each project's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
 | `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.svg`, printed as a link). |
 

@@ -16,7 +16,12 @@ public class ConfigBuilder
         logger.LogInformation("[⚙ ] Building dependency graph from {RootPath}...", rootPath);
 
         string[] csprojs = Directory.GetFiles(rootPath, "*.csproj", SearchOption.AllDirectories);
-        var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal);
+        var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal, options.IncludeTests);
+        if (graph.LeftOutTests.Count != 0)
+        {
+            logger.LogInformation("[🧪] Left out {Count} test project(s) ('--tests' keeps them): {Projects}",
+                graph.LeftOutTests.Count, string.Join(", ", graph.LeftOutTests));
+        }
         foreach (var collision in graph.Collisions)
         {
             logger.LogError("Several projects are named {Name}, all left out of the config: {Paths}",
@@ -116,7 +121,11 @@ public class ConfigBuilder
                 throw new UsageException($"Ambiguous project(s) for '{flag}': {string.Join(", ", collided)} (several projects share the name, see the error above).");
             var unknown = graph.FindUnknown(names);
             if (unknown.Count != 0)
-                throw new UsageException($"Unknown project(s) for '{flag}': {string.Join(", ", unknown)}.");
+            {
+                bool tests = unknown.Any(name => graph.LeftOutTests.Contains(name, StringComparer.OrdinalIgnoreCase));
+                throw new UsageException($"Unknown project(s) for '{flag}': {string.Join(", ", unknown)}."
+                    + (tests ? " Test projects are left out unless you give '--tests'." : string.Empty));
+            }
         }
     }
 }
