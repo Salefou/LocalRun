@@ -65,6 +65,7 @@ internal class RepackConfigBuilder
                 {
                     Name = proj.Name,
                     PathToCsproj = pathToCsproj,
+                    SolutionPath = proj.SolutionPath,
                     FromVersion = version,
                     ToVersion = bumpedVersion,
                     Depth = depth,

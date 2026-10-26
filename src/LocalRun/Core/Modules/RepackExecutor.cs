@@ -76,7 +76,7 @@ public class RepackExecutor
         var levelPackingTasks = projects.Select(async proj =>
         {
             logger.LogInformation("[📦] [Depth {Depth}] Packing {Project} ({FromVersion}) to ({ToVersion})...", depth, proj.Name, proj.FromVersion, proj.ToVersion);
-            await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{nugetRepoPath}\" -p:CustomBeforeMicrosoftCommonProps=\"{versionsPropsPath}\"");
+            await RunProcessAsync("dotnet", $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{nugetRepoPath}\" -p:CustomBeforeMicrosoftCommonProps=\"{versionsPropsPath}\"{SolutionProperties.Arguments(proj.SolutionPath)}");
         });
         await Task.WhenAll(levelPackingTasks);
     }
@@ -86,7 +86,7 @@ public class RepackExecutor
         var levelCleanAndRestoreTasks = projects.Select(async proj =>
         {
             logger.LogInformation("[🔁] [Depth {Depth}] Cleaning {Project}...", depth, proj.Name);
-            await RunProcessAsync("dotnet", $"clean \"{proj.PathToCsproj}\" --verbosity minimal");
+            await RunProcessAsync("dotnet", $"clean \"{proj.PathToCsproj}\" --verbosity minimal{SolutionProperties.Arguments(proj.SolutionPath)}");
         });
         await Task.WhenAll(levelCleanAndRestoreTasks);
     }
@@ -99,7 +99,7 @@ public class RepackExecutor
             // The local feed is added to the sources from NuGet.config (--source would replace them all,
             // breaking restore of any third-party package that isn't in the global packages folder yet).
             // --force: a no-op restore would keep floating *-* references on the previous iteration
-            await RunProcessAsync("dotnet", $"restore \"{proj.PathToCsproj}\" --force -p:RestoreAdditionalProjectSources=\"{nugetRepoPath}\" --verbosity minimal");
+            await RunProcessAsync("dotnet", $"restore \"{proj.PathToCsproj}\" --force -p:RestoreAdditionalProjectSources=\"{nugetRepoPath}\" --verbosity minimal{SolutionProperties.Arguments(proj.SolutionPath)}");
         });
         await Task.WhenAll(levelCleanAndRestoreTasks);
     }
