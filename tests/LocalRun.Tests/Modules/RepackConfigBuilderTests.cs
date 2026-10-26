@@ -79,4 +79,42 @@ public sealed class RepackConfigBuilderTests : IDisposable
 
         Assert.Equal("1.4.2-beta+sha", plan["Lib"].ToVersion.AsVersionString());
     }
+
+    [Fact]
+    public async Task EarlierIterations_AreFoundUnderThePackageId()
+    {
+        Directory.CreateDirectory(Feed);
+        File.WriteAllText(Path.Combine(Feed, "Acme.Lib.1.5.0-alpha.4.nupkg"), "");
+        var lib = new ProjectNode
+        {
+            Name = "Lib",
+            PackageId = "Acme.Lib",
+            Path = "Lib/Lib.csproj",
+            Type = "library",
+            Version = ProjectVersion.Parse("1.4.2"),
+            Dependencies = [],
+        };
+
+        var plan = await Plan(new BumpOptions { BumpType = BumpType.Minor, Suffix = "alpha" }, lib);
+
+        Assert.Equal("1.5.0-alpha.5", plan["Lib"].ToVersion.AsVersionString());
+    }
+
+    [Theory]
+    [InlineData("<PropertyGroup><PackageVersion>9.9.9</PackageVersion></PropertyGroup>", true)]
+    [InlineData("<PropertyGroup><PackageVersion Condition=\"'$(PackageVersion)' == ''\">9.9.9</PackageVersion></PropertyGroup>", false)]
+    [InlineData("<PropertyGroup><Version>9.9.9</Version></PropertyGroup>", false)]
+    public void OverridesPackageVersion_OnlyWhenTheCsprojSetsIt(string body, bool expected)
+    {
+        string csproj = Path.Combine(root, "Lib.csproj");
+        File.WriteAllText(csproj, $"""<Project Sdk="Microsoft.NET.Sdk">{body}</Project>""");
+
+        Assert.Equal(expected, RepackConfigBuilder.OverridesPackageVersion(csproj));
+    }
+
+    [Fact]
+    public void OverridesPackageVersion_IsFalse_ForAMissingCsproj()
+    {
+        Assert.False(RepackConfigBuilder.OverridesPackageVersion(Path.Combine(root, "Gone.csproj")));
+    }
 }

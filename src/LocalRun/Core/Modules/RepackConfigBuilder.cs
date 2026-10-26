@@ -7,6 +7,7 @@ using LocalRun.Options;
 using Microsoft.Extensions.Logging;
 using NuGet.Configuration;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 internal class RepackConfigBuilder
 {
@@ -40,7 +41,8 @@ internal class RepackConfigBuilder
         // Only a label set by the suffix is known to end the version (a kept label may carry +metadata)
         if (repackOptions.BumpOptions?.Suffix != null && toVersions.Count != 0)
         {
-            int iteration = PackageIterations.Next(toVersions.Select(entry => (entry.Key, entry.Value, fromVersions[entry.Key])), PackageFolders(config));
+            var packageIds = config.Projects.ToDictionary(proj => proj.Name, proj => proj.PackageIdOrName, StringComparer.OrdinalIgnoreCase);
+            int iteration = PackageIterations.Next(toVersions.Select(entry => (packageIds[entry.Key], entry.Value, fromVersions[entry.Key])), PackageFolders(config));
             logger.LogInformation("[🔢] Iteration {Iteration} ({Reason})", iteration,
                 iteration == 1 ? "first pack of these versions" : $"up to .{iteration - 1} found on the sources, in the local feed or in the NuGet cache");
             foreach (var name in toVersions.Keys.ToList())
@@ -60,6 +62,11 @@ internal class RepackConfigBuilder
                 logger.LogInformation("[📦] Writing repack config of {Project} ({FromVersion}) to ({ToVersion})...", proj.Name, version, bumpedVersion);
 
                 string pathToCsproj = Path.Combine(config.RootPath, proj.Path);
+                if (OverridesPackageVersion(pathToCsproj))
+                {
+                    logger.LogWarning("{Project} sets <PackageVersion> in its csproj, which overrides the planned version: go will pack it under the csproj's",
+                        proj.Name);
+                }
                 int depth = nameToDepth[proj.Name];
                 projectRepacks.Add(new()
                 {
@@ -84,6 +91,28 @@ internal class RepackConfigBuilder
             RepackTrees = repackTrees,
             Clean = repackOptions.CleanBeforeRestore
         });
+    }
+
+    /// <summary>
+    /// Whether the csproj sets <c>PackageVersion</c> itself: its body is evaluated after the props giving the planned
+    /// version, so it wins. A default kept for an empty <c>PackageVersion</c> (condition on it) doesn't.
+    /// </summary>
+    internal static bool OverridesPackageVersion(string pathToCsproj)
+    {
+        if (!File.Exists(pathToCsproj))
+            return false;
+        try
+        {
+            var doc = XDocument.Load(pathToCsproj);
+            var ns = doc.Root!.Name.Namespace;
+            return doc.Root.Elements(ns + "PropertyGroup").Elements(ns + "PackageVersion")
+                .Any(elem => elem.Attribute("Condition")?.Value.Contains("$(PackageVersion)", StringComparison.OrdinalIgnoreCase) != true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug("Could not read {Csproj} to check for <PackageVersion>: {Error}", pathToCsproj, ex.Message);
+            return false;
+        }
     }
 
     /// <summary>Where earlier iterations can be: the local feed, and the global packages folders the consumers restored them into.</summary>

@@ -453,4 +453,45 @@ public class DependencyGraphTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [Theory]
+    [InlineData("<PackageId>Acme.Lib</PackageId>", "Acme.Lib")]
+    [InlineData("<AssemblyName>Acme.Lib</AssemblyName>", "Acme.Lib")]
+    [InlineData("<AssemblyName>Acme.Asm</AssemblyName><PackageId>Acme.Lib</PackageId>", "Acme.Lib")]
+    [InlineData("<PackageId>lib</PackageId>", null)]
+    [InlineData("<PackageId>$(Prefix).Lib</PackageId>", null)]
+    [InlineData("", null)]
+    public void ReadPackageId_FollowsTheSdkDefaults(string properties, string? expected)
+    {
+        var csproj = XDocument.Parse($"""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>{properties}</PropertyGroup></Project>""");
+
+        Assert.Equal(expected, DependencyGraph.ReadPackageId(csproj, "Lib"));
+    }
+
+    [Fact]
+    public void FromSource_LinksAPackageReference_ToTheProjectPackedUnderThatId()
+    {
+        string root = Directory.CreateTempSubdirectory("localrun-ids-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "Lib"));
+            Directory.CreateDirectory(Path.Combine(root, "App"));
+            File.WriteAllText(Path.Combine(root, "Lib", "Lib.csproj"),
+                """<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><PackageId>Acme.Lib</PackageId></PropertyGroup></Project>""");
+            File.WriteAllText(Path.Combine(root, "App", "App.csproj"),
+                """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="acme.lib" Version="1.*" /></ItemGroup></Project>""");
+            string[] csprojs = Directory.GetFiles(root, "*.csproj", SearchOption.AllDirectories);
+
+            var graph = DependencyGraph.FromSource(root, csprojs, includeProjectsWithoutSolutions: true);
+
+            var app = graph.AllProjects.Single(p => p.Name == "App");
+            Assert.Equal(["Lib"], app.Dependencies);
+            Assert.Equal("Acme.Lib", graph.AllProjects.Single(p => p.Name == "Lib").PackageIdOrName);
+            Assert.Equal(["Lib", "App"], graph.TopologicalOrder().Select(p => p.Name));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }

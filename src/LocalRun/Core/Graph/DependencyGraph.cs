@@ -78,7 +78,7 @@ public class DependencyGraph
     public static DependencyGraph FromSource(string rootPath, string[] csprojs, bool includeProjectsWithoutSolutions, bool includeTests = false)
     {
         var projectToSolution = SolutionScanner.BuildProjectToSolutionMap(rootPath);
-        var projects = new List<ProjectNode>();
+        var scanned = new List<(ProjectNode Project, List<string> PackageReferences)>();
         var leftOutTests = new List<string>();
         foreach (var csproj in csprojs.Order())
         {
@@ -103,26 +103,64 @@ public class DependencyGraph
                 logger.LogWarning("Did not find any solution referencing project {Project}", csproj);
             }
 
-            var allDependencies = doc.Descendants(ns + "ProjectReference")
-                .Select(e => Path.GetFileNameWithoutExtension(e.Attribute("Include")!.Value))
-                .Concat(doc.Descendants(ns + "PackageReference")
-                .Select(e => e.Attribute("Include")!.Value))
-                .ToList();
-            var deps = allDependencies
-                .Where(dep => includeProjectsWithoutSolutions || projectToSolution.TryGetValue(dep, out _))
-                .ToList();
-
-            projects.Add(new ProjectNode
+            scanned.Add((new ProjectNode
             {
                 Name = name,
+                PackageId = ReadPackageId(doc, name),
                 Path = Path.GetRelativePath(rootPath, csproj),
                 SolutionPath = solutionPath,
                 Type = type,
                 Version = version,
-                Dependencies = deps
+                Dependencies = [.. doc.Descendants(ns + "ProjectReference")
+                    .Select(e => Path.GetFileNameWithoutExtension(e.Attribute("Include")!.Value))],
+            }, [.. doc.Descendants(ns + "PackageReference").Select(e => e.Attribute("Include")!.Value)]));
+        }
+
+        // A package reference names a package id: the project packed under that id, when it isn't the project's name
+        var packageIdToName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (project, _) in scanned.Where(entry => entry.Project.PackageId != null))
+            packageIdToName.TryAdd(project.PackageId!, project.Name);
+        var projects = new List<ProjectNode>();
+        foreach (var (project, packageReferences) in scanned)
+        {
+            var deps = project.Dependencies
+                .Concat(packageReferences.Select(id => packageIdToName.GetValueOrDefault(id, id)))
+                .Where(dep => includeProjectsWithoutSolutions || projectToSolution.TryGetValue(dep, out _))
+                .ToList();
+            projects.Add(new ProjectNode
+            {
+                Name = project.Name,
+                PackageId = project.PackageId,
+                Path = project.Path,
+                SolutionPath = project.SolutionPath,
+                Type = project.Type,
+                Version = project.Version,
+                Dependencies = deps,
             });
         }
         return new DependencyGraph(projects) { LeftOutTests = leftOutTests };
+    }
+
+    /// <summary>
+    /// The id the project is packed under, as the SDK derives it: <c>PackageId</c>, else <c>AssemblyName</c>, else the
+    /// project name. Null when it is the project name, or when MSBuild would have to evaluate it (<c>$(Prefix).Lib</c>).
+    /// </summary>
+    internal static string? ReadPackageId(XDocument doc, string name)
+    {
+        var ns = doc.Root!.Name.Namespace;
+        string? Property(string property) => doc.Root.Elements(ns + "PropertyGroup").Elements(ns + property)
+            .Select(elem => elem.Value.Trim())
+            .FirstOrDefault(value => value.Length != 0);
+
+        string? id = Property("PackageId") ?? Property("AssemblyName");
+        if (id == null || string.Equals(id, name, StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (id.Contains("$("))
+        {
+            logger.LogWarning("Package id {PackageId} of {Project} needs MSBuild to evaluate it, the project name is used instead", id, name);
+            return null;
+        }
+        return id;
     }
 
     /// <summary>

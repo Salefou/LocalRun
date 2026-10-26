@@ -7,6 +7,14 @@ public class ProjectNode
 {
     public required string Name { get; init; }
 
+    /// <summary>The id the project is packed under (<c>PackageId</c>, else <c>AssemblyName</c>), when it isn't <see cref="Name"/>.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PackageId { get; init; }
+
+    /// <summary>The id the project is packed under: what the NuGet sources and package folders know it as.</summary>
+    [JsonIgnore]
+    public string PackageIdOrName => PackageId ?? Name;
+
     public required string Path { get; init; }
 
     public string? SolutionPath { get; init; }
