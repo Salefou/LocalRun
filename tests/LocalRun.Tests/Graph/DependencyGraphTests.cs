@@ -409,4 +409,48 @@ public class DependencyGraphTests
 
         Assert.Equal("2.3.0", DependencyGraph.ReadVersion(csproj, "Lib.csproj").AsVersionString());
     }
+
+    [Theory]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" /></ItemGroup></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="microsoft.net.test.sdk" /></ItemGroup></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><IsTestProject>true</IsTestProject></PropertyGroup></Project>""", true)]
+    [InlineData("""<Project Sdk="MSTest.Sdk/3.6.4"></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><IsTestProject>false</IsTestProject></PropertyGroup></Project>""", false)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit.assert" /></ItemGroup></Project>""", false)]
+    public void IsTestProject_FollowsTheSdkMarkers(string csproj, bool expected)
+    {
+        Assert.Equal(expected, DependencyGraph.IsTestProject(XDocument.Parse(csproj)));
+    }
+
+    [Theory]
+    [InlineData(false, new[] { "Lib" })]
+    [InlineData(true, new[] { "Lib", "Lib.Tests" })]
+    public void FromSource_LeavesOutTestProjects_UnlessAsked(bool includeTests, string[] expected)
+    {
+        string root = Directory.CreateTempSubdirectory("localrun-tests-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "Lib"));
+            Directory.CreateDirectory(Path.Combine(root, "Lib.Tests"));
+            File.WriteAllText(Path.Combine(root, "Lib", "Lib.csproj"), """<Project Sdk="Microsoft.NET.Sdk" />""");
+            File.WriteAllText(Path.Combine(root, "Lib.Tests", "Lib.Tests.csproj"), """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <ItemGroup>
+                    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+                    <ProjectReference Include="..\Lib\Lib.csproj" />
+                  </ItemGroup>
+                </Project>
+                """);
+            string[] csprojs = Directory.GetFiles(root, "*.csproj", SearchOption.AllDirectories);
+
+            var graph = DependencyGraph.FromSource(root, csprojs, includeProjectsWithoutSolutions: true, includeTests);
+
+            Assert.Equal(expected, graph.AllProjects.Select(p => p.Name).Order());
+            Assert.Equal(includeTests ? [] : ["Lib.Tests"], graph.LeftOutTests);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }

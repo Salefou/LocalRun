@@ -10,6 +10,7 @@ public static class BuildConfigOptionsParser
             RetainDependsOn = args.Values("--users-of"),
             RetainIsDependencyOf = args.Values("--deps-of"),
             IncludeExternal = args.Flag("--include-external"),
+            IncludeTests = args.Flag("--tests"),
             Union = args.Flag("--union"),
             WithServices = args.Flag("--with-services"),
             CsprojVersionsOnly = args.Flag("--csproj"),

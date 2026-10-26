@@ -7,6 +7,18 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Added
+
+- Absolute paths in the output (the configs written, the plot, the root, the local feed) are hyperlinks: Ctrl+click
+  opens them in Windows Terminal or VS Code. Plain text when the output is redirected.
+- `build`, `plot` and `pack` end by listing the files they wrote (configs, plot), so they aren't buried under the
+  output of `--plot` or `--go`. Also after a failure.
+
+### Changed
+
+- `build` leaves the test projects out of the config (projects referencing `Microsoft.NET.Test.Sdk`, setting
+  `IsTestProject`, or using `MSTest.Sdk`) and lists them; `build --tests` keeps them.
+
 ## [0.2.1] - 2026-10-26
 
 ### Fixed

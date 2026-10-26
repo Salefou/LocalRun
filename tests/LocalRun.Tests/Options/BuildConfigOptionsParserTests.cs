@@ -86,6 +86,13 @@ public class BuildConfigOptionsParserTests
     }
 
     [Fact]
+    public void Tests_AreLeftOutUnlessTests()
+    {
+        Assert.False(Parse().IncludeTests);
+        Assert.True(Parse("--tests").IncludeTests);
+    }
+
+    [Fact]
     public void Sources_AreQueriedUnlessCsproj()
     {
         Assert.False(Parse().CsprojVersionsOnly);

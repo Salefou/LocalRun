@@ -51,19 +51,21 @@ public static class LocalRunCli
         }
 
         string cmd = args[0].ToLowerInvariant();
+        // Listed again at the end, so they aren't buried under the output of the work that followed
+        List<string> written = [];
         try
         {
             var options = new CommandLineArgs(args.Skip(1));
             switch (cmd)
             {
                 case "build":
-                    await BuildAsync(options);
+                    await BuildAsync(options, written);
                     break;
                 case "plot":
-                    await PlotAsync(options);
+                    await PlotAsync(options, written);
                     break;
                 case "pack":
-                    await PackAsync(options);
+                    await PackAsync(options, written);
                     break;
                 case "go":
                     await GoAsync(options);
@@ -94,9 +96,13 @@ public static class LocalRunCli
             logger.LogDebug(ex, "Command '{Command}' failure details", cmd);
             return ExitFailure;
         }
+        finally
+        {
+            PrintWritten(written);
+        }
     }
 
-    private static async Task BuildAsync(CommandLineArgs args)
+    private static async Task BuildAsync(CommandLineArgs args, List<string> written)
     {
         string rootPath = Path.GetFullPath(args.Value("--root") ?? Directory.GetCurrentDirectory());
         string localNugetPath = Path.GetFullPath(args.Value("--local-nuget") ?? DefaultLocalNugetPath);
@@ -113,14 +119,15 @@ public static class LocalRunCli
         if (!configOptions.CsprojVersionsOnly)
             await configBuilder.FetchLatestVersionsAsync(localRunConfig);
         await WriteToFile(configPath, localRunConfig);
+        written.Add(configPath);
         logger.LogInformation("[✔ ] Configuration written to {Path}", configPath);
 
         // As 'plot' with its defaults, from the config just written
         if (plot)
-            await PlotGraphAsync(localRunConfig, UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now), open: false);
+            await PlotGraphAsync(localRunConfig, UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now), open: false, written);
     }
 
-    private static async Task PlotAsync(CommandLineArgs args)
+    private static async Task PlotAsync(CommandLineArgs args, List<string> written)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         string outputPath = args.Value("--output") ?? UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now);
@@ -128,16 +135,17 @@ public static class LocalRunCli
         args.EnsureAllConsumed();
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
-        await PlotGraphAsync(config, outputPath, open);
+        await PlotGraphAsync(config, outputPath, open, written);
     }
 
-    private static async Task PlotGraphAsync(LocalRunConfig config, string outputPath, bool open)
+    private static async Task PlotGraphAsync(LocalRunConfig config, string outputPath, bool open, List<string> written)
     {
         string svgPath = await GraphVisualizer.GenerateAsync(new GraphVisualizer.Config
         {
             Graph = DependencyGraph.FromConfig(config),
             OutputFilePath = outputPath,
         });
+        written.Add(Path.GetFullPath(svgPath));
         if (open)
             OpenWithDefaultApp(svgPath);
     }
@@ -155,7 +163,7 @@ public static class LocalRunCli
         return path;
     }
 
-    private static async Task PackAsync(CommandLineArgs args)
+    private static async Task PackAsync(CommandLineArgs args, List<string> written)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         string repackConfigPath = Path.GetFullPath(args.Value("--repack-config") ?? DefaultRepackConfigPath);
@@ -166,6 +174,7 @@ public static class LocalRunCli
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
         RepackConfig repackConfig = await new RepackConfigBuilder().BuildRepackConfig(config, repackOptions);
         await WriteToFile(repackConfigPath, repackConfig);
+        written.Add(repackConfigPath);
         logger.LogInformation("[✔ ] Repack configuration written to {Path}", repackConfigPath);
 
         // The plan is still written first, so a failed or surprising repack can be inspected afterwards
@@ -190,6 +199,15 @@ public static class LocalRunCli
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
         await new RunProcessor().RunAsync(config, exclude);
+    }
+
+    /// <summary>The files the command wrote, as its last lines (Ctrl+click opens them).</summary>
+    private static void PrintWritten(List<string> written)
+    {
+        if (written.Count == 0) return;
+        logger.LogInformation("[📄] Written:");
+        foreach (var path in written)
+            logger.LogInformation("     {Path}", path);
     }
 
     private static async Task<T> ReadFromFile<T>(string pathToFile, string producingCommand)
@@ -266,6 +284,7 @@ public static class LocalRunCli
         Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
         Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
+        Console.WriteLine("        --tests                 Keep the test projects (left out by default)");
         Console.WriteLine("        --csproj                Don't query your NuGet sources and local feed for the latest versions:");
         Console.WriteLine("                                pack then starts from the csproj versions (default: from the latest)");
         Console.WriteLine("        --plot                  Then plot the graph, as 'plot' does with its defaults");

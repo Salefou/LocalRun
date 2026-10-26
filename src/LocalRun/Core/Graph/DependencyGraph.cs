@@ -72,16 +72,25 @@ public class DependencyGraph
         }
     }
 
-    public static DependencyGraph FromSource(string rootPath, string[] csprojs, bool includeProjectsWithoutSolutions)
+    /// <summary>Test projects left out by <see cref="FromSource"/> (without <c>--tests</c>), by name.</summary>
+    public IReadOnlyList<string> LeftOutTests { get; private init; } = [];
+
+    public static DependencyGraph FromSource(string rootPath, string[] csprojs, bool includeProjectsWithoutSolutions, bool includeTests = false)
     {
         var projectToSolution = SolutionScanner.BuildProjectToSolutionMap(rootPath);
         var projects = new List<ProjectNode>();
+        var leftOutTests = new List<string>();
         foreach (var csproj in csprojs.Order())
         {
             var doc = XDocument.Load(csproj);
             var ns = doc.Root!.Name.Namespace;
 
             string name = Path.GetFileNameWithoutExtension(csproj);
+            if (!includeTests && IsTestProject(doc))
+            {
+                leftOutTests.Add(name);
+                continue;
+            }
             string type = doc.Descendants(ns + "OutputType")
                 .Select(desc => desc.Value)
                 .Any(desc => desc == "Exe") ? "executable" : "library";
@@ -113,7 +122,21 @@ public class DependencyGraph
                 Dependencies = deps
             });
         }
-        return new DependencyGraph(projects);
+        return new DependencyGraph(projects) { LeftOutTests = leftOutTests };
+    }
+
+    /// <summary>
+    /// A test project, as the SDK knows it: <c>IsTestProject</c> set to true, or a reference to
+    /// <c>Microsoft.NET.Test.Sdk</c> (xUnit, NUnit and MSTest projects all have one), or the <c>MSTest.Sdk</c> project SDK.
+    /// </summary>
+    internal static bool IsTestProject(XDocument doc)
+    {
+        var ns = doc.Root!.Name.Namespace;
+        return (doc.Root.Attribute("Sdk")?.Value.StartsWith("MSTest.Sdk", StringComparison.OrdinalIgnoreCase) ?? false)
+            || doc.Root.Elements(ns + "PropertyGroup").Elements(ns + "IsTestProject")
+                .Any(elem => string.Equals(elem.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase))
+            || doc.Descendants(ns + "PackageReference")
+                .Any(elem => string.Equals(elem.Attribute("Include")?.Value, "Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

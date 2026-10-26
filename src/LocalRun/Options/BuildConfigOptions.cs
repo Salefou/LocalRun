@@ -11,6 +11,9 @@ public class BuildConfigOptions
 
     public bool IncludeExternal { get; internal set; }
 
+    /// <summary>Keep the test projects, left out by default.</summary>
+    public bool IncludeTests { get; internal set; }
+
     /// <summary>Keep users of --users-of OR dependencies of --deps-of, instead of the projects between them.</summary>
     public bool Union { get; internal set; }
 
