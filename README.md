@@ -79,7 +79,8 @@ so you can **inspect or hand-edit** the plan between steps.
 ### The dependency graph
 
 - A **node** is a project. Its **dependencies** are the names of its `ProjectReference`s and the ids
-  of its `PackageReference`s.
+  of its `PackageReference`s. A package id is matched to the project packed under it: its `<PackageId>`,
+  else `<AssemblyName>`, else its name (as the SDK does), so `Acme.Lib` finds the project `Lib`.
 - A dependency is kept only if **some solution under the root references a project with that name**,
   i.e. it is one of *your* projects. Third-party packages (`Newtonsoft.Json`, …) are dropped.
   `--include-external` keeps every dependency, including projects that no solution references.
@@ -452,6 +453,7 @@ All files are indented JSON, safe to commit, diff or edit by hand between steps.
   "Projects": [                                 // topological order: dependencies first
     {
       "Name": "Shared.Pricing",
+      "PackageId": "Acme.Pricing",              // <PackageId>, else <AssemblyName>; absent when it is the name
       "Path": "pricing\\src\\Shared.Pricing\\Shared.Pricing.csproj",
       "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // null if no solution references it
       "Type": "library",                        // "executable" when <OutputType>Exe</OutputType>
@@ -774,7 +776,10 @@ Exit it and re-run the script.
   killed from outside; Ctrl+C or closing the terminal stops them.
 - **`--git-changes`** compares with your last fetch and only knows `origin`; files changed outside
   project folders mark the whole repository, even when only docs changed.
-- `build` queries projects and sources one at a time, so it takes a while on a large config (`--csproj` skips it).
+- `build` queries the sources of 8 projects at a time; a source that can't be reached costs NuGet's retries (about
+  30 s) once per run, then is skipped (`--csproj` skips the queries altogether).
+- Versions and package ids are read from the `.csproj` itself: ones set in a `Directory.Build.props`, or built from
+  MSBuild properties (`$(Prefix).Lib`), aren't seen.
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
   told apart, so they're all left out of the graph (with an error), rather than handled.
 - **`plot` draws a static SVG** with the bundled Graphviz, so it only works on win-x64 and linux-x64. A
