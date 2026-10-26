@@ -38,13 +38,16 @@ public class ProcessJobTests
         if (!OperatingSystem.IsWindows()) return;
         var job = ProcessJob.TryCreate();
         Assert.NotNull(job);
-        // cmd starts ping after joining the job, as `dotnet run` starts the app
-        using var cmd = Process.Start(new ProcessStartInfo("cmd", "/c ping -n 60 127.0.0.1 & echo done")
+        // cmd starts ping after joining the job, as `dotnet run` starts the app. It waits for a line on stdin first
+        // (set /p is built in, no child process): started before job.Add, ping would be outside the job
+        using var cmd = Process.Start(new ProcessStartInfo("cmd", "/c set /p go= & ping -n 60 127.0.0.1 & echo done")
         {
             UseShellExecute = false,
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
         })!;
         job.Add(cmd, "cmd");
+        cmd.StandardInput.WriteLine("go");
         Process ping = WaitForChild(cmd.Id, "PING.EXE");
 
         job.Dispose();
