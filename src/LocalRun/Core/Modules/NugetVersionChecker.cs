@@ -80,7 +80,8 @@ public class NugetVersionChecker
         {
             try
             {
-                var repository = Repository.Factory.GetCoreV3(source.Source);
+                // The PackageSource, not its URL: it carries the credentials of NuGet.Config (packageSourceCredentials)
+                var repository = Repository.Factory.GetCoreV3(source);
                 var metadata = await repository.GetResourceAsync<PackageMetadataResource>();
                 if (metadata == null)
                 {
