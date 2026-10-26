@@ -7,6 +7,11 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Added
+
+- Absolute paths in the output (the configs written, the plot, the root, the local feed) are hyperlinks: Ctrl+click
+  opens them in Windows Terminal or VS Code. Plain text when the output is redirected.
+
 ## [0.2.1] - 2026-10-26
 
 ### Fixed

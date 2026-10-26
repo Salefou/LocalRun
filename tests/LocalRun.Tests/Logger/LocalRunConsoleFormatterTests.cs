@@ -48,6 +48,47 @@ public class LocalRunConsoleFormatterTests
         Assert.Equal($"\x1B[33m[WRN] \x1B[39m\x1B[22mcareful{Environment.NewLine}", output);
     }
 
+    // The state of a templated log call: its values, by name
+    private static string FormatTemplate(bool useColors, string message, params object[] values)
+    {
+        var formatter = new LocalRunConsoleFormatter(useColors);
+        List<KeyValuePair<string, object?>> state = [.. values.Select((value, i) => new KeyValuePair<string, object?>($"Value{i}", value))];
+        var entry = new LogEntry<List<KeyValuePair<string, object?>>>(LogLevel.Information, "Category", default, state, null, (_, _) => message);
+        using var writer = new StringWriter();
+        formatter.Write(entry, scopeProvider: null, writer);
+        return writer.ToString();
+    }
+
+    [Fact]
+    public void AbsolutePaths_BecomeLinks_OnATerminal()
+    {
+        string config = Path.GetFullPath(Path.Combine("my repos", "localrun.config.json"));
+        string uri = new Uri(config).AbsoluteUri;
+
+        Assert.Equal($"Written to \x1B]8;;{uri}\x1B\\{config}\x1B]8;;\x1B\\ for A{Environment.NewLine}",
+            FormatTemplate(useColors: true, $"Written to {config} for A", config, "A"));
+        Assert.Contains("%20", uri);
+    }
+
+    [Fact]
+    public void Paths_StayPlain_WhenRedirected()
+    {
+        string config = Path.GetFullPath("localrun.config.json");
+
+        Assert.Equal($"Written to {config}{Environment.NewLine}", FormatTemplate(useColors: false, $"Written to {config}", config));
+    }
+
+    [Fact]
+    public void APathInsideALongerOne_IsLeftToIt()
+    {
+        string root = Path.GetFullPath("repos");
+        string config = Path.Combine(root, "localrun.config.json");
+
+        string output = FormatTemplate(useColors: true, $"{config} from {root}", config, root);
+
+        Assert.Equal(1, output.Split("\x1B]8;;file").Length - 1);
+    }
+
     [Fact]
     public void EmptyMessageWithoutException_WritesNothing()
     {
