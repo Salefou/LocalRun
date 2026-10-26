@@ -70,6 +70,9 @@ shell escaping.
   `MSBuildProjectFullPath`). Never go back to `-p:PackageVersion`: as a global property it flows into
   project references, and packages then declare their own version for every project they reference
   (NU1107 in consumers). `samples/` reproduces this: Logging project-references Primitives.
+- **Solution properties**: every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments` (`SolutionDir`
+  etc. of the project's solution, `ProjectRepack.SolutionPath` / `ProjectNode.SolutionPath`), since projects are built
+  alone: an `OutputPath` of `$(SolutionDir)\bin\…` otherwise lands at the drive root (`C:\bin`). Reported 2026-10-26.
 - **`up` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
   references would collide), start all with `dotnet run --no-build` without awaiting, Ctrl+C →
   `e.Cancel = true` + children get Ctrl+C themselves (same console) + kill the process tree after

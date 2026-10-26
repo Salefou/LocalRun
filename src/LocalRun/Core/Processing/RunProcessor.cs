@@ -2,6 +2,7 @@
 
 using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
+using LocalRun.Core.Modules;
 using LocalRun.Logger;
 using LocalRun.Options;
 using Microsoft.Extensions.Logging;
@@ -42,7 +43,7 @@ public class RunProcessor : IRunProcessor
         foreach (var exe in executables)
         {
             logger.LogInformation("[🔨] Building {Project}...", exe.Name);
-            await RunToCompletionAsync("dotnet", $"build \"{FullPath(config, exe)}\" --nologo --verbosity quiet{feedSource}");
+            await RunToCompletionAsync("dotnet", $"build \"{FullPath(config, exe)}\" --nologo --verbosity quiet{feedSource}{SolutionProperties.Arguments(exe.SolutionPath)}");
         }
 
         using var stopping = new CancellationTokenSource();
@@ -69,7 +70,7 @@ public class RunProcessor : IRunProcessor
             {
                 logger.LogInformation("[▶] Starting {Project}", exe.Name);
                 running.Add(RunningProcess.Start(exe.Name.PadRight(prefixWidth),
-                    "dotnet", $"run --no-build --project \"{FullPath(config, exe)}\"", job: job));
+                    "dotnet", $"run --no-build --project \"{FullPath(config, exe)}\"{SolutionProperties.Arguments(exe.SolutionPath)}", job: job));
             }
             logger.LogInformation("[✔ ] {Count} process(es) started. Press Ctrl+C to stop them all.", running.Count);
 
