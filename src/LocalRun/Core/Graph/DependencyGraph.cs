@@ -87,10 +87,7 @@ public class DependencyGraph
                 .Any(desc => desc == "Exe") ? "executable" : "library";
 
 
-            var versions = doc.Descendants(ns + "Version")
-                .ToList();
-            var versionElem = versions.FirstOrDefault();
-            var version = ProjectVersion.Parse(versionElem?.Value);
+            var version = ReadVersion(doc, csproj);
 
             if (!projectToSolution.TryGetValue(name, out var solutionPath))
             {
@@ -117,6 +114,32 @@ public class DependencyGraph
             });
         }
         return new DependencyGraph(projects);
+    }
+
+    /// <summary>
+    /// The version written in the csproj, as the SDK derives it: <c>Version</c>, else <c>VersionPrefix</c> with
+    /// its <c>VersionSuffix</c>, else 1.0.0. Only properties count, not a <c>&lt;Version&gt;</c> child of a
+    /// <c>PackageReference</c>. A value MSBuild would have to evaluate (<c>$(Major).0.0</c>) is left out with a warning,
+    /// except a suffix (<c>$(BuildNumber)</c>, usually empty outside CI), which is just dropped.
+    /// </summary>
+    internal static ProjectVersion ReadVersion(XDocument doc, string csproj)
+    {
+        var ns = doc.Root!.Name.Namespace;
+        string? Property(string name) => doc.Root.Elements(ns + "PropertyGroup").Elements(ns + name)
+            .Select(elem => elem.Value.Trim())
+            .FirstOrDefault(value => value.Length != 0);
+
+        string? version = Property("Version");
+        if (version == null && Property("VersionPrefix") is { } prefix)
+            version = Property("VersionSuffix") is { } suffix && !suffix.Contains("$(") ? $"{prefix}-{suffix}" : prefix;
+        if (version == null)
+            return ProjectVersion.Parse(null);
+        if (version.Contains("$("))
+        {
+            logger.LogWarning("Version {Version} of {Project} needs MSBuild to evaluate it, 1.0.0 used instead", version, csproj);
+            return ProjectVersion.Parse(null);
+        }
+        return ProjectVersion.Parse(version);
     }
 
     public static DependencyGraph FromConfig(LocalRunConfig config)

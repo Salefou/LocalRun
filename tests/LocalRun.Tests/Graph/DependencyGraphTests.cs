@@ -2,6 +2,7 @@ namespace LocalRun.Tests.Graph;
 
 using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
+using System.Xml.Linq;
 
 public class DependencyGraphTests
 {
@@ -379,5 +380,33 @@ public class DependencyGraphTests
 
         Assert.Empty(added);
         Assert.Equal(["Api", "Lib"], Names(graph));
+    }
+
+    [Theory]
+    [InlineData("<Version>1.4.2</Version>", "1.4.2")]
+    [InlineData("<VersionPrefix>2.3.0</VersionPrefix>", "2.3.0")]
+    [InlineData("<VersionPrefix>2.3.0</VersionPrefix><VersionSuffix>beta</VersionSuffix>", "2.3.0-beta")]
+    [InlineData("<VersionPrefix>2.3.0</VersionPrefix><VersionSuffix>$(BuildNumber)</VersionSuffix>", "2.3.0")]
+    [InlineData("<VersionPrefix>2.3.0</VersionPrefix><Version>1.4.2</Version>", "1.4.2")]
+    [InlineData("<Version>$(Major).0.0</Version>", "1.0.0")]
+    [InlineData("", "1.0.0")]
+    public void ReadVersion_FollowsTheSdkDefaults(string properties, string expected)
+    {
+        var csproj = XDocument.Parse($"""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>{properties}</PropertyGroup></Project>""");
+
+        Assert.Equal(expected, DependencyGraph.ReadVersion(csproj, "Lib.csproj").AsVersionString());
+    }
+
+    [Fact]
+    public void ReadVersion_IgnoresThePackageReferenceVersions()
+    {
+        var csproj = XDocument.Parse("""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Other"><Version>9.9.9</Version></PackageReference></ItemGroup>
+              <PropertyGroup><VersionPrefix>2.3.0</VersionPrefix></PropertyGroup>
+            </Project>
+            """);
+
+        Assert.Equal("2.3.0", DependencyGraph.ReadVersion(csproj, "Lib.csproj").AsVersionString());
     }
 }
