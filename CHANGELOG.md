@@ -7,6 +7,11 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Added
+
+- `plot --html` (experimental): an interactive page with projects framed by solution, collapsible into a
+  solution-level graph that flags solutions depending on each other both ways, and users-of / deps-of highlighting.
+
 ## [0.2.2] - 2026-10-27
 
 ### Added

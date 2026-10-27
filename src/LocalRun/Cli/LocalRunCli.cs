@@ -132,10 +132,22 @@ public static class LocalRunCli
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         string outputPath = args.Value("--output") ?? UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now);
         bool open = args.Flag("--open");
+        bool html = args.Flag("--html");
         args.EnsureAllConsumed();
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
-        await PlotGraphAsync(config, outputPath, open, written);
+        if (html)
+            await PlotPageAsync(config, outputPath, open, written);
+        else
+            await PlotGraphAsync(config, outputPath, open, written);
+    }
+
+    private static async Task PlotPageAsync(LocalRunConfig config, string outputPath, bool open, List<string> written)
+    {
+        string htmlPath = await GraphPage.GenerateAsync(config, outputPath);
+        written.Add(htmlPath);
+        if (open)
+            OpenWithDefaultApp(htmlPath);
     }
 
     private static async Task PlotGraphAsync(LocalRunConfig config, string outputPath, bool open, List<string> written)
@@ -158,7 +170,7 @@ public static class LocalRunCli
     {
         string basePath = Path.Combine(folder, $"dependencies-{now:yyyyMMdd-HHmmss}");
         string path = basePath;
-        for (int counter = 2; File.Exists($"{path}.svg") || File.Exists($"{path}.dot"); counter++)
+        for (int counter = 2; File.Exists($"{path}.svg") || File.Exists($"{path}.dot") || File.Exists($"{path}.html"); counter++)
             path = $"{basePath}-{counter}";
         return path;
     }
@@ -296,6 +308,8 @@ public static class LocalRunCli
         Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
         Console.WriteLine($"        --output <path>         Output path without extension (default: {DefaultVisualsFolder}/dependencies-<date-time>)");
         Console.WriteLine("        --open                  Open the SVG with the default application");
+        Console.WriteLine("        --html                  Write an interactive HTML page instead (experimental): projects");
+        Console.WriteLine("                                framed by solution, collapsible, hover for users-of / deps-of");
         Console.WriteLine();
 
         Console.WriteLine("  pack [options]");

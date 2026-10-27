@@ -43,6 +43,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- The page template of 'plot' with the html flag; the graph data is filled in at run time -->
+		<EmbeddedResource Include="Core\Modules\GraphPage.html" LogicalName="LocalRun.Core.Modules.GraphPage.html" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<InternalsVisibleTo Include="LocalRun.Tests" />
 	</ItemGroup>
 

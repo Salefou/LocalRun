@@ -326,6 +326,7 @@ plot is what `pack`, `go` and `up` act on.
 | `--config <file>` | `localrun.config.json` | Config file to read. |
 | `--output <path>` | `lrun-visuals/dependencies-<yyyyMMdd-HHmmss>` | Output path **without extension**. The default never overwrites an earlier graph (`-2`, `-3`, … within the same second). |
 | `--open` | off | Open the SVG with the default application (Windows, macOS `open`, Linux `xdg-open`). |
+| `--html` | off | *Experimental.* Write `<output>.html` instead: an interactive page where projects are framed by solution (or by top folder), each group collapses into one node (*Collapse all* gives the solution-level graph), hovering or clicking a node highlights its users-of / deps-of cones, with search, zoom and pan. Groups that depend on each other both ways are drawn in red: they can't be built one after the other. The layout library (elkjs) is loaded from cdn.jsdelivr.net, so the page needs internet access for now. |
 
 The SVG is printed as a `file:///…` link: in Windows Terminal or VS Code, Ctrl+click opens it with its
 default app, usually the browser.

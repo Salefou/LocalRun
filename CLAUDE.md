@@ -200,6 +200,9 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
 - Replace the Graphviz SVG of `plot` with an interactive HTML page (user's interest, 2026-10-24): layered layout
   via elkjs embedded in the page (Graphviz's `dot` layout is fine; the costs are the ~20 MB native binaries,
   win-x64/linux-x64 only, and a static image), hover to highlight a project's users-of / deps-of cones, search,
-  zoom. MSAGL (pure .NET) was the portability-only alternative. Not started.
+  zoom. MSAGL (pure .NET) was the portability-only alternative. 2026-10-27, branch `claude/interactive-plot`: POC as
+  `plot --html` (`GraphPage`, template `GraphPage.html` embedded as a resource), grouped by solution or top folder,
+  groups collapsible (all collapsed = the solution graph, Tarjan on it flags solution cycles that the acyclic project
+  graph still allows). Open: elkjs from a CDN vs embedded (~1.6 MB, EPL-2.0 notice), replacing the SVG or not.
 - Versions and package ids come from the csproj XML only (`Directory.Build.props` and `$(…)` values unseen).
   `dotnet msbuild -getProperty` would be exact but costs ~1 s per project; deferred to 0.3.0 at the earliest (2026-10-27).
