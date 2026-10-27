@@ -6,7 +6,7 @@ LocalRun is a .NET command-line tool for working across many repositories whose 
 each other through NuGet packages. It scans a directory tree of repositories, builds the dependency
 graph between their projects, and then:
 
-- **plots** that graph as an SVG,
+- **plots** that graph as an interactive HTML page, projects framed by solution,
 - **bumps versions** and **repacks** the libraries you changed into a local NuGet feed, in dependency order,
 - **runs** the executables that consume them, in dependency order.
 
@@ -57,7 +57,7 @@ so you can **inspect or hand-edit** the plan between steps.
                                │      │         └──────────── pack --go ─────────────┘        (~/.localnuget)
                           plot │      │ up
                                ▼      ▼
-                dependencies.svg    dotnet run, executables in dependency order
+               dependencies.html    dotnet run, executables in dependency order
 ```
 
 1. **`build`** finds every `*.csproj` under the root, reads its name, `OutputType`,
@@ -65,7 +65,7 @@ so you can **inspect or hand-edit** the plan between steps.
    that reference them. Optional filters keep only the part of the graph you care about. It also records
    each project's latest version on your NuGet sources and in the local feed (unless `--csproj`). The result
    is written in topological order to `localrun.config.json`.
-2. **`plot`** renders that graph to DOT and SVG (Graphviz is embedded, nothing to install).
+2. **`plot`** renders that graph as a self-contained interactive HTML page (no internet access needed).
 3. **`pack`** decides, for every project, the version it will be packed as: the config's version (the
    latest one when recorded, else the csproj's), bumped, with your suffix and an iteration number that
    goes up each time you pack the same versions again. Nothing is built yet: the plan is written to
@@ -108,8 +108,7 @@ so you can **inspect or hand-edit** the plan between steps.
 - **.NET SDK 8.0 or later** (`dotnet` on the `PATH`). LocalRun itself targets `net8.0`, and it shells
   out to `dotnet restore`, `dotnet pack`, `dotnet clean` and `dotnet run`.
 - **Tested on Windows x64**, which is what CI runs. It is written to run on Linux and macOS too, but that
-  is untested, and `plot` needs the Graphviz binaries bundled by `Rubjerg.Graphviz`, which exist for
-  win-x64 and linux-x64 only.
+  is untested. `plot` needs nothing native: its page opens in any recent browser.
 - For `build` (unless `--csproj`): the NuGet sources that apply to each project, as for a restore from its folder,
   plus the local feed.
 
@@ -208,7 +207,7 @@ cd ~/work
 # 1. Graph everything that depends on the library you changed, and plot it (Ctrl+click the printed link)
 lrun build --root ./repos --users-of Shared.Pricing --plot
 
-# 2. Or plot the current config again, opening the SVG directly
+# 2. Or plot the current config again, opening the page directly
 lrun plot --open
 
 # 3. Plan a patch bump with a "dev" suffix, then review repack.config.json
@@ -262,7 +261,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 | `--tests` | off | Keep the test projects. By default `build` leaves them out (and lists them): projects referencing `Microsoft.NET.Test.Sdk`, setting `<IsTestProject>true</IsTestProject>`, or using the `MSTest.Sdk` project SDK. |
 | `--csproj` | off | Don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` records each project's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
-| `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.svg`, printed as a link). |
+| `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.html`, printed as a link). |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
 The two flags are AND'ed: with `--users-of X --deps-of Y` you get **the projects between X and Y**,
@@ -311,9 +310,22 @@ warns and writes an empty config.
 
 ### `plot`
 
-Render the graph of a config file as `<output>.dot` and `<output>.svg`. Nodes show the project name
-and version, edges point from a dependency to its dependent, and colours darken with depth:
+Render the graph of a config file as `<output>.html`, a single self-contained page (the layout library,
+elkjs, is inlined: no internet access needed). Nodes show the project name and version (and the latest
+version when it differs), edges point from a dependency to its dependent, and colours darken with depth:
 libraries are blue, executables green.
+
+- **Groups**: projects are framed by solution, by top folder (the repository, when the root holds one
+  folder per repository), or not at all (*Group by*). Projects referenced by no solution share a
+  `(no solution)` frame.
+- **Collapse**: click a frame's header to collapse it into one node (double-click the node to expand it).
+  *Collapse all* gives the solution-level graph; `×N` on an edge means it stands for N project edges.
+- **Group cycles**, in red: groups that depend on each other both ways (`A.Lib1 → B.Lib → A.Lib2`). The
+  project graph has no cycle, but these solutions can't be built one after the other.
+- **Cones**: hovering a node highlights the projects using it (orange, `--users-of`) and the ones it
+  depends on (blue, `--deps-of`); a collapsed group stands for all its projects. Click to pin it and open a
+  panel listing them, with the matching filter flags to copy.
+- Search (Enter focuses the first match), wheel to zoom, drag to pan, *Fit*, Escape to clear.
 
 Dependencies that aren't projects of the config are drawn with a grey dashed outline and dashed
 edges: projects a `build` filter left out, a name collision or a cycle, and with `--include-external`
@@ -325,11 +337,10 @@ plot is what `pack`, `go` and `up` act on.
 |---|---|---|
 | `--config <file>` | `localrun.config.json` | Config file to read. |
 | `--output <path>` | `lrun-visuals/dependencies-<yyyyMMdd-HHmmss>` | Output path **without extension**. The default never overwrites an earlier graph (`-2`, `-3`, … within the same second). |
-| `--open` | off | Open the SVG with the default application (Windows, macOS `open`, Linux `xdg-open`). |
-| `--html` | off | *Experimental.* Write `<output>.html` instead: an interactive page where projects are framed by solution (or by top folder), each group collapses into one node (*Collapse all* gives the solution-level graph), hovering or clicking a node highlights its users-of / deps-of cones, with search, zoom and pan. Groups that depend on each other both ways are drawn in red: they can't be built one after the other. The layout library (elkjs) is loaded from cdn.jsdelivr.net, so the page needs internet access for now. |
+| `--open` | off | Open the page with the default browser (Windows, macOS `open`, Linux `xdg-open`). |
 
-The SVG is printed as a `file:///…` link: in Windows Terminal or VS Code, Ctrl+click opens it with its
-default app, usually the browser.
+The page is printed as a `file:///…` link: in Windows Terminal or VS Code, Ctrl+click opens it in the
+default browser.
 
 ### `pack`
 
@@ -496,10 +507,10 @@ they are ignored.)
 
 Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`.
 
-### `lrun-visuals/dependencies-<date-time>.dot` / `.svg` — written by `plot` (or `build --plot`)
+### `lrun-visuals/dependencies-<date-time>.html` — written by `plot` (or `build --plot`)
 
-Plain Graphviz DOT and its rendering, one pair per graph (delete the folder when you're done). The DOT file can be re-rendered or post-processed with any
-Graphviz tooling.
+One self-contained page per graph, about 1.6 MB, mostly the inlined layout library (delete the folder when you're
+done). It holds a copy of the graph, so it doesn't change when the config does.
 
 ---
 
@@ -576,7 +587,7 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 | Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `up` inherit the console.) |
 | Exit codes | `0` success · `1` the command failed (missing file, `dotnet` failure, dependency cycle, …) · `2` invalid command line. |
 | Output | Human-readable log lines on **stdout**. Warnings and errors are prefixed `[WRN] ` / `[ERR] `; ANSI colours are dropped when output is redirected. Output of child `dotnet` processes is forwarded line by line (stderr lines as warnings). |
-| Results | The JSON / DOT / SVG files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
+| Results | The JSON / HTML files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
 | Side effects | `--open` launches a viewer; `go` writes packages to the feed; `up` starts processes. |
 
 Do not parse the log lines — they are for humans and may change. Read the JSON files instead.
@@ -663,9 +674,10 @@ src/
    ├─ Core/
    │  ├─ Graph/                  DependencyGraph: building, filtering, cycles, layered topological sort
    │  ├─ Model/                  JSON-serialised types: LocalRunConfig, RepackConfig, ProjectNode, …
-   │  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphVisualizer,
+   │  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphPage,
    │  │                          NugetVersionChecker, SolutionScanner
    │  └─ Processing/             RunProcessor: the `up` command
+   ├─ Resources/                 GraphPage.html (the plot page template) and the vendored elkjs
    └─ Logger/                    Logger factory and console formatter
 tests/
 └─ LocalRun.Tests/               xUnit tests, one folder per area of src/LocalRun (Graph, Options, …)
@@ -732,9 +744,6 @@ publishing ones, to check a release would build and pack.
 
 ## Troubleshooting
 
-**`Warning: Could not load "...gvplugin_pango.dll"`** — printed by the embedded Graphviz on Windows.
-Harmless: the SVG is still produced, using Graphviz's built-in text rendering.
-
 **`'…localrun.config.json' not found. Run 'lrun build' first.`** — the path is resolved against the
 current directory. Run from the directory where you ran `build`, or pass `--config`.
 
@@ -783,13 +792,14 @@ Exit it and re-run the script.
   MSBuild properties (`$(Prefix).Lib`), aren't seen.
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
   told apart, so they're all left out of the graph (with an error), rather than handled.
-- **`plot` draws a static SVG** with the bundled Graphviz, so it only works on win-x64 and linux-x64. A
-  candidate replacement: an interactive HTML page (layered layout with elkjs embedded in the page),
-  highlighting a project's users and dependencies on hover, with search and zoom, and no native code.
+- `plot` groups projects by solution or top folder, but the other commands still work project by project:
+  filters take project names, and `go` packs projects, not solutions.
+- A project referenced by several solutions is grouped under the first one (by path); an umbrella solution
+  sorting first would gather projects of several repositories.
 
 ---
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). The package bundles third-party components (Graphviz, libgit2, NuGet
+MIT, see [LICENSE](LICENSE). The package bundles third-party components (elkjs, libgit2, NuGet
 client libraries, …) under their own licences: see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

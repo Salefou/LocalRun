@@ -20,7 +20,7 @@
 	<PropertyGroup>
 		<!-- The next version to release: the release workflow requires the pushed tag to match it, and after a
 		     release it is bumped right away, so local builds (VersionPrefix-local-...) sort above the release -->
-		<VersionPrefix>0.2.2</VersionPrefix>
+		<VersionPrefix>0.3.0</VersionPrefix>
 		<PackageId>LocalRun</PackageId>
 		<Authors>Salefou</Authors>
 		<Description>Try a library change in the services that consume it as a NuGet package, across repositories: lrun scans them, builds the project dependency graph, repacks the libraries in between into a local feed in dependency order, and runs the executables side by side.</Description>
@@ -43,8 +43,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- The page template of 'plot' with the html flag; the graph data is filled in at run time -->
-		<EmbeddedResource Include="Core\Modules\GraphPage.html" LogicalName="LocalRun.Core.Modules.GraphPage.html" />
+		<!-- The page written by 'plot', and the layout library inlined into it so it works offline -->
+		<EmbeddedResource Include="Resources\GraphPage.html" LogicalName="LocalRun.GraphPage.html" />
+		<EmbeddedResource Include="Resources\elkjs\elk.bundled.js" LogicalName="LocalRun.elk.bundled.js" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -58,7 +59,6 @@
 		<PackageReference Include="NuGet.Configuration" Version="7.9.0" />
 		<PackageReference Include="NuGet.Protocol" Version="7.9.0" />
 		<PackageReference Include="NuGet.Versioning" Version="7.9.0" />
-		<PackageReference Include="Rubjerg.Graphviz" Version="3.0.5" />
 	</ItemGroup>
 
 </Project>

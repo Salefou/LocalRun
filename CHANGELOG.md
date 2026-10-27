@@ -7,10 +7,14 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- `plot --html` (experimental): an interactive page with projects framed by solution, collapsible into a
-  solution-level graph that flags solutions depending on each other both ways, and users-of / deps-of highlighting.
+- **Breaking:** `plot` (and `build --plot`) writes an interactive HTML page, `<output>.html`, instead of the
+  Graphviz `.dot` and `.svg` files. Projects are framed by solution (or top folder); each solution collapses into
+  one node, down to the solution-level graph, where solutions depending on each other both ways are flagged in red.
+  Hovering or clicking a project highlights its users and dependencies, with the matching `--users-of` /
+  `--deps-of` flags to copy; search, zoom and pan. The page is self-contained and works offline.
+- The tool no longer bundles Graphviz (about 20 MB of native binaries): `plot` now works on any platform.
 
 ## [0.2.2] - 2026-10-27
 

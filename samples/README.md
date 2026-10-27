@@ -74,8 +74,13 @@ lrun plot --open
 - Logs `[🌐] Fetching the latest versions on your NuGet sources and in …\samples\.feed ('--csproj' skips this)...`, then
   `not found, pack will start from the csproj version …` for every project: `.feed/` is still empty and
   nuget.org has no `LrSample.*`.
-- `localrun.config.json` lists the 11 projects; the SVG shows the two islands and the diamond, with
-  the executables in green and nothing dashed (no dependency outside the config).
+- `localrun.config.json` lists the 11 projects; the page shows them in 6 frames (`Core.sln`, `Pricing.sln`,
+  `Trading.sln`, `Reporting.sln`, `Island.sln`, and `(no solution)` holding Orphan with no edge), the two islands
+  and the diamond, the executables in green and nothing dashed (no dependency outside the config). The header
+  reads `11 projects · 6 solutions`, with no group cycle.
+- *Collapse all* leaves one node per solution: Core → Pricing → Trading and Reporting (Core → Trading as well,
+  through Logging), Island and `(no solution)` apart. Hovering `Pricing.sln` lights Trading and Reporting in
+  orange, Core in blue.
 
 ### 2. Filters
 
@@ -186,7 +191,7 @@ Variations worth trying:
 - **Debugging one service**: `lrun up --exclude LrSample.RiskService` logs `Not running
   LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
   IDE (`:5102` stays free for it). `--exclude LrSample.Pricing` is rejected (exit code 2): it's a library.
-- **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `lrun-visuals/dependencies-<date-time>.svg` and prints
+- **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `lrun-visuals/dependencies-<date-time>.html` and prints
   it as a `file:///` link; Ctrl+click it (Windows Terminal, VS Code) to open it in the browser.
 
 ### 5. Iterate, then continue from the latest versions

@@ -46,6 +46,8 @@ public class GraphPageTests
         var html = GraphPage.ToHtml(Config(Project(Path.Combine("core", "A", "A.csproj"), null, "</script>")));
 
         Assert.DoesNotContain("{{GRAPH_DATA}}", html);
+        Assert.DoesNotContain("{{ELKJS}}", html);
+        Assert.DoesNotContain("<script src=", html); // elkjs is inlined: the page works offline
         Assert.Contains("\"name\":\"A\"", html);
         Assert.Contains("\\u003C/script\\u003E", html);
     }

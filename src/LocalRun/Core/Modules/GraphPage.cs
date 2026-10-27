@@ -12,13 +12,14 @@ using System.Threading.Tasks;
 /// <summary>
 /// Writes the dependency graph as a single interactive HTML page: projects framed by solution (or top folder),
 /// groups collapsible into one node, hover to see a project's users-of / deps-of cones. The layout runs in the
-/// browser (elkjs), so nothing native is needed.
+/// browser with elkjs, inlined into the page so it works offline and nothing native is needed.
 /// </summary>
 public static class GraphPage
 {
     private static readonly ILogger logger = Log.For(typeof(GraphPage).FullName!);
 
-    private const string Placeholder = "{{GRAPH_DATA}}";
+    private const string ElkPlaceholder = "{{ELKJS}}";
+    private const string DataPlaceholder = "{{GRAPH_DATA}}";
 
     // Camel case for the page's script; the default encoder escapes '<', so the JSON can't close its <script> tag
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -30,16 +31,24 @@ public static class GraphPage
         string htmlPath = $"{Path.GetFullPath(outputFilePath)}.html";
         Directory.CreateDirectory(Path.GetDirectoryName(htmlPath)!);
         await File.WriteAllTextAsync(htmlPath, ToHtml(config));
-        logger.LogInformation("[🖼️] Interactive graph generated: {Uri}", new Uri(htmlPath).AbsoluteUri);
+        // As a file:// URI, which terminals (Windows Terminal, VS Code, ...) turn into a link: Ctrl+click opens the page
+        logger.LogInformation("[🖼️] Graph generated: {Uri}", new Uri(htmlPath).AbsoluteUri);
         return htmlPath;
     }
 
     internal static string ToHtml(LocalRunConfig config)
     {
-        using var template = typeof(GraphPage).Assembly.GetManifestResourceStream($"{typeof(GraphPage).Namespace}.GraphPage.html")
-            ?? throw new InvalidOperationException("GraphPage.html is missing from the assembly resources");
-        string html = new StreamReader(template).ReadToEnd();
-        return html.Replace(Placeholder, JsonSerializer.Serialize(ToData(config), JsonOptions));
+        // elkjs first: the data, filled in last, can't then be mistaken for a placeholder
+        return ReadResource("GraphPage.html")
+            .Replace(ElkPlaceholder, ReadResource("elk.bundled.js"))
+            .Replace(DataPlaceholder, JsonSerializer.Serialize(ToData(config), JsonOptions));
+    }
+
+    private static string ReadResource(string name)
+    {
+        using var stream = typeof(GraphPage).Assembly.GetManifestResourceStream($"LocalRun.{name}")
+            ?? throw new InvalidOperationException($"{name} is missing from the assembly resources");
+        return new StreamReader(stream).ReadToEnd();
     }
 
     internal sealed record PageData(string RootPath, PageProject[] Projects);

@@ -1,3 +1,6 @@
 # Batch files can misparse with LF line endings
 *.cmd text eol=crlf
 *.bat text eol=crlf
+
+# Vendored elkjs (embedded in the plot page): kept byte for byte, no diffs of the minified bundle
+src/LocalRun/Resources/elkjs/** -text -diff linguist-vendored

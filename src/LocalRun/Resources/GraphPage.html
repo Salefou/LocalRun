@@ -118,7 +118,8 @@
 </div>
 
 <script id="graph-data" type="application/json">{{GRAPH_DATA}}</script>
-<script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
+<!-- elkjs 0.9.3 (EPL-2.0, https://github.com/kieler/elkjs), inlined by lrun -->
+<script>{{ELKJS}}</script>
 <script>
 (() => {
   "use strict";
@@ -539,10 +540,6 @@
   }
 
   document.getElementById("wrap").style.setProperty("--header-h", document.getElementById("toolbar").offsetHeight + "px");
-  if (typeof ELK === "undefined") {
-    showError("Couldn't load the layout library (elkjs) from cdn.jsdelivr.net: this page needs internet access for now.");
-    return;
-  }
   layout().catch(showError);
 })();
 </script>

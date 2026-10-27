@@ -1,6 +1,5 @@
 ﻿namespace LocalRun.Cli;
 
-using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
 using LocalRun.Core.Modules;
 using LocalRun.Core.Processing;
@@ -132,34 +131,18 @@ public static class LocalRunCli
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         string outputPath = args.Value("--output") ?? UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now);
         bool open = args.Flag("--open");
-        bool html = args.Flag("--html");
         args.EnsureAllConsumed();
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
-        if (html)
-            await PlotPageAsync(config, outputPath, open, written);
-        else
-            await PlotGraphAsync(config, outputPath, open, written);
+        await PlotGraphAsync(config, outputPath, open, written);
     }
 
-    private static async Task PlotPageAsync(LocalRunConfig config, string outputPath, bool open, List<string> written)
+    private static async Task PlotGraphAsync(LocalRunConfig config, string outputPath, bool open, List<string> written)
     {
         string htmlPath = await GraphPage.GenerateAsync(config, outputPath);
         written.Add(htmlPath);
         if (open)
             OpenWithDefaultApp(htmlPath);
-    }
-
-    private static async Task PlotGraphAsync(LocalRunConfig config, string outputPath, bool open, List<string> written)
-    {
-        string svgPath = await GraphVisualizer.GenerateAsync(new GraphVisualizer.Config
-        {
-            Graph = DependencyGraph.FromConfig(config),
-            OutputFilePath = outputPath,
-        });
-        written.Add(Path.GetFullPath(svgPath));
-        if (open)
-            OpenWithDefaultApp(svgPath);
     }
 
     /// <summary>
@@ -170,7 +153,7 @@ public static class LocalRunCli
     {
         string basePath = Path.Combine(folder, $"dependencies-{now:yyyyMMdd-HHmmss}");
         string path = basePath;
-        for (int counter = 2; File.Exists($"{path}.svg") || File.Exists($"{path}.dot") || File.Exists($"{path}.html"); counter++)
+        for (int counter = 2; File.Exists($"{path}.html"); counter++)
             path = $"{basePath}-{counter}";
         return path;
     }
@@ -265,7 +248,7 @@ public static class LocalRunCli
         }
         catch (Exception ex)
         {
-            logger.LogWarning("Could not open SVG: {Error}", ex.Message);
+            logger.LogWarning("Could not open the graph: {Error}", ex.Message);
         }
     }
 
@@ -303,13 +286,12 @@ public static class LocalRunCli
         Console.WriteLine();
 
         Console.WriteLine("  plot [options]");
-        Console.WriteLine("      Render the dependency graph of a config file as DOT and SVG.");
+        Console.WriteLine("      Render the dependency graph of a config file as an interactive HTML page: projects framed");
+        Console.WriteLine("      by solution, collapsible into the solution graph, hover or click for users-of / deps-of.");
         Console.WriteLine("      Options:");
         Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
         Console.WriteLine($"        --output <path>         Output path without extension (default: {DefaultVisualsFolder}/dependencies-<date-time>)");
-        Console.WriteLine("        --open                  Open the SVG with the default application");
-        Console.WriteLine("        --html                  Write an interactive HTML page instead (experimental): projects");
-        Console.WriteLine("                                framed by solution, collapsible, hover for users-of / deps-of");
+        Console.WriteLine("        --open                  Open the page with the default browser");
         Console.WriteLine();
 
         Console.WriteLine("  pack [options]");
