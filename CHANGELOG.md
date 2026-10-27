@@ -7,6 +7,8 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-27
+
 ### Added
 
 - Absolute paths in the output (the configs written, the plot, the root, the local feed) are hyperlinks: Ctrl+click
@@ -97,7 +99,8 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/Salefou/LocalRun/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Salefou/LocalRun/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Salefou/LocalRun/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Salefou/LocalRun/compare/v0.1.0...v0.1.1
