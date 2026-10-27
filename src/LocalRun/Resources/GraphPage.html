@@ -89,6 +89,12 @@
       <option value="none">nothing</option>
     </select>
   </label>
+  <label>Layout
+    <select id="layout">
+      <option value="lanes" title="Each group on its own band; columns = depth, the order go packs in">one band per group</option>
+      <option value="free" title="Free layered layout">free</option>
+    </select>
+  </label>
   <button id="collapseAll" title="One node per group: the order to build them in">Collapse all</button>
   <button id="expandAll" title="Every project, framed by its group">Expand all</button>
   <button id="fit">Fit</button>
@@ -137,7 +143,7 @@
     }
   const outside = [...new Set(DATA.projects.flatMap(p => p.dependencies).filter(d => !projects.has(d)))].sort();
 
-  const state = { groupBy: "solution", collapsed: new Set(), hovered: null, pinned: null, search: "" };
+  const state = { groupBy: "solution", layout: "lanes", collapsed: new Set(), hovered: null, pinned: null, search: "" };
 
   function groupOf(name) {
     const p = projects.get(name);
@@ -346,10 +352,120 @@
     return merged;
   }
 
+  // One full-width band per group, stacked; columns are the project depths, shared by every band, so a dependency is
+  // always in an earlier column (left to right is the order 'go' packs in) and project edges always point right.
+  // Inside a band, a column holds as many rows as it needs. Returns the same shape as an ELK result.
+  function laneLayout(graph) {
+    const COL_GAP = 70, ROW_GAP = 12, LANE_GAP = 16, PAD = 12;
+    const lanes = new Map();
+    const lane = (key, frame) => lanes.get(key) ?? lanes.set(key, { key, frame, items: [] }).get(key);
+    const depthOf = name => projects.get(name)?.depth;
+    const item = node => {
+      const names = namesOf(node.id);
+      let cols = names.map(depthOf).filter(d => d != null);
+      // A dependency outside the config: one column before its first user
+      if (!cols.length) cols = [Math.min(...(users.get(names[0]) ?? []).map(depthOf)) - 1];
+      // A collapsed group sits in the column of its first project
+      const col = Math.min(...cols);
+      return { node, col, names };
+    };
+    // Bands linked by edges, directly or not, form a component: they stay next to each other
+    const bandOf = new Map(), parent = new Map();
+    for (const c of graph.children) {
+      const band = c.id.startsWith("p:") ? "p:" : c.id; // ungrouped projects (Group by: nothing) share one band
+      parent.set(band, band);
+      for (const n of c.children ?? [c]) bandOf.set(n.id, band);
+    }
+    const find = k => { while (parent.get(k) !== k) { parent.set(k, parent.get(parent.get(k))); k = parent.get(k); } return k; };
+    for (const e of graph.edges) parent.set(find(bandOf.get(e.sources[0])), find(bandOf.get(e.targets[0])));
+    for (const c of graph.children) {
+      if (c.id.startsWith("c:")) { const l = lane(c.id, c); c.children.forEach(n => l.items.push(item(n))); }
+      // Dependencies outside the config: on a band of their own, above the component using them
+      else if (c.id.startsWith("x:")) lane("x:" + find(c.id), null).items.push(item(c));
+      else if (c.id.startsWith("g:")) lane(c.id, null).items.push(item(c));
+      else lane("p:", null).items.push(item(c));
+    }
+    for (const l of lanes.values()) l.component = find(l.key.startsWith("x:") ? l.items[0].node.id : l.key);
+    const all = [...lanes.values()].flatMap(l => l.items);
+    const minCol = Math.min(...all.map(i => i.col)), maxCol = Math.max(...all.map(i => i.col));
+
+    // Column x positions, from the widest single-column node of each column
+    const colW = new Map();
+    for (const i of all) colW.set(i.col, Math.max(colW.get(i.col) ?? 0, i.node.width));
+    const colX = new Map();
+    let x = PAD;
+    for (let c = minCol; c <= maxCol; c++) { colX.set(c, x); x += (colW.get(c) ?? 0) + COL_GAP; }
+    const width = x - COL_GAP + PAD;
+
+    // Bands: biggest component first; within one, outside dependencies on top, then by first column (a group's
+    // dependencies tend to start earlier, so they end up above it)
+    const size = new Map();
+    for (const l of lanes.values())
+      size.set(l.component, (size.get(l.component) ?? 0) + l.items.reduce((s, i) => s + i.names.length, 0));
+    const first = l => Math.min(...l.items.map(i => i.col)), last = l => Math.max(...l.items.map(i => i.col));
+    const order = [...lanes.values()].sort((a, b) => size.get(b.component) - size.get(a.component)
+      || a.component.localeCompare(b.component)
+      || (a.key.startsWith("x:") ? -1 : b.key.startsWith("x:") ? 1 : 0)
+      || first(a) - first(b) || last(a) - last(b) || a.key.localeCompare(b.key));
+    let y = 0;
+    for (const [n, l] of order.entries()) {
+      if (n > 0 && l.component !== order[n - 1].component) y += 2 * LANE_GAP; // unrelated: a wider gap
+      const perCol = new Map();
+      for (const i of l.items) perCol.set(i.col, (perCol.get(i.col) ?? 0) + 1);
+      l.rows = Math.max(...perCol.values());
+      l.slot = Math.max(...l.items.map(i => i.node.height));
+      l.top = y + (l.frame ? HEADER + 4 : 0);
+      l.height = (l.frame ? HEADER + 4 + PAD : 0) + l.rows * l.slot + (l.rows - 1) * ROW_GAP;
+      y += l.height + LANE_GAP;
+    }
+
+    // Rows within a band and column: by the mean height of what each node depends on (fewer crossings), then name
+    const pos = new Map(); // visual id -> { x, y, w, h }
+    const centerY = id => { const p = pos.get(id); return p ? p.y + p.h / 2 : null; };
+    for (let c = minCol; c <= maxCol; c++)
+      for (const l of order) {
+        const here = l.items.filter(i => i.col === c);
+        const key = i => {
+          const ys = i.names.flatMap(n => projects.get(n)?.dependencies ?? []).map(d => centerY(visualId(d))).filter(v => v != null);
+          return ys.length ? ys.reduce((s, v) => s + v, 0) / ys.length : Infinity;
+        };
+        here.map(i => [i, key(i)]).sort((a, b) => a[1] - b[1] || a[0].node.id.localeCompare(b[0].node.id))
+          .forEach(([i], row) => pos.set(i.node.id, { x: colX.get(c), y: l.top + row * (l.slot + ROW_GAP), w: i.node.width, h: i.node.height }));
+      }
+
+    const children = [];
+    for (const l of order) {
+      if (l.frame) {
+        const top = l.top - HEADER - 4;
+        l.frame.x = 0; l.frame.y = top; l.frame.width = width; l.frame.height = l.height;
+        for (const n of l.frame.children) { const p = pos.get(n.id); n.x = p.x; n.y = p.y - top; }
+        children.push(l.frame);
+      } else for (const i of l.items) { const p = pos.get(i.node.id); i.node.x = p.x; i.node.y = p.y; children.push(i.node); }
+    }
+
+    // Edges as curves from the right side of the dependency to the left side of its user
+    for (const e of graph.edges) {
+      const s = pos.get(e.sources[0]), t = pos.get(e.targets[0]);
+      const sy = s.y + s.h / 2, tx = t.x, ty = t.y + t.h / 2;
+      e.container = "root";
+      if (tx > s.x + s.w) {
+        const sx = s.x + s.w, dx = (tx - sx) / 2;
+        e.path = `M${sx},${sy} C${sx + dx},${sy} ${tx - dx},${ty} ${tx},${ty}`;
+        e.labelAt = { x: (sx + tx) / 2, y: (sy + ty) / 2 };
+      } else { // backwards, between collapsed groups of a cycle: a loop on the left, out of one left side into the other
+        const out = Math.min(s.x, tx) - 60;
+        e.path = `M${s.x},${sy} C${out},${sy} ${out},${ty} ${tx},${ty}`;
+        e.labelAt = { x: out + 10, y: (sy + ty) / 2 };
+      }
+    }
+    return { id: "root", x: 0, y: 0, width, height: y, children, edges: graph.edges };
+  }
+
   async function layout() {
     const model = buildModel();
-    const elk = new ELK();
-    const graph = pack(await Promise.all(splitComponents(model.graph).map(part => elk.layout(part))));
+    const graph = state.layout === "lanes"
+      ? laneLayout(model.graph)
+      : pack(await Promise.all(splitComponents(model.graph).map(part => new ELK().layout(part))));
     const abs = new Map();
     const walk = (n, ox, oy) => {
       const x = ox + (n.x ?? 0), y = oy + (n.y ?? 0);
@@ -381,14 +497,19 @@
     }
 
     for (const e of graph.edges) {
+      const cls = "edge" + (e.outside ? " outside" : "") + (e.cyclic ? " cyclic" : "");
+      const tooltip = e.pairs.map(([d, u]) => `${u} uses ${d}`).join("\n");
+      if (e.path) { // band layout: a curve, in root coordinates
+        el("title", {}, el("path", { class: cls, d: e.path, "marker-end": "url(#arrow)", "data-edge": e.id }, edgesLayer)).textContent = tooltip;
+        if (e.pairs.length > 1)
+          el("text", { class: "edge-label", x: e.labelAt.x + 4, y: e.labelAt.y - 4, "data-edge": e.id }, edgesLayer).textContent = `×${e.pairs.length}`;
+        continue;
+      }
       const off = e.container && e.container !== "root" ? abs.get(e.container) : { x: abs.get("root").x, y: abs.get("root").y };
       for (const s of e.sections ?? []) {
         const pts = [s.startPoint, ...(s.bendPoints ?? []), s.endPoint].map(p => `${p.x + off.x},${p.y + off.y}`);
-        const path = el("polyline", {
-          class: "edge" + (e.outside ? " outside" : "") + (e.cyclic ? " cyclic" : ""),
-          points: pts.join(" "), "marker-end": "url(#arrow)", "data-edge": e.id,
-        }, edgesLayer);
-        el("title", {}, path).textContent = e.pairs.map(([d, u]) => `${u} uses ${d}`).join("\n");
+        const path = el("polyline", { class: cls, points: pts.join(" "), "marker-end": "url(#arrow)", "data-edge": e.id }, edgesLayer);
+        el("title", {}, path).textContent = tooltip;
         if (e.pairs.length > 1) {
           const mid = s.bendPoints?.[Math.floor(s.bendPoints.length / 2)] ?? s.startPoint;
           const lbl = el("text", { class: "edge-label", x: mid.x + off.x + 4, y: mid.y + off.y - 4, "data-edge": e.id }, edgesLayer);
@@ -562,6 +683,8 @@
   });
 
   // ---- Toolbar ----
+  const layoutSelect = document.getElementById("layout");
+  layoutSelect.addEventListener("change", () => { state.layout = layoutSelect.value; firstLayout = true; relayout(); });
   const groupBySelect = document.getElementById("groupBy");
   groupBySelect.addEventListener("change", () => {
     state.groupBy = groupBySelect.value; state.collapsed.clear(); state.pinned = null; firstLayout = true; relayout();

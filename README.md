@@ -325,8 +325,12 @@ libraries are blue, executables green.
 - **Cones**: hovering a node highlights the projects using it (orange, `--users-of`) and the ones it
   depends on (blue, `--deps-of`); a collapsed group stands for all its projects. Click to pin it and open a
   panel listing them, with the matching filter flags to copy.
-- **Unrelated parts** (frames and nodes no edge connects, even indirectly) are laid out separately and placed
-  side by side: never inside another part's frame or edge loops.
+- **Layout**: by default, *one band per group*: each solution is a full-width band, stacked; columns are the
+  project depths, shared by all bands, so left to right is the order `go` packs in and every project edge points
+  right. Related solutions stay together, dependencies above their users (roughly: by first column), each part's
+  outside dependencies on a band above it; unrelated parts follow after a wider gap. *Free* is the layered layout
+  of the whole graph (ELK), where unrelated parts are laid out separately and placed side by side, never inside
+  another part's frame or edge loops.
 - Search (Enter focuses the first match), wheel to zoom, drag to pan, *Fit*, Escape to clear.
 
 Dependencies that aren't projects of the config are drawn with a grey dashed outline and dashed

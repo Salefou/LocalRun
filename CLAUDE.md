@@ -194,6 +194,8 @@ shell escaping.
   per solution (one per repo at work), so projects are framed by solution, collapsible down to the solution graph.
   `GraphPage` fills `Resources/GraphPage.html` with the config's data and inlines the vendored elkjs (offline, e.g.
   behind a corporate proxy; a CDN was the POC). Grouping is a view only: filters and `go` stay per project.
+  Default layout (user's idea): one full-width band per solution, columns = project depth (no ELK); ELK's free
+  layout stays as an option, its connected components laid out apart (it packed unrelated solutions inside cycle loops).
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz (until 0.3.0).
 
 ## Known issues / candidate tasks
