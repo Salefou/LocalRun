@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LocalRun dependencies</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7385; --border: #d9dde5;
+    --group-bg: rgba(90, 110, 150, 0.06); --group-border: #b9c1d0; --edge: #9aa3b2;
+    --users: #e8833a; --deps: #3a8ee8; --cycle: #d64545; --match: #f2c94c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15181e; --panel: #1d2129; --text: #e3e6ec; --muted: #8b93a3; --border: #303644;
+      --group-bg: rgba(140, 160, 200, 0.06); --group-border: #47506a; --edge: #5f6879;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 14px;
+    background: var(--panel); border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  header .stats { color: var(--muted); }
+  header label { color: var(--muted); }
+  select, input, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 8px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  input[type=search] { width: 200px; }
+  .legend { display: flex; gap: 10px; color: var(--muted); font-size: 12px; margin-left: auto; flex-wrap: wrap; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+    margin-right: 4px; vertical-align: -1px; background: var(--c); border: 1px solid var(--b, transparent); }
+  main { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+  #canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+  #canvas.dragging { cursor: grabbing; }
+  #details { position: absolute; right: 12px; top: 12px; width: 320px; max-height: calc(100% - 24px); overflow: auto;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12); display: none; }
+  #details.open { display: block; }
+  #details h2 { font-size: 14px; margin: 0 0 4px; word-break: break-all; }
+  #details .sub { color: var(--muted); margin-bottom: 8px; word-break: break-all; }
+  #details h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 12px 0 4px; }
+  #details ul { margin: 0; padding-left: 18px; }
+  #details li { word-break: break-all; }
+  #details .warn { color: var(--cycle); }
+  #details .cmd { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+  #details .cmd.full code { white-space: normal; word-break: break-all; }
+  #details code { font: 12px Consolas, monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: 2px 5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #message { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--muted);
+    text-align: center; padding: 16px; }
+  .wrap { position: absolute; top: var(--header-h, 46px); bottom: 0; left: 0; right: 0; }
+
+  /* Graph */
+  .group rect.frame { fill: var(--group-bg); stroke: var(--group-border); stroke-dasharray: 4 3; }
+  .group.cyclic rect.frame { stroke: var(--cycle); stroke-dasharray: none; }
+  .group .header { cursor: pointer; }
+  .group .header text { fill: var(--muted); font: 600 12px system-ui, sans-serif; }
+  .node { cursor: pointer; }
+  .node rect { stroke: rgba(0, 0, 0, 0.35); stroke-width: 1; }
+  .node text { fill: #fff; font: 12px Consolas, monospace; pointer-events: none; }
+  .node text.name { font-weight: 700; }
+  .node.outside rect { fill: none; stroke: var(--edge); stroke-dasharray: 4 3; }
+  .node.outside text { fill: var(--muted); }
+  .node.collapsed rect { stroke-width: 2; stroke: var(--group-border); }
+  .node.collapsed.cyclic rect { stroke: var(--cycle); }
+  .edge { fill: none; stroke: var(--edge); stroke-width: 1.3; }
+  .edge.outside { stroke-dasharray: 5 4; }
+  .edge.cyclic { stroke: var(--cycle); stroke-width: 2; }
+  .edge.users { stroke: var(--users); stroke-width: 2.2; }
+  .edge.deps { stroke: var(--deps); stroke-width: 2.2; }
+  .edge-label { fill: var(--muted); font: 11px system-ui, sans-serif; }
+  .focusing .dim { opacity: 0.18; }
+  .node.seed rect { stroke: var(--text); stroke-width: 3; }
+  .node.users rect { stroke: var(--users); stroke-width: 3; }
+  .node.deps rect { stroke: var(--deps); stroke-width: 3; }
+  .node.match rect { stroke: var(--match); stroke-width: 3; }
+</style>
+</head>
+<body>
+<header id="toolbar">
+  <h1>LocalRun dependencies</h1>
+  <span class="stats" id="stats"></span>
+  <label>Group by
+    <select id="groupBy">
+      <option value="solution">solution</option>
+      <option value="folder">top folder</option>
+      <option value="none">nothing</option>
+    </select>
+  </label>
+  <label>Layout
+    <select id="layout">
+      <option value="lanes" title="Each group on its own band; columns = depth, the order go packs in">one band per group</option>
+      <option value="free" title="Free layered layout">free</option>
+    </select>
+  </label>
+  <button id="collapseAll" title="One node per group: the order to build them in">Collapse all</button>
+  <button id="expandAll" title="Every project, framed by its group">Expand all</button>
+  <button id="fit">Fit</button>
+  <input type="search" id="search" placeholder="Search a project (Enter: focus)">
+  <div class="legend">
+    <span style="--c: hsl(210 45% 50%)">library</span>
+    <span style="--c: hsl(120 40% 42%)">executable</span>
+    <span style="--c: transparent; --b: var(--edge)">outside the config</span>
+    <span style="--c: var(--users)">users of</span>
+    <span style="--c: var(--deps)">deps of</span>
+    <span style="--c: var(--cycle)">group cycle</span>
+  </div>
+</header>
+<div class="wrap" id="wrap">
+  <main>
+    <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="context-stroke"></path>
+        </marker>
+      </defs>
+      <g id="viewport"></g>
+    </svg>
+    <aside id="details"></aside>
+    <div id="message"></div>
+  </main>
+</div>
+
+<script id="graph-data" type="application/json">{{GRAPH_DATA}}</script>
+<!-- elkjs 0.9.3 (EPL-2.0, https://github.com/kieler/elkjs), inlined by lrun -->
+<script>{{ELKJS}}</script>
+<script>
+(() => {
+  "use strict";
+  const DATA = JSON.parse(document.getElementById("graph-data").textContent);
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const NO_SOLUTION = "(no solution)";
+
+  // ---- Model: projects, reverse edges, dependencies outside the config ----
+  const projects = new Map(DATA.projects.map(p => [p.name, p]));
+  const users = new Map();
+  for (const p of DATA.projects)
+    for (const dep of p.dependencies) {
+      if (!users.has(dep)) users.set(dep, []);
+      users.get(dep).push(p.name);
+    }
+  const outside = [...new Set(DATA.projects.flatMap(p => p.dependencies).filter(d => !projects.has(d)))].sort();
+
+  const state = { groupBy: "solution", layout: "lanes", collapsed: new Set(), hovered: null, pinned: null, search: "" };
+
+  function groupOf(name) {
+    const p = projects.get(name);
+    if (!p || state.groupBy === "none") return null;
+    return state.groupBy === "solution" ? (p.solution ?? NO_SOLUTION) : p.folder;
+  }
+  function groupLabel(key) {
+    if (state.groupBy !== "solution" || key === NO_SOLUTION) return key;
+    return key.split(/[\\/]/).pop();
+  }
+  function groupKeys() {
+    const keys = new Set();
+    for (const p of DATA.projects) { const g = groupOf(p.name); if (g != null) keys.add(g); }
+    return [...keys].sort((a, b) => a.localeCompare(b));
+  }
+  function membersOf(key) { return DATA.projects.filter(p => groupOf(p.name) === key).map(p => p.name); }
+
+  function closure(seeds, next) {
+    const seen = new Set(seeds), todo = [...seeds];
+    while (todo.length) for (const n of next(todo.pop()) ?? []) if (!seen.has(n)) { seen.add(n); todo.push(n); }
+    return seen;
+  }
+  const depsCone = seeds => closure(seeds, n => projects.get(n)?.dependencies);
+  const usersCone = seeds => closure(seeds, n => users.get(n));
+
+  // ---- Group graph: dependency edges between groups, and its cycles (Tarjan) ----
+  // The project graph is acyclic, but groups can still depend on each other both ways (A.Lib1 -> B.Lib -> A.Lib2):
+  // such groups can't be built one after the other in a single pass.
+  function groupGraph() {
+    const edges = new Map(); // dependency group -> Set(user groups)
+    for (const p of DATA.projects) {
+      const gu = groupOf(p.name);
+      for (const dep of p.dependencies) {
+        const gd = groupOf(dep);
+        if (gu == null || gd == null || gu === gd) continue;
+        if (!edges.has(gd)) edges.set(gd, new Set());
+        edges.get(gd).add(gu);
+      }
+    }
+    let index = 0; const idx = new Map(), low = new Map(), stack = [], onStack = new Set(), sccOf = new Map(), cycles = [];
+    const visit = v => {
+      idx.set(v, index); low.set(v, index); index++; stack.push(v); onStack.add(v);
+      for (const w of edges.get(v) ?? []) {
+        if (!idx.has(w)) { visit(w); low.set(v, Math.min(low.get(v), low.get(w))); }
+        else if (onStack.has(w)) low.set(v, Math.min(low.get(v), idx.get(w)));
+      }
+      if (low.get(v) === idx.get(v)) {
+        const scc = []; let w;
+        do { w = stack.pop(); onStack.delete(w); scc.push(w); } while (w !== v);
+        scc.forEach(g => sccOf.set(g, scc));
+        if (scc.length > 1) cycles.push(scc.sort());
+      }
+    };
+    for (const g of groupKeys()) if (!idx.has(g)) visit(g);
+    const inCycle = (a, b) => a != null && b != null && a !== b && sccOf.get(a) === sccOf.get(b);
+    return { edges, cycles, inCycle, cyclic: new Set(cycles.flat()) };
+  }
+
+  // ---- Visible graph: projects, or one node per collapsed group ----
+  const measureCtx = document.createElement("canvas").getContext("2d");
+  function textWidth(text, bold) {
+    measureCtx.font = `${bold ? "700 " : ""}12px Consolas, monospace`;
+    return measureCtx.measureText(text).width;
+  }
+  const LINE = 15, PAD_X = 10, PAD_Y = 7, HEADER = 26;
+
+  function visualId(name) {
+    const g = groupOf(name);
+    if (g != null && state.collapsed.has(g)) return "g:" + g;
+    return (projects.has(name) ? "p:" : "x:") + name;
+  }
+  function namesOf(id) {
+    if (id.startsWith("g:")) return membersOf(id.slice(2));
+    return [id.slice(2)];
+  }
+
+  function nodeLines(id) {
+    const kind = id.slice(0, 2), key = id.slice(2);
+    if (kind === "g:") {
+      const n = membersOf(key).length;
+      return [groupLabel(key), `${n} project${n > 1 ? "s" : ""}`];
+    }
+    const p = projects.get(key);
+    if (!p) return [key];
+    const lines = [p.name, p.version];
+    if (p.latest && p.latest !== p.version) lines.push(`latest ${p.latest}`);
+    return lines;
+  }
+  function leaf(id) {
+    const lines = nodeLines(id);
+    const width = Math.ceil(Math.max(...lines.map((l, i) => textWidth(l, i === 0)))) + 2 * PAD_X;
+    return { id, width, height: lines.length * LINE + 2 * PAD_Y, lines };
+  }
+
+  function buildModel() {
+    const gg = groupGraph();
+    const children = [];
+    for (const key of groupKeys()) {
+      if (state.collapsed.has(key)) { children.push(leaf("g:" + key)); continue; }
+      children.push({
+        id: "c:" + key,
+        layoutOptions: { "elk.padding": `[top=${HEADER + 6},left=12,bottom=12,right=12]` },
+        children: membersOf(key).map(n => leaf("p:" + n)),
+      });
+    }
+    for (const p of DATA.projects) if (groupOf(p.name) == null) children.push(leaf("p:" + p.name));
+    for (const name of outside) children.push(leaf("x:" + name));
+
+    const edges = new Map();
+    for (const p of DATA.projects)
+      for (const dep of p.dependencies) {
+        const s = visualId(dep), t = visualId(p.name);
+        if (s === t) continue;
+        const k = s + "\u0000" + t;
+        if (!edges.has(k)) edges.set(k, { id: "e" + edges.size, sources: [s], targets: [t], pairs: [], outside: false, cyclic: false });
+        const e = edges.get(k);
+        e.pairs.push([dep, p.name]);
+        e.outside ||= !projects.has(dep);
+        e.cyclic ||= gg.inCycle(groupOf(dep), groupOf(p.name));
+      }
+    return { gg, graph: {
+      id: "root",
+      layoutOptions: {
+        "elk.algorithm": "layered",
+        "elk.direction": "RIGHT",
+        "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+        "elk.layered.spacing.nodeNodeBetweenLayers": "45",
+        "elk.spacing.nodeNode": "18",
+        "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
+        "elk.spacing.componentComponent": "40",
+      },
+      children,
+      edges: [...edges.values()],
+    } };
+  }
+
+  // ---- Rendering ----
+  const svg = document.getElementById("canvas"), viewport = document.getElementById("viewport");
+  let current = null; // { gg, graph (laid out), abs: Map id -> {x, y, node} }
+  let firstLayout = true;
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(SVG_NS, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function depthFill(p, collapsed) {
+    if (collapsed) return "hsl(220 18% 42%)";
+    const exe = p.type === "executable";
+    return `hsl(${exe ? 120 : 210} ${exe ? 40 : 45}% ${Math.max(28, 56 - p.depth * 6)}%)`;
+  }
+
+  // Top-level items (frames, collapsed groups, loose nodes) that no edge links, directly or not, are laid out apart:
+  // in one ELK graph, a cycle's back edges loop around their frames and unrelated components get packed inside the loops
+  function splitComponents(graph) {
+    const topOf = new Map(), parent = new Map();
+    for (const c of graph.children) {
+      topOf.set(c.id, c.id); parent.set(c.id, c.id);
+      for (const leafNode of c.children ?? []) topOf.set(leafNode.id, c.id);
+    }
+    const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+    for (const e of graph.edges) parent.set(find(topOf.get(e.sources[0])), find(topOf.get(e.targets[0])));
+    const parts = new Map();
+    for (const c of graph.children) {
+      const r = find(c.id);
+      if (!parts.has(r)) parts.set(r, { id: "root", layoutOptions: graph.layoutOptions, children: [], edges: [] });
+      parts.get(r).children.push(c);
+    }
+    for (const e of graph.edges) parts.get(find(topOf.get(e.sources[0]))).edges.push(e);
+    return [...parts.values()];
+  }
+
+  // Bounds of a laid-out component, its root-level edge routes included (they can loop outside the nodes)
+  function bounds(part) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const add = (x, y) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
+    for (const c of part.children) { add(c.x, c.y); add(c.x + c.width, c.y + c.height); }
+    for (const e of part.edges) {
+      if (e.container && e.container !== "root") continue; // inside a frame, so within its bounds
+      for (const s of e.sections ?? []) [s.startPoint, ...(s.bendPoints ?? []), s.endPoint].forEach(p => add(p.x, p.y));
+    }
+    return { x0, y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  // Shelf packing: biggest components first, rows about as wide as the window's aspect ratio suggests
+  function pack(parts) {
+    const GAP = 40;
+    const items = parts.map(part => ({ part, b: bounds(part) })).sort((a, b) => b.b.h * b.b.w - a.b.h * a.b.w);
+    const area = items.reduce((s, i) => s + (i.b.w + GAP) * (i.b.h + GAP), 0);
+    const aspect = Math.max(0.5, svg.clientWidth / Math.max(1, svg.clientHeight));
+    const rowWidth = Math.max(...items.map(i => i.b.w), Math.sqrt(area * aspect));
+    const merged = { id: "root", x: 0, y: 0, children: [], edges: [] };
+    let x = 0, y = 0, rowHeight = 0;
+    for (const { part, b } of items) {
+      if (x > 0 && x + b.w > rowWidth) { x = 0; y += rowHeight + GAP; rowHeight = 0; }
+      const dx = x - b.x0, dy = y - b.y0;
+      for (const c of part.children) { c.x += dx; c.y += dy; merged.children.push(c); }
+      for (const e of part.edges) {
+        if (!e.container || e.container === "root")
+          for (const s of e.sections ?? []) [s.startPoint, ...(s.bendPoints ?? []), s.endPoint].forEach(p => { p.x += dx; p.y += dy; });
+        merged.edges.push(e);
+      }
+      x += b.w + GAP; rowHeight = Math.max(rowHeight, b.h);
+    }
+    return merged;
+  }
+
+  // One full-width band per group, stacked; columns are the project depths, shared by every band, so a dependency is
+  // always in an earlier column (left to right is the order 'go' packs in) and project edges always point right.
+  // Inside a band, a column holds as many rows as it needs. Returns the same shape as an ELK result.
+  function laneLayout(graph) {
+    const COL_GAP = 70, ROW_GAP = 12, LANE_GAP = 16, PAD = 12;
+    const lanes = new Map();
+    const lane = (key, frame) => lanes.get(key) ?? lanes.set(key, { key, frame, items: [] }).get(key);
+    const depthOf = name => projects.get(name)?.depth;
+    const item = node => {
+      const names = namesOf(node.id);
+      let cols = names.map(depthOf).filter(d => d != null);
+      // A dependency outside the config: one column before its first user
+      if (!cols.length) cols = [Math.min(...(users.get(names[0]) ?? []).map(depthOf)) - 1];
+      // A collapsed group sits in the column of its first project
+      const col = Math.min(...cols);
+      return { node, col, names };
+    };
+    // Bands linked by edges, directly or not, form a component: they stay next to each other
+    const bandOf = new Map(), parent = new Map();
+    for (const c of graph.children) {
+      const band = c.id.startsWith("p:") ? "p:" : c.id; // ungrouped projects (Group by: nothing) share one band
+      parent.set(band, band);
+      for (const n of c.children ?? [c]) bandOf.set(n.id, band);
+    }
+    const find = k => { while (parent.get(k) !== k) { parent.set(k, parent.get(parent.get(k))); k = parent.get(k); } return k; };
+    for (const e of graph.edges) parent.set(find(bandOf.get(e.sources[0])), find(bandOf.get(e.targets[0])));
+    for (const c of graph.children) {
+      if (c.id.startsWith("c:")) { const l = lane(c.id, c); c.children.forEach(n => l.items.push(item(n))); }
+      // Dependencies outside the config: on a band of their own, above the component using them
+      else if (c.id.startsWith("x:")) lane("x:" + find(c.id), null).items.push(item(c));
+      else if (c.id.startsWith("g:")) lane(c.id, null).items.push(item(c));
+      else lane("p:", null).items.push(item(c));
+    }
+    for (const l of lanes.values()) l.component = find(l.key.startsWith("x:") ? l.items[0].node.id : l.key);
+    const all = [...lanes.values()].flatMap(l => l.items);
+    const minCol = Math.min(...all.map(i => i.col)), maxCol = Math.max(...all.map(i => i.col));
+
+    // Column x positions, from the widest single-column node of each column
+    const colW = new Map();
+    for (const i of all) colW.set(i.col, Math.max(colW.get(i.col) ?? 0, i.node.width));
+    const colX = new Map();
+    let x = PAD;
+    for (let c = minCol; c <= maxCol; c++) { colX.set(c, x); x += (colW.get(c) ?? 0) + COL_GAP; }
+    const width = x - COL_GAP + PAD;
+
+    // Bands: biggest component first; within one, outside dependencies on top, then by first column (a group's
+    // dependencies tend to start earlier, so they end up above it)
+    const size = new Map();
+    for (const l of lanes.values())
+      size.set(l.component, (size.get(l.component) ?? 0) + l.items.reduce((s, i) => s + i.names.length, 0));
+    const first = l => Math.min(...l.items.map(i => i.col)), last = l => Math.max(...l.items.map(i => i.col));
+    const order = [...lanes.values()].sort((a, b) => size.get(b.component) - size.get(a.component)
+      || a.component.localeCompare(b.component)
+      || (a.key.startsWith("x:") ? -1 : b.key.startsWith("x:") ? 1 : 0)
+      || first(a) - first(b) || last(a) - last(b) || a.key.localeCompare(b.key));
+    let y = 0;
+    for (const [n, l] of order.entries()) {
+      if (n > 0 && l.component !== order[n - 1].component) y += 2 * LANE_GAP; // unrelated: a wider gap
+      const perCol = new Map();
+      for (const i of l.items) perCol.set(i.col, (perCol.get(i.col) ?? 0) + 1);
+      l.rows = Math.max(...perCol.values());
+      l.slot = Math.max(...l.items.map(i => i.node.height));
+      l.top = y + (l.frame ? HEADER + 4 : 0);
+      l.height = (l.frame ? HEADER + 4 + PAD : 0) + l.rows * l.slot + (l.rows - 1) * ROW_GAP;
+      y += l.height + LANE_GAP;
+    }
+
+    // Rows within a band and column: by the mean height of what each node depends on (fewer crossings), then name
+    const pos = new Map(); // visual id -> { x, y, w, h }
+    const centerY = id => { const p = pos.get(id); return p ? p.y + p.h / 2 : null; };
+    for (let c = minCol; c <= maxCol; c++)
+      for (const l of order) {
+        const here = l.items.filter(i => i.col === c);
+        const key = i => {
+          const ys = i.names.flatMap(n => projects.get(n)?.dependencies ?? []).map(d => centerY(visualId(d))).filter(v => v != null);
+          return ys.length ? ys.reduce((s, v) => s + v, 0) / ys.length : Infinity;
+        };
+        here.map(i => [i, key(i)]).sort((a, b) => a[1] - b[1] || a[0].node.id.localeCompare(b[0].node.id))
+          .forEach(([i], row) => pos.set(i.node.id, { x: colX.get(c), y: l.top + row * (l.slot + ROW_GAP), w: i.node.width, h: i.node.height }));
+      }
+
+    const children = [];
+    for (const l of order) {
+      if (l.frame) {
+        const top = l.top - HEADER - 4;
+        l.frame.x = 0; l.frame.y = top; l.frame.width = width; l.frame.height = l.height;
+        for (const n of l.frame.children) { const p = pos.get(n.id); n.x = p.x; n.y = p.y - top; }
+        children.push(l.frame);
+      } else for (const i of l.items) { const p = pos.get(i.node.id); i.node.x = p.x; i.node.y = p.y; children.push(i.node); }
+    }
+
+    // Edges as curves from the right side of the dependency to the left side of its user
+    for (const e of graph.edges) {
+      const s = pos.get(e.sources[0]), t = pos.get(e.targets[0]);
+      const sy = s.y + s.h / 2, tx = t.x, ty = t.y + t.h / 2;
+      e.container = "root";
+      if (tx > s.x + s.w) {
+        const sx = s.x + s.w, dx = (tx - sx) / 2;
+        e.path = `M${sx},${sy} C${sx + dx},${sy} ${tx - dx},${ty} ${tx},${ty}`;
+        e.labelAt = { x: (sx + tx) / 2, y: (sy + ty) / 2 };
+      } else { // backwards, between collapsed groups of a cycle: a loop on the left, out of one left side into the other
+        const out = Math.min(s.x, tx) - 60;
+        e.path = `M${s.x},${sy} C${out},${sy} ${out},${ty} ${tx},${ty}`;
+        e.labelAt = { x: out + 10, y: (sy + ty) / 2 };
+      }
+    }
+    return { id: "root", x: 0, y: 0, width, height: y, children, edges: graph.edges };
+  }
+
+  async function layout() {
+    const model = buildModel();
+    const graph = state.layout === "lanes"
+      ? laneLayout(model.graph)
+      : pack(await Promise.all(splitComponents(model.graph).map(part => new ELK().layout(part))));
+    const abs = new Map();
+    const walk = (n, ox, oy) => {
+      const x = ox + (n.x ?? 0), y = oy + (n.y ?? 0);
+      abs.set(n.id, { x, y, node: n });
+      for (const c of n.children ?? []) walk(c, x, y);
+    };
+    walk(graph, -graph.x || 0, -graph.y || 0);
+    current = { gg: model.gg, graph, abs };
+    render();
+    if (firstLayout) { fit(); firstLayout = false; }
+  }
+
+  function render() {
+    viewport.replaceChildren();
+    const { graph, abs, gg } = current;
+    const groupsLayer = el("g", {}, viewport), edgesLayer = el("g", {}, viewport), nodesLayer = el("g", {}, viewport);
+
+    for (const c of graph.children) {
+      if (!c.id.startsWith("c:")) continue;
+      const key = c.id.slice(2), { x, y } = abs.get(c.id);
+      const g = el("g", { class: "group" + (gg.cyclic.has(key) ? " cyclic" : ""), "data-id": c.id }, groupsLayer);
+      el("rect", { class: "frame", x, y, width: c.width, height: c.height, rx: 8 }, g);
+      const header = el("g", { class: "header" }, g);
+      el("rect", { x, y, width: c.width, height: HEADER, fill: "transparent" }, header);
+      const t = el("text", { x: x + 10, y: y + 17 }, header);
+      t.textContent = `▾ ${groupLabel(key)}`;
+      el("title", {}, header).textContent = `${key}\nClick to collapse into one node`;
+      header.addEventListener("click", ev => { ev.stopPropagation(); toggle(key); });
+    }
+
+    for (const e of graph.edges) {
+      const cls = "edge" + (e.outside ? " outside" : "") + (e.cyclic ? " cyclic" : "");
+      const tooltip = e.pairs.map(([d, u]) => `${u} uses ${d}`).join("\n");
+      if (e.path) { // band layout: a curve, in root coordinates
+        el("title", {}, el("path", { class: cls, d: e.path, "marker-end": "url(#arrow)", "data-edge": e.id }, edgesLayer)).textContent = tooltip;
+        if (e.pairs.length > 1)
+          el("text", { class: "edge-label", x: e.labelAt.x + 4, y: e.labelAt.y - 4, "data-edge": e.id }, edgesLayer).textContent = `×${e.pairs.length}`;
+        continue;
+      }
+      const off = e.container && e.container !== "root" ? abs.get(e.container) : { x: abs.get("root").x, y: abs.get("root").y };
+      for (const s of e.sections ?? []) {
+        const pts = [s.startPoint, ...(s.bendPoints ?? []), s.endPoint].map(p => `${p.x + off.x},${p.y + off.y}`);
+        const path = el("polyline", { class: cls, points: pts.join(" "), "marker-end": "url(#arrow)", "data-edge": e.id }, edgesLayer);
+        el("title", {}, path).textContent = tooltip;
+        if (e.pairs.length > 1) {
+          const mid = s.bendPoints?.[Math.floor(s.bendPoints.length / 2)] ?? s.startPoint;
+          const lbl = el("text", { class: "edge-label", x: mid.x + off.x + 4, y: mid.y + off.y - 4, "data-edge": e.id }, edgesLayer);
+          lbl.textContent = `×${e.pairs.length}`;
+        }
+      }
+    }
+
+    for (const [id, { x, y, node }] of abs) {
+      if (!/^[pxg]:/.test(id)) continue;
+      const key = id.slice(2), p = projects.get(key);
+      const collapsed = id.startsWith("g:");
+      const cls = ["node", collapsed ? "collapsed" : "", id.startsWith("x:") ? "outside" : "",
+        collapsed && gg.cyclic.has(key) ? "cyclic" : ""].join(" ");
+      const g = el("g", { class: cls, "data-id": id }, nodesLayer);
+      el("rect", { x, y, width: node.width, height: node.height, rx: 6,
+        fill: id.startsWith("x:") ? "none" : depthFill(p ?? {}, collapsed) }, g);
+      node.lines ??= nodeLines(id);
+      node.lines.forEach((line, i) => {
+        const t = el("text", { x: x + PAD_X, y: y + PAD_Y + LINE * i + 11, class: i === 0 ? "name" : "" }, g);
+        t.textContent = line;
+      });
+      el("title", {}, g).textContent = collapsed ? `${key}\nDouble-click to expand` : (p ? p.path : `${key}: not a project of the config`);
+      g.addEventListener("mouseenter", () => { state.hovered = id; highlight(); });
+      g.addEventListener("mouseleave", () => { if (state.hovered === id) { state.hovered = null; highlight(); } });
+      g.addEventListener("click", ev => { ev.stopPropagation(); state.pinned = state.pinned === id ? null : id; highlight(); details(); });
+      if (collapsed) g.addEventListener("dblclick", ev => { ev.stopPropagation(); toggle(key); });
+    }
+    highlight();
+    details();
+    stats();
+  }
+
+  // Cones of the focused node, computed on projects: a collapsed group stands for all its members
+  function highlight() {
+    const focus = state.pinned ?? state.hovered;
+    const q = state.search.trim().toLowerCase();
+    viewport.classList.toggle("focusing", !!focus);
+    let seeds = new Set(), ups = new Set(), downs = new Set();
+    if (focus && current.abs.has(focus)) {
+      seeds = new Set(namesOf(focus));
+      ups = usersCone(seeds); downs = depsCone(seeds);
+    }
+    for (const g of viewport.querySelectorAll(".node")) {
+      const names = namesOf(g.dataset.id);
+      const role = names.some(n => seeds.has(n)) ? "seed" : names.some(n => ups.has(n)) ? "users"
+        : names.some(n => downs.has(n)) ? "deps" : "dim";
+      g.classList.remove("seed", "users", "deps", "dim", "match");
+      if (focus) g.classList.add(role);
+      if (q && names.some(n => n.toLowerCase().includes(q))) g.classList.add("match");
+    }
+    for (const g of viewport.querySelectorAll(".group")) {
+      const names = membersOf(g.dataset.id.slice(2));
+      g.classList.toggle("dim", !!focus && !names.some(n => ups.has(n) || downs.has(n)));
+    }
+    const edgeById = new Map(current.graph.edges.map(e => [e.id, e]));
+    for (const p of viewport.querySelectorAll("[data-edge]")) {
+      const e = edgeById.get(p.dataset.edge);
+      p.classList.remove("users", "deps", "dim");
+      if (!focus) continue;
+      // dependency -> user: on the users-of cone when both ends are in it, on the deps-of cone likewise
+      if (e.pairs.some(([d, u]) => ups.has(d) && ups.has(u) && !seeds.has(u))) p.classList.add("users");
+      else if (e.pairs.some(([d, u]) => downs.has(d) && downs.has(u) && !seeds.has(d))) p.classList.add("deps");
+      else p.classList.add("dim");
+    }
+  }
+
+  function details() {
+    const box = document.getElementById("details");
+    const id = state.pinned;
+    if (!id || !current.abs.has(id)) { box.classList.remove("open"); return; }
+    const names = namesOf(id), seeds = new Set(names);
+    const ups = [...usersCone(seeds)].filter(n => !seeds.has(n)).sort();
+    const downs = [...depsCone(seeds)].filter(n => !seeds.has(n)).sort();
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const list = items => items.length ? `<ul>${items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : `<div class="sub">none</div>`;
+    const own = names.filter(n => projects.has(n)).join(" ");
+    const line = (text, cls = "") => `<div class="cmd ${cls}"><code title="${esc(text)}">${esc(text)}</code><button data-copy="${esc(text)}">Copy</button></div>`;
+    const cmd = flag => line(`${flag} ${own}`);
+    // What is highlighted: both cones, hence --union (the flags are AND'ed without it)
+    const query = () => `<h3>Highlighted</h3>${line(`lrun build --root "${DATA.rootPath}" --users-of ${own} --deps-of ${own} --union --plot`, "full")}`;
+    let html;
+    if (id.startsWith("g:")) {
+      const key = id.slice(2), gg = current.gg;
+      const usedBy = [...(gg.edges.get(key) ?? [])].sort();
+      const dependsOn = [...gg.edges].filter(([, us]) => us.has(key)).map(([g]) => g).sort();
+      const cycle = gg.cycles.find(c => c.includes(key));
+      html = `<h2>${esc(groupLabel(key))}</h2><div class="sub">${esc(key)}</div>`
+        + (cycle ? `<div class="warn">In a group cycle with ${esc(cycle.filter(g => g !== key).map(groupLabel).join(", "))}: these can't be built one after the other.</div>` : "")
+        + `<h3>Projects (${names.length})</h3>${list(names)}`
+        + `<h3>Depends on</h3>${list(dependsOn.map(groupLabel))}<h3>Used by</h3>${list(usedBy.map(groupLabel))}`
+        + `<h3>Filters</h3>${cmd("--users-of")}${cmd("--deps-of")}${query()}`;
+    } else if (id.startsWith("p:")) {
+      const p = projects.get(names[0]);
+      html = `<h2>${esc(p.name)}</h2><div class="sub">${esc(p.type)} · ${esc(p.version)}${p.latest && p.latest !== p.version ? ` · latest ${esc(p.latest)}` : ""}</div>`
+        + `<div class="sub">${esc(p.path)}<br>${esc(p.solution ?? NO_SOLUTION)}</div>`
+        + `<h3>Users of it (${ups.length})</h3>${list(ups)}<h3>Its dependencies (${downs.length})</h3>${list(downs)}`
+        + `<h3>Filters</h3>${cmd("--users-of")}${cmd("--deps-of")}${query()}`;
+    } else {
+      html = `<h2>${esc(names[0])}</h2><div class="sub">Not a project of the config: left out by a filter, a name collision or a cycle, or outside every solution. The commands leave it alone.</div>`
+        + `<h3>Used by (${ups.length})</h3>${list(ups)}`;
+    }
+    box.innerHTML = html;
+    box.classList.add("open");
+    for (const b of box.querySelectorAll("[data-copy]"))
+      b.addEventListener("click", () => navigator.clipboard?.writeText(b.dataset.copy).then(() => { b.textContent = "Copied"; }));
+  }
+
+  function stats() {
+    const keys = groupKeys(), gg = current.gg;
+    const parts = [`${DATA.projects.length} projects`];
+    if (state.groupBy !== "none") parts.push(`${keys.length} ${state.groupBy === "solution" ? "solutions" : "folders"}`);
+    if (outside.length) parts.push(`${outside.length} outside`);
+    if (gg.cycles.length) parts.push(`⚠ ${gg.cycles.length} group cycle${gg.cycles.length > 1 ? "s" : ""}`);
+    document.getElementById("stats").textContent = parts.join(" · ");
+  }
+
+  function toggle(key) {
+    if (state.collapsed.has(key)) state.collapsed.delete(key); else state.collapsed.add(key);
+    relayout();
+  }
+  function relayout() {
+    // A pinned node that disappears (its group collapsed or expanded) moves to what now stands for it
+    if (state.pinned) {
+      const ids = new Set(namesOf(state.pinned).map(visualId));
+      state.pinned = ids.size === 1 ? [...ids][0] : null;
+    }
+    state.hovered = null;
+    layout().catch(showError);
+  }
+
+  // ---- Pan and zoom ----
+  const view = { x: 0, y: 0, k: 1 };
+  function applyView() { viewport.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`); }
+  function fit() {
+    const box = viewport.getBBox(), w = svg.clientWidth, h = svg.clientHeight;
+    if (!box.width || !box.height) return;
+    view.k = Math.min(1.5, 0.92 * Math.min(w / box.width, h / box.height));
+    view.x = (w - box.width * view.k) / 2 - box.x * view.k;
+    view.y = (h - box.height * view.k) / 2 - box.y * view.k;
+    applyView();
+  }
+  function centerOn(id) {
+    const a = current.abs.get(id); if (!a) return;
+    const w = svg.clientWidth, h = svg.clientHeight;
+    view.k = Math.max(view.k, 1);
+    view.x = w / 2 - (a.x + a.node.width / 2) * view.k;
+    view.y = h / 2 - (a.y + a.node.height / 2) * view.k;
+    applyView();
+  }
+  svg.addEventListener("wheel", ev => {
+    ev.preventDefault();
+    const r = svg.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    const k = Math.min(4, Math.max(0.1, view.k * Math.exp(-ev.deltaY * 0.0015)));
+    view.x = mx - (mx - view.x) * (k / view.k); view.y = my - (my - view.y) * (k / view.k); view.k = k;
+    applyView();
+  }, { passive: false });
+  let drag = null;
+  svg.addEventListener("pointerdown", ev => {
+    if (ev.target.closest(".node, .header")) return;
+    drag = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y, moved: false };
+    svg.setPointerCapture(ev.pointerId); svg.classList.add("dragging");
+  });
+  svg.addEventListener("pointermove", ev => {
+    if (!drag) return;
+    drag.moved ||= Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) > 3;
+    view.x = drag.vx + ev.clientX - drag.x; view.y = drag.vy + ev.clientY - drag.y; applyView();
+  });
+  svg.addEventListener("pointerup", () => {
+    if (drag && !drag.moved && state.pinned) { state.pinned = null; highlight(); details(); }
+    drag = null; svg.classList.remove("dragging");
+  });
+
+  // ---- Toolbar ----
+  const layoutSelect = document.getElementById("layout");
+  layoutSelect.addEventListener("change", () => { state.layout = layoutSelect.value; firstLayout = true; relayout(); });
+  const groupBySelect = document.getElementById("groupBy");
+  groupBySelect.addEventListener("change", () => {
+    state.groupBy = groupBySelect.value; state.collapsed.clear(); state.pinned = null; firstLayout = true; relayout();
+  });
+  document.getElementById("collapseAll").addEventListener("click", () => {
+    groupKeys().forEach(k => state.collapsed.add(k)); firstLayout = true; relayout();
+  });
+  document.getElementById("expandAll").addEventListener("click", () => { state.collapsed.clear(); firstLayout = true; relayout(); });
+  document.getElementById("fit").addEventListener("click", fit);
+  const search = document.getElementById("search");
+  search.addEventListener("input", () => { state.search = search.value; highlight(); });
+  search.addEventListener("keydown", ev => {
+    if (ev.key !== "Enter") return;
+    const q = search.value.trim().toLowerCase(); if (!q) return;
+    const name = [...projects.keys(), ...outside].find(n => n.toLowerCase().includes(q)); if (!name) return;
+    const id = visualId(name);
+    state.pinned = id; highlight(); details(); centerOn(id);
+  });
+  document.addEventListener("keydown", ev => {
+    if (ev.key === "Escape") { state.pinned = null; search.value = ""; state.search = ""; highlight(); details(); }
+  });
+  window.addEventListener("resize", () => {
+    document.getElementById("wrap").style.setProperty("--header-h", document.getElementById("toolbar").offsetHeight + "px");
+  });
+
+  function showError(err) {
+    const m = document.getElementById("message");
+    m.style.display = "flex";
+    m.textContent = err?.message ?? String(err);
+    console.error(err);
+  }
+
+  document.getElementById("wrap").style.setProperty("--header-h", document.getElementById("toolbar").offsetHeight + "px");
+  layout().catch(showError);
+})();
+</script>
+</body>
+</html>

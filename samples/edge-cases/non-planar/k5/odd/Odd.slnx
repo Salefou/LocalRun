@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="LrEdge.K1/LrEdge.K1.csproj" />
+  <Project Path="LrEdge.K3/LrEdge.K3.csproj" />
+  <Project Path="LrEdge.K5/LrEdge.K5.csproj" />
+</Solution>

@@ -189,7 +189,14 @@ shell escaping.
   same PR: `build --remote` excluding the local feed, then `--all-sources`; the user replaced both with
   "all sources by default, `--csproj` to opt out". Writing the csproj or reading the sources at pack time were
   the rejected alternatives; colleagues pushing odd versions were judged rare (custom suffixes handle them).
-- Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz.
+- 2026-10-27, branch `claude/interactive-plot` (0.3.0): `plot` writes an interactive HTML page instead of the Graphviz
+  DOT/SVG (dropped, not kept behind a flag: the user only plots through `build --plot`). Motivation: the user builds
+  per solution (one per repo at work), so projects are framed by solution, collapsible down to the solution graph.
+  `GraphPage` fills `Resources/GraphPage.html` with the config's data and inlines the vendored elkjs (offline, e.g.
+  behind a corporate proxy; a CDN was the POC). Grouping is a view only: filters and `go` stay per project.
+  Default layout (user's idea): one full-width band per solution, columns = project depth (no ELK); ELK's free
+  layout stays as an option, its connected components laid out apart (it packed unrelated solutions inside cycle loops).
+- Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz (until 0.3.0).
 
 ## Known issues / candidate tasks
 
@@ -197,9 +204,5 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
 
 - Batch git operations across the repos of a config (`lrun git …`, keep going on failure, summary):
   floated by the user on 2026-10-24, postponed until they hit enough real use cases. Never stash/reset on the user's behalf.
-- Replace the Graphviz SVG of `plot` with an interactive HTML page (user's interest, 2026-10-24): layered layout
-  via elkjs embedded in the page (Graphviz's `dot` layout is fine; the costs are the ~20 MB native binaries,
-  win-x64/linux-x64 only, and a static image), hover to highlight a project's users-of / deps-of cones, search,
-  zoom. MSAGL (pure .NET) was the portability-only alternative. Not started.
 - Versions and package ids come from the csproj XML only (`Directory.Build.props` and `$(…)` values unseen).
   `dotnet msbuild -getProperty` would be exact but costs ~1 s per project; deferred to 0.3.0 at the earliest (2026-10-27).

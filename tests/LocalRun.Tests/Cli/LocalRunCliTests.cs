@@ -54,11 +54,11 @@ public class LocalRunCliTests
             string first = LocalRunCli.UniqueVisualsPath(folder, now);
             Assert.Equal(Path.Combine(folder, "dependencies-20261024-031502"), first);
 
-            File.WriteAllText($"{first}.svg", "");
+            File.WriteAllText($"{first}.html", "");
             string second = LocalRunCli.UniqueVisualsPath(folder, now);
             Assert.Equal($"{first}-2", second);
 
-            File.WriteAllText($"{second}.dot", "");
+            File.WriteAllText($"{second}.html", "");
             Assert.Equal($"{first}-3", LocalRunCli.UniqueVisualsPath(folder, now));
         }
         finally

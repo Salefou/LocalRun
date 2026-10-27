@@ -40,12 +40,13 @@ What each part is there to exercise:
 | Executables for `up` | OrderGateway, RiskService, ReportCli, Island.App print the version of every LrSample library they loaded |
 | Services vs jobs under `up` | OrderGateway and RiskService (`svc`) are long-running HTTP services that stop on Ctrl+C; ReportCli and Island.App are one-shot jobs |
 
-`edge-cases/` holds graphs that are *meant* to misbehave. It sits outside `workspace/` so it never
-breaks a normal run.
+`edge-cases/` holds graphs that are *meant* to misbehave, or to be hard to draw. It sits outside
+`workspace/` so it never breaks a normal run.
 
 `lrun build` run from the repository root scans `samples/` too. Its only expected warnings are the
-intended ones: `LrSample.Orphan` in no solution, and the `LrEdge.A, LrEdge.B, LrEdge.C` cycle with
-`LrEdge.Top` kept without it. Any other warning is a regression.
+intended ones: `LrSample.Orphan` in no solution, the `LrEdge.Shared` name collision (an error, with
+`LrEdge.Consumer` kept without it), and the `LrEdge.A, LrEdge.B, LrEdge.C` cycle with `LrEdge.Top` kept
+without it. Any other warning is a regression.
 
 ## Setup
 
@@ -74,8 +75,13 @@ lrun plot --open
 - Logs `[🌐] Fetching the latest versions on your NuGet sources and in …\samples\.feed ('--csproj' skips this)...`, then
   `not found, pack will start from the csproj version …` for every project: `.feed/` is still empty and
   nuget.org has no `LrSample.*`.
-- `localrun.config.json` lists the 11 projects; the SVG shows the two islands and the diamond, with
-  the executables in green and nothing dashed (no dependency outside the config).
+- `localrun.config.json` lists the 11 projects; the page shows them in 6 frames (`Core.sln`, `Pricing.sln`,
+  `Trading.sln`, `Reporting.sln`, `Island.sln`, and `(no solution)` holding Orphan with no edge), the two islands
+  and the diamond, the executables in green and nothing dashed (no dependency outside the config). The header
+  reads `11 projects · 6 solutions`, with no group cycle.
+- *Collapse all* leaves one node per solution: Core → Pricing → Trading and Reporting (Core → Trading as well,
+  through Logging), Island and `(no solution)` apart. Hovering `Pricing.sln` lights Trading and Reporting in
+  orange, Core in blue.
 
 ### 2. Filters
 
@@ -186,7 +192,7 @@ Variations worth trying:
 - **Debugging one service**: `lrun up --exclude LrSample.RiskService` logs `Not running
   LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
   IDE (`:5102` stays free for it). `--exclude LrSample.Pricing` is rejected (exit code 2): it's a library.
-- **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `lrun-visuals/dependencies-<date-time>.svg` and prints
+- **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `lrun-visuals/dependencies-<date-time>.html` and prints
   it as a `file:///` link; Ctrl+click it (Windows Terminal, VS Code) to open it in the browser.
 
 ### 5. Iterate, then continue from the latest versions
@@ -229,6 +235,7 @@ lrun pack --next --suffix dev
 lrun build --root edge-cases/cycle --config edge.json
 lrun build --root edge-cases/name-collision --config edge.json
 lrun build --root edge-cases/slnx-only --config edge.json
+lrun build --root edge-cases/non-planar --config edge.json --plot
 ```
 
 | Case | What happens |
@@ -236,6 +243,7 @@ lrun build --root edge-cases/slnx-only --config edge.json
 | `cycle/`: A → B → C → A, with A → Base and Top → A | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `LrEdge.Top` kept without its dependency on it. The config holds Base and Top |
 | `name-collision/`: two `LrEdge.Shared` | Succeeds (exit 0) with `[ERR] Several projects are named LrEdge.Shared, all left out of the config: repo-one\…, repo-two\…` and a warning that `LrEdge.Consumer` is kept without its dependency on it. The config holds Consumer only. Adding `--users-of LrEdge.Shared` fails with `Ambiguous project(s)`, exit code 2 |
 | `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Succeeds with no warning: `.slnx` solutions (the .NET 10 SDK default) are read like `.sln` ones. A `Did not find any solution referencing …LrEdge.Modern` warning means `.slnx` support regressed |
+| `non-planar/`: the two smallest graphs that can't be drawn without crossings, as dependency graphs. `k33/`: K₃,₃, every `LrEdge.Desk.*` (X, Y, Z, in `Desks.slnx`) uses every `LrEdge.Feed.*` (A, B, C, in `Feeds.slnx`). `k5/`: K₅, each `LrEdge.K<i>` uses every `K<j>` with j < i, odd ones in `Odd.slnx` and even ones in `Even.slnx` (project references within a solution, package references across) | Succeeds with no warning, 11 projects. The page reads `11 projects · 4 solutions · ⚠ 1 group cycle`: no project cycle, but Odd and Even use each other (K1 → K2 → K3), so their frames and the edges between them are red. Hovering K3 lights K4, K5 in orange and K1, K2 in blue. *Collapse all* leaves Feeds → Desks (`×9`) and Odd ⇄ Even (3 edges each way). With the default bands, Odd and Even are adjacent bands and the K edges zigzag between them, all pointing right; collapsed, Odd → Even points right and Even → Odd loops back on the left. With *Layout: free*, the layout has to route around the cycle and some K edges loop back around the frames; `lrun build --root edge-cases --plot` then shows the K₅ part on its own, the other edge cases packed beside it, never inside its loops |
 
 ## Changing the samples
 

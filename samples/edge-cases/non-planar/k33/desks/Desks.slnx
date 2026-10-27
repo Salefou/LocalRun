@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="LrEdge.Desk.X/LrEdge.Desk.X.csproj" />
+  <Project Path="LrEdge.Desk.Y/LrEdge.Desk.Y.csproj" />
+  <Project Path="LrEdge.Desk.Z/LrEdge.Desk.Z.csproj" />
+</Solution>

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../LrEdge.K1/LrEdge.K1.csproj" />
+    <PackageReference Include="LrEdge.K2" Version="*-*" />
+    <ProjectReference Include="../LrEdge.K3/LrEdge.K3.csproj" />
+    <PackageReference Include="LrEdge.K4" Version="*-*" />
+  </ItemGroup>
+</Project>
