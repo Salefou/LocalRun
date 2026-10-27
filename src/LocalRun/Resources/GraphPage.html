@@ -46,6 +46,7 @@
   #details li { word-break: break-all; }
   #details .warn { color: var(--cycle); }
   #details .cmd { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+  #details .cmd.full code { white-space: normal; word-break: break-all; }
   #details code { font: 12px Consolas, monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
     padding: 2px 5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #message { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--muted);
@@ -586,10 +587,11 @@
     const downs = [...depsCone(seeds)].filter(n => !seeds.has(n)).sort();
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
     const list = items => items.length ? `<ul>${items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : `<div class="sub">none</div>`;
-    const cmd = (flag) => {
-      const text = `${flag} ${names.filter(n => projects.has(n)).join(" ")}`;
-      return `<div class="cmd"><code title="${esc(text)}">${esc(text)}</code><button data-copy="${esc(text)}">Copy</button></div>`;
-    };
+    const own = names.filter(n => projects.has(n)).join(" ");
+    const line = (text, cls = "") => `<div class="cmd ${cls}"><code title="${esc(text)}">${esc(text)}</code><button data-copy="${esc(text)}">Copy</button></div>`;
+    const cmd = flag => line(`${flag} ${own}`);
+    // What is highlighted: both cones, hence --union (the flags are AND'ed without it)
+    const query = () => `<h3>Highlighted</h3>${line(`lrun build --root "${DATA.rootPath}" --users-of ${own} --deps-of ${own} --union --plot`, "full")}`;
     let html;
     if (id.startsWith("g:")) {
       const key = id.slice(2), gg = current.gg;
@@ -600,13 +602,13 @@
         + (cycle ? `<div class="warn">In a group cycle with ${esc(cycle.filter(g => g !== key).map(groupLabel).join(", "))}: these can't be built one after the other.</div>` : "")
         + `<h3>Projects (${names.length})</h3>${list(names)}`
         + `<h3>Depends on</h3>${list(dependsOn.map(groupLabel))}<h3>Used by</h3>${list(usedBy.map(groupLabel))}`
-        + `<h3>Filters</h3>${cmd("--users-of")}${cmd("--deps-of")}`;
+        + `<h3>Filters</h3>${cmd("--users-of")}${cmd("--deps-of")}${query()}`;
     } else if (id.startsWith("p:")) {
       const p = projects.get(names[0]);
       html = `<h2>${esc(p.name)}</h2><div class="sub">${esc(p.type)} · ${esc(p.version)}${p.latest && p.latest !== p.version ? ` · latest ${esc(p.latest)}` : ""}</div>`
         + `<div class="sub">${esc(p.path)}<br>${esc(p.solution ?? NO_SOLUTION)}</div>`
         + `<h3>Users of it (${ups.length})</h3>${list(ups)}<h3>Its dependencies (${downs.length})</h3>${list(downs)}`
-        + `<h3>Filters</h3>${cmd("--users-of")}${cmd("--deps-of")}`;
+        + `<h3>Filters</h3>${cmd("--users-of")}${cmd("--deps-of")}${query()}`;
     } else {
       html = `<h2>${esc(names[0])}</h2><div class="sub">Not a project of the config: left out by a filter, a name collision or a cycle, or outside every solution. The commands leave it alone.</div>`
         + `<h3>Used by (${ups.length})</h3>${list(ups)}`;

@@ -324,7 +324,8 @@ libraries are blue, executables green.
   project graph has no cycle, but these solutions can't be built one after the other.
 - **Cones**: hovering a node highlights the projects using it (orange, `--users-of`) and the ones it
   depends on (blue, `--deps-of`); a collapsed group stands for all its projects. Click to pin it and open a
-  panel listing them, with the matching filter flags to copy.
+  panel listing them, with the matching filter flags to copy, and the full `lrun build … --union --plot` command
+  giving exactly what is highlighted (both cones).
 - **Layout**: by default, *one band per group*: each solution is a full-width band, stacked; columns are the
   project depths, shared by all bands, so left to right is the order `go` packs in and every project edge points
   right. Related solutions stay together, dependencies above their users (roughly: by first column), each part's

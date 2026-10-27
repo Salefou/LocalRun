@@ -13,7 +13,7 @@ bumps the minor version, anything else the patch.
   Graphviz `.dot` and `.svg` files. Projects are framed by solution (or top folder); each solution collapses into
   one node, down to the solution-level graph, where solutions depending on each other both ways are flagged in red.
   Hovering or clicking a project highlights its users and dependencies, with the matching `--users-of` /
-  `--deps-of` flags to copy; search, zoom and pan. The page is self-contained and works offline.
+  `--deps-of` flags and the full `lrun build` command to copy; search, zoom and pan. The page is self-contained and works offline.
 - The tool no longer bundles Graphviz (about 20 MB of native binaries): `plot` now works on any platform.
 
 ## [0.2.2] - 2026-10-27
