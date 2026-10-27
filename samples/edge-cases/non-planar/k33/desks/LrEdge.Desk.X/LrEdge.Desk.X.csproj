@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="LrEdge.Feed.A" Version="*-*" />
+    <PackageReference Include="LrEdge.Feed.B" Version="*-*" />
+    <PackageReference Include="LrEdge.Feed.C" Version="*-*" />
+  </ItemGroup>
+</Project>

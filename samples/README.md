@@ -40,12 +40,13 @@ What each part is there to exercise:
 | Executables for `up` | OrderGateway, RiskService, ReportCli, Island.App print the version of every LrSample library they loaded |
 | Services vs jobs under `up` | OrderGateway and RiskService (`svc`) are long-running HTTP services that stop on Ctrl+C; ReportCli and Island.App are one-shot jobs |
 
-`edge-cases/` holds graphs that are *meant* to misbehave. It sits outside `workspace/` so it never
-breaks a normal run.
+`edge-cases/` holds graphs that are *meant* to misbehave, or to be hard to draw. It sits outside
+`workspace/` so it never breaks a normal run.
 
 `lrun build` run from the repository root scans `samples/` too. Its only expected warnings are the
-intended ones: `LrSample.Orphan` in no solution, and the `LrEdge.A, LrEdge.B, LrEdge.C` cycle with
-`LrEdge.Top` kept without it. Any other warning is a regression.
+intended ones: `LrSample.Orphan` in no solution, the `LrEdge.Shared` name collision (an error, with
+`LrEdge.Consumer` kept without it), and the `LrEdge.A, LrEdge.B, LrEdge.C` cycle with `LrEdge.Top` kept
+without it. Any other warning is a regression.
 
 ## Setup
 
@@ -234,6 +235,7 @@ lrun pack --next --suffix dev
 lrun build --root edge-cases/cycle --config edge.json
 lrun build --root edge-cases/name-collision --config edge.json
 lrun build --root edge-cases/slnx-only --config edge.json
+lrun build --root edge-cases/non-planar --config edge.json --plot
 ```
 
 | Case | What happens |
@@ -241,6 +243,7 @@ lrun build --root edge-cases/slnx-only --config edge.json
 | `cycle/`: A → B → C → A, with A → Base and Top → A | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `LrEdge.Top` kept without its dependency on it. The config holds Base and Top |
 | `name-collision/`: two `LrEdge.Shared` | Succeeds (exit 0) with `[ERR] Several projects are named LrEdge.Shared, all left out of the config: repo-one\…, repo-two\…` and a warning that `LrEdge.Consumer` is kept without its dependency on it. The config holds Consumer only. Adding `--users-of LrEdge.Shared` fails with `Ambiguous project(s)`, exit code 2 |
 | `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Succeeds with no warning: `.slnx` solutions (the .NET 10 SDK default) are read like `.sln` ones. A `Did not find any solution referencing …LrEdge.Modern` warning means `.slnx` support regressed |
+| `non-planar/`: the two smallest graphs that can't be drawn without crossings, as dependency graphs. `k33/`: K₃,₃, every `LrEdge.Desk.*` (X, Y, Z, in `Desks.slnx`) uses every `LrEdge.Feed.*` (A, B, C, in `Feeds.slnx`). `k5/`: K₅, each `LrEdge.K<i>` uses every `K<j>` with j < i, odd ones in `Odd.slnx` and even ones in `Even.slnx` (project references within a solution, package references across) | Succeeds with no warning, 11 projects. The page reads `11 projects · 4 solutions · ⚠ 1 group cycle`: no project cycle, but Odd and Even use each other (K1 → K2 → K3), so their frames and the edges between them are red. Hovering K3 lights K4, K5 in orange and K1, K2 in blue. *Collapse all* leaves Feeds → Desks (`×9`) and Odd ⇄ Even (3 edges each way). The layout has to route around the cycle: with the frames kept whole, some K edges loop back around them |
 
 ## Changing the samples
 

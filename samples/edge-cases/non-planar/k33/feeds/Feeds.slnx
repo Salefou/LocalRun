@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="LrEdge.Feed.A/LrEdge.Feed.A.csproj" />
+  <Project Path="LrEdge.Feed.B/LrEdge.Feed.B.csproj" />
+  <Project Path="LrEdge.Feed.C/LrEdge.Feed.C.csproj" />
+</Solution>
