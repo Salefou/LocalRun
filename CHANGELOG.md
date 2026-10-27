@@ -18,6 +18,16 @@ bumps the minor version, anything else the patch.
 
 - `build` leaves the test projects out of the config (projects referencing `Microsoft.NET.Test.Sdk`, setting
   `IsTestProject`, or using `MSTest.Sdk`) and lists them; `build --tests` keeps them.
+- `build` queries the NuGet sources of several projects at once, opens each source once per run, and reports a
+  failing source once instead of once per project.
+- `pack` warns about projects whose csproj sets `<PackageVersion>`, which overrides the planned version.
+
+### Fixed
+
+- Projects packed under another id than their name (`<PackageId>`, else `<AssemblyName>`) are looked up under that
+  id on the sources and in the package folders, and a `PackageReference` to that id now links to the project.
+  They were reported as not found, or matched an unrelated package of the same name, and consumers referencing them
+  as packages were left out of their dependency tree. The config records the id as `PackageId`.
 
 ## [0.2.1] - 2026-10-26
 

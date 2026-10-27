@@ -66,6 +66,35 @@ public sealed class NugetVersionCheckerTests : IDisposable
         Assert.Equal("2.3.0", latest?.ToNormalizedString());
     }
 
+    [Fact]
+    public async Task ADeadSource_LeavesTheOthersAnswering()
+    {
+        Packed("Lib", "1.2.0");
+        // Answers 404 to everything: a refused connection would fail the same way, after NuGet's retries (~30 s)
+        using var listener = new HttpListener();
+        string baseUrl = $"http://localhost:{FreePort()}/";
+        listener.Prefixes.Add(baseUrl);
+        listener.Start();
+        _ = Task.Run(async () =>
+        {
+            while (listener.IsListening)
+            {
+                try { using var response = (await listener.GetContextAsync()).Response; response.StatusCode = 404; }
+                catch (Exception) { return; } // the listener was disposed
+            }
+        });
+        File.WriteAllText(Path.Combine(root, "NuGet.Config"), $"""
+            <configuration>
+              <packageSources><clear /><add key="dead" value="{baseUrl}v3/index.json" allowInsecureConnections="true" /></packageSources>
+            </configuration>
+            """);
+        using var checker = new NugetVersionChecker();
+
+        // Twice: the second lookup reuses the source opened (and failed) by the first
+        Assert.Equal("1.2.0", (await checker.GetLatestVersionAcrossSourcesAsync("Lib", root, feed))?.ToNormalizedString());
+        Assert.Equal("1.2.0", (await checker.GetLatestVersionAcrossSourcesAsync("Lib", root, feed))?.ToNormalizedString());
+    }
+
     private static int FreePort()
     {
         var tcp = new TcpListener(IPAddress.Loopback, 0);

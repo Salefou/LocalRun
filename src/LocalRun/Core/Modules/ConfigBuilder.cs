@@ -5,6 +5,7 @@ using LocalRun.Core.Model;
 using LocalRun.Logger;
 using LocalRun.Options;
 using Microsoft.Extensions.Logging;
+using NuGet.Versioning;
 using System;
 
 public class ConfigBuilder
@@ -78,23 +79,38 @@ public class ConfigBuilder
     public async Task FetchLatestVersionsAsync(LocalRunConfig config)
     {
         logger.LogInformation("[🌐] Fetching the latest versions on your NuGet sources and in {LocalNugetPath} ('--csproj' skips this)...", config.LocalNugetPath);
-        var nugetVersionChecker = new NugetVersionChecker();
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        using var nugetVersionChecker = new NugetVersionChecker();
         // go restores with the local feed as an additional source, whatever the NuGet.Config files say
         string? localFeed = Directory.Exists(config.LocalNugetPath) ? config.LocalNugetPath : null;
-        foreach (var proj in config.Projects)
-        {
-            string projectFolder = Path.GetDirectoryName(Path.Combine(config.RootPath, proj.Path))!;
-            var latest = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.Name, projectFolder, localFeed);
-            if (latest == null)
+        // Several projects at once (each querying its sources at once); logged afterwards, in config order
+        var latestPerProject = new NuGetVersion?[config.Projects.Count];
+        await Parallel.ForEachAsync(Enumerable.Range(0, config.Projects.Count), new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentLookups },
+            async (i, _) =>
             {
-                logger.LogInformation("  {Project}: not found, pack will start from the csproj version {Version}", proj.Name, proj.Version);
+                var proj = config.Projects[i];
+                string projectFolder = Path.GetDirectoryName(Path.Combine(config.RootPath, proj.Path))!;
+                latestPerProject[i] = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.PackageIdOrName, projectFolder, localFeed);
+            });
+
+        for (int i = 0; i < config.Projects.Count; i++)
+        {
+            var proj = config.Projects[i];
+            string project = proj.PackageId == null ? proj.Name : $"{proj.Name} ({proj.PackageId})";
+            if (latestPerProject[i] is not { } latest)
+            {
+                logger.LogInformation("  {Project}: not found, pack will start from the csproj version {Version}", project, proj.Version);
                 continue;
             }
             // Normalized keeps the prerelease label (1.4.2-beta); .Version would give 1.4.2.0
             proj.LatestVersion = ProjectVersion.Parse(latest.ToNormalizedString());
-            logger.LogInformation("  {Project}: {LatestVersion} (csproj {Version})", proj.Name, proj.LatestVersion, proj.Version);
+            logger.LogInformation("  {Project}: {LatestVersion} (csproj {Version})", project, proj.LatestVersion, proj.Version);
         }
+        logger.LogDebug("Fetched the latest versions of {Count} projects in {ElapsedMs}ms", config.Projects.Count, stopwatch.ElapsedMilliseconds);
     }
+
+    /// <summary>Projects looked up at once by <see cref="FetchLatestVersionsAsync"/>: enough to hide the latency of remote feeds.</summary>
+    private const int MaxConcurrentLookups = 8;
 
     /// <summary>The projects of the graph with pending git changes, which <c>--git-changes</c> adds to the <c>--users-of</c> names.</summary>
     private static List<string> FindGitChanges(string rootPath, string[] csprojs, DependencyGraph graph)

@@ -201,5 +201,5 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
   via elkjs embedded in the page (Graphviz's `dot` layout is fine; the costs are the ~20 MB native binaries,
   win-x64/linux-x64 only, and a static image), hover to highlight a project's users-of / deps-of cones, search,
   zoom. MSAGL (pure .NET) was the portability-only alternative. Not started.
-- `NugetVersionChecker` has unused members (`GetLatestVersionAsync`, `GetLatestFromLocalFolder`,
-  `IsNewerThanRemoteAsync`).
+- Versions and package ids come from the csproj XML only (`Directory.Build.props` and `$(…)` values unseen).
+  `dotnet msbuild -getProperty` would be exact but costs ~1 s per project; deferred to 0.3.0 at the earliest (2026-10-27).
