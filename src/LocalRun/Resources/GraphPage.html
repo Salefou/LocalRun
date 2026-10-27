@@ -291,10 +291,65 @@
     return `hsl(${exe ? 120 : 210} ${exe ? 40 : 45}% ${Math.max(28, 56 - p.depth * 6)}%)`;
   }
 
+  // Top-level items (frames, collapsed groups, loose nodes) that no edge links, directly or not, are laid out apart:
+  // in one ELK graph, a cycle's back edges loop around their frames and unrelated components get packed inside the loops
+  function splitComponents(graph) {
+    const topOf = new Map(), parent = new Map();
+    for (const c of graph.children) {
+      topOf.set(c.id, c.id); parent.set(c.id, c.id);
+      for (const leafNode of c.children ?? []) topOf.set(leafNode.id, c.id);
+    }
+    const find = x => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
+    for (const e of graph.edges) parent.set(find(topOf.get(e.sources[0])), find(topOf.get(e.targets[0])));
+    const parts = new Map();
+    for (const c of graph.children) {
+      const r = find(c.id);
+      if (!parts.has(r)) parts.set(r, { id: "root", layoutOptions: graph.layoutOptions, children: [], edges: [] });
+      parts.get(r).children.push(c);
+    }
+    for (const e of graph.edges) parts.get(find(topOf.get(e.sources[0]))).edges.push(e);
+    return [...parts.values()];
+  }
+
+  // Bounds of a laid-out component, its root-level edge routes included (they can loop outside the nodes)
+  function bounds(part) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const add = (x, y) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
+    for (const c of part.children) { add(c.x, c.y); add(c.x + c.width, c.y + c.height); }
+    for (const e of part.edges) {
+      if (e.container && e.container !== "root") continue; // inside a frame, so within its bounds
+      for (const s of e.sections ?? []) [s.startPoint, ...(s.bendPoints ?? []), s.endPoint].forEach(p => add(p.x, p.y));
+    }
+    return { x0, y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  // Shelf packing: biggest components first, rows about as wide as the window's aspect ratio suggests
+  function pack(parts) {
+    const GAP = 40;
+    const items = parts.map(part => ({ part, b: bounds(part) })).sort((a, b) => b.b.h * b.b.w - a.b.h * a.b.w);
+    const area = items.reduce((s, i) => s + (i.b.w + GAP) * (i.b.h + GAP), 0);
+    const aspect = Math.max(0.5, svg.clientWidth / Math.max(1, svg.clientHeight));
+    const rowWidth = Math.max(...items.map(i => i.b.w), Math.sqrt(area * aspect));
+    const merged = { id: "root", x: 0, y: 0, children: [], edges: [] };
+    let x = 0, y = 0, rowHeight = 0;
+    for (const { part, b } of items) {
+      if (x > 0 && x + b.w > rowWidth) { x = 0; y += rowHeight + GAP; rowHeight = 0; }
+      const dx = x - b.x0, dy = y - b.y0;
+      for (const c of part.children) { c.x += dx; c.y += dy; merged.children.push(c); }
+      for (const e of part.edges) {
+        if (!e.container || e.container === "root")
+          for (const s of e.sections ?? []) [s.startPoint, ...(s.bendPoints ?? []), s.endPoint].forEach(p => { p.x += dx; p.y += dy; });
+        merged.edges.push(e);
+      }
+      x += b.w + GAP; rowHeight = Math.max(rowHeight, b.h);
+    }
+    return merged;
+  }
+
   async function layout() {
     const model = buildModel();
     const elk = new ELK();
-    const graph = await elk.layout(model.graph);
+    const graph = pack(await Promise.all(splitComponents(model.graph).map(part => elk.layout(part))));
     const abs = new Map();
     const walk = (n, ox, oy) => {
       const x = ox + (n.x ?? 0), y = oy + (n.y ?? 0);
