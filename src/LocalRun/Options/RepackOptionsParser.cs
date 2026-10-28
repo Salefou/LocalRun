@@ -6,7 +6,8 @@ internal partial class RepackOptionsParser
 {
     internal const string DefaultSuffix = "local";
 
-    public static RepackOptions Parse(CommandLineArgs args)
+    /// <param name="defaultSuffix">Prerelease label when <c>--suffix</c> is not given (the user's setting, else <see cref="DefaultSuffix"/>).</param>
+    public static RepackOptions Parse(CommandLineArgs args, string? defaultSuffix = null)
     {
         // Gone in 0.2.0: point at what replaced it rather than only rejecting it as unknown
         if (args.Flag("--remote"))
@@ -14,8 +15,8 @@ internal partial class RepackOptionsParser
 
         BumpType bumpType = BumpType.None;
         string? suffix = args.Value("--suffix");
-        if (suffix != null && !PrereleaseLabelRegex().IsMatch(suffix))
-            throw new UsageException($"Invalid '--suffix' value '{suffix}': use letters, digits and '-', optionally in dot-separated parts (e.g. 'dev', 'beta.2'), without a leading dash.");
+        if (suffix != null)
+            EnsureValidSuffix(suffix, "--suffix");
 
         List<string> bumpFlags = [];
         if (args.Flag("--patch"))
@@ -52,7 +53,7 @@ internal partial class RepackOptionsParser
 
         // Never plan stable versions for the local feed: a local 1.4.3 would sit in ~/.nuget/packages and
         // shadow the official 1.4.3 once it is published, since NuGet never downloads a cached version again
-        suffix ??= DefaultSuffix;
+        suffix ??= defaultSuffix ?? DefaultSuffix;
 
         return new RepackOptions()
         {
@@ -63,6 +64,12 @@ internal partial class RepackOptionsParser
             },
             CleanBeforeRestore = args.Flag("--clean"),
         };
+    }
+
+    internal static void EnsureValidSuffix(string suffix, string name)
+    {
+        if (!PrereleaseLabelRegex().IsMatch(suffix))
+            throw new UsageException($"Invalid '{name}' value '{suffix}': use letters, digits and '-', optionally in dot-separated parts (e.g. 'dev', 'beta.2'), without a leading dash.");
     }
 
     // SemVer 2 prerelease identifiers: non-empty [0-9A-Za-z-] parts separated by dots

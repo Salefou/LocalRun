@@ -24,6 +24,8 @@ public class LocalRunCliTests
     [InlineData("go", "--nope")]
     [InlineData("up", "--nope")]
     [InlineData("version", "--nope")]
+    [InlineData("settings", "--nope")]
+    [InlineData("settings", "--path", "yes")]
     public async Task Commands_RejectBadOptionsBeforeDoingAnyWork(params string[] args)
     {
         Assert.Equal(LocalRunCli.ExitUsage, await LocalRunCli.RunAsync(args));

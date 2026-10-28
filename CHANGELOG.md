@@ -7,6 +7,12 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Added
+
+- `lrun settings` creates your settings file (`~/.lrun/settings.json`, or `LOCALRUN_SETTINGS`) with every setting
+  commented out, and opens it. `localNuget`, `root` and `suffix` become the defaults of `build --local-nuget`,
+  `build --root` and `pack --suffix`; an option on the command line still wins. `settings --path` only prints the location.
+
 ## [0.3.0] - 2026-10-28
 
 ### Changed
