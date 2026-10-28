@@ -85,6 +85,12 @@ shell escaping.
   code needs `/v:on` and `!ERRORLEVEL!`.
 - **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
   rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
+- **User settings** (`UserSettings`, user's choices 2026-10-28): `~/.lrun/settings.json` (or `LOCALRUN_SETTINGS`) holds
+  per-user defaults (`localNuget`, `root`, `suffix`), created by `lrun settings` with everything commented out and opened
+  right away (the command itself is the flag that allows opening a window). Precedence: command-line option > settings >
+  built-in default. Paths are absolute or `~`-prefixed (relative would depend on the cwd: keep rejecting them), unknown
+  keys fail. Tests and hand testing set `LOCALRUN_SETTINGS`; never touch the real file. Not read by `plot`/`go`/`up`:
+  they only use the configs. A new setting = a property there + the template + README `settings` + a test.
 - **Exit codes** (`LocalRunCli`): `0` success, `1` command failed, `2` invalid command line
   (`UsageException`). External code relies on them.
 - **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values`, then call

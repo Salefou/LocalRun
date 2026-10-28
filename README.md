@@ -202,6 +202,10 @@ Say your repositories are checked out under `~/work/repos`, and you changed `Sha
 `OrderGateway` (an executable) consumes through two intermediate libraries.
 
 ```sh
+# 0. Once per machine: set what differs from one user to the next (your local feed, your repos folder...).
+#    Opens ~/.lrun/settings.json, all commented out; skip it if the defaults suit you.
+lrun settings
+
 cd ~/work
 
 # 1. Graph everything that depends on the library you changed, and plot it (Ctrl+click the printed link)
@@ -250,8 +254,8 @@ Scan a directory tree and write its dependency graph to a config file.
 
 | Option | Default | Description |
 |---|---|---|
-| `--root <dir>` | current directory | Directory scanned recursively for `*.csproj` and `*.sln`. |
-| `--local-nuget <dir>` | `~/.localnuget` | Local NuGet feed that `go` will pack into. Stored in the config. |
+| `--root <dir>` | your [settings](#settings), else current directory | Directory scanned recursively for `*.csproj` and `*.sln`. |
+| `--local-nuget <dir>` | your [settings](#settings), else `~/.localnuget` | Local NuGet feed that `go` will pack into. Stored in the config. |
 | `--config <file>` | `.lrun/localrun.config.json` | Config file to write. Parent directories are created. |
 | `--users-of <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
 | `--deps-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
@@ -360,7 +364,7 @@ Builds nothing, unless `--go` is given: then the plan is still written, and exec
 | `--config <file>` | `.lrun/localrun.config.json` | Config file to read. |
 | `--repack-config <file>` | `.lrun/repack.config.json` | Repack config file to write. |
 | `--patch` / `--minor` / `--major` | no bump | Version component to increment. At most one. |
-| `--suffix <text>` | `local` | Prerelease label to set, without the dash, followed by the iteration number: `--suffix dev` → `1.4.3-dev.1`, then `1.4.3-dev.2` the next time. Letters, digits, `-` and `.`-separated parts. Never empty: see [why](#versioning-rules). |
+| `--suffix <text>` | your [settings](#settings), else `local` | Prerelease label to set, without the dash, followed by the iteration number: `--suffix dev` → `1.4.3-dev.1`, then `1.4.3-dev.2` the next time. Letters, digits, `-` and `.`-separated parts. Never empty: see [why](#versioning-rules). |
 | `--next` | — | Continue a prerelease: `1.5.0-alpha.9` → `1.5.0-alpha.10` (with `--suffix alpha`). A release, or a prerelease whose label sorts above the new one, is patch-bumped instead: `1.4.2` → `1.4.3-alpha.1`. |
 | `--alpha` | — | Shorthand for `--next --suffix alpha`. Cannot be combined with another bump or `--suffix`. |
 | `--clean` | off | Make `go` run `dotnet clean` before restoring. |
@@ -451,6 +455,34 @@ starting the next: by design, each service is expected to wait for (or retry) th
 ```sh
 lrun up --exclude OrderGateway     # everything but OrderGateway, which you start under the debugger
 ```
+
+### `settings`
+
+Create your settings file if it is missing, then open it with the default app for `.json` (notepad if there is
+none, on Windows). It holds what differs from one user to the next and rarely changes for you, so you don't repeat
+it on every command:
+
+```jsonc
+{
+  // Local NuGet feed that 'go' repacks into (default: ~/.localnuget)
+  "localNuget": "~/.localnuget",
+  // Directory 'build' scans for projects (default: the current directory)
+  "root": "~/source/repos",
+  // Prerelease label 'pack' gives the planned versions (default: local)
+  "suffix": "local"
+}
+```
+
+The file is created with all of it commented out, and never overwritten. Comments and trailing commas are allowed;
+an unknown key or a bad value fails the command that reads it (`build`, `pack`) with the file's path. Paths are
+absolute or start with `~`; a relative one would depend on where you run `lrun` from. An option on the command
+line (`--local-nuget`, `--root`, `--suffix`) always wins.
+
+| Option | Description |
+|---|---|
+| `--path` | Only print where the file is, without creating or opening anything. |
+
+The file is `~/.lrun/settings.json`, or the path in the `LOCALRUN_SETTINGS` environment variable.
 
 ### `help`
 

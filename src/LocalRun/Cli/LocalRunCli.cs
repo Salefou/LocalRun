@@ -78,6 +78,9 @@ public static class LocalRunCli
                 case "up":
                     await RunExecutablesAsync(options);
                     break;
+                case "settings":
+                    Settings(options, written);
+                    break;
                 case "help" or "--help" or "-h":
                     PrintHelp();
                     break;
@@ -109,12 +112,16 @@ public static class LocalRunCli
 
     private static async Task BuildAsync(CommandLineArgs args, List<string> written)
     {
-        string rootPath = Path.GetFullPath(args.Value("--root") ?? Directory.GetCurrentDirectory());
-        string localNugetPath = Path.GetFullPath(args.Value("--local-nuget") ?? DefaultLocalNugetPath);
+        string? root = args.Value("--root");
+        string? localNuget = args.Value("--local-nuget");
         string configPath = Path.GetFullPath(args.Value("--config") ?? DefaultConfigPath);
         BuildConfigOptions configOptions = BuildConfigOptionsParser.Parse(args);
         bool plot = args.Flag("--plot");
         args.EnsureAllConsumed();
+
+        UserSettings settings = UserSettings.Load();
+        string rootPath = Path.GetFullPath(root ?? settings.Root ?? Directory.GetCurrentDirectory());
+        string localNugetPath = Path.GetFullPath(localNuget ?? settings.LocalNuget ?? DefaultLocalNugetPath);
 
         if (!Directory.Exists(rootPath))
             throw new DirectoryNotFoundException($"Root directory not found: {rootPath}");
@@ -169,7 +176,8 @@ public static class LocalRunCli
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         string repackConfigPath = Path.GetFullPath(args.Value("--repack-config") ?? DefaultRepackConfigPath);
-        RepackOptions repackOptions = RepackOptionsParser.Parse(args);
+        // The settings only supply the default suffix; --suffix wins
+        RepackOptions repackOptions = RepackOptionsParser.Parse(args, UserSettings.Load().Suffix);
         bool go = args.Flag("--go");
         args.EnsureAllConsumed();
 
@@ -201,6 +209,36 @@ public static class LocalRunCli
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
         await new RunProcessor().RunAsync(config, exclude);
+    }
+
+    private static void Settings(CommandLineArgs args, List<string> written)
+    {
+        bool pathOnly = args.Flag("--path");
+        args.EnsureAllConsumed();
+
+        string path = UserSettings.DefaultPath;
+        if (pathOnly)
+        {
+            Console.WriteLine(path);
+            return;
+        }
+
+        if (UserSettings.CreateIfMissing(path))
+        {
+            written.Add(path);
+            logger.LogInformation("[✔ ] Settings file created at {Path}", path);
+        }
+        else
+        {
+            logger.LogInformation("[⚙ ] Settings file: {Path}", path);
+        }
+
+        // A machine can have no app for .json: notepad is always there on Windows
+        if (!OpenWithDefaultApp(path) && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            try { Process.Start("notepad.exe", $"\"{path}\""); }
+            catch (Exception ex) { logger.LogWarning("Could not open notepad: {Error}", ex.Message); }
+        }
     }
 
     /// <summary>The files the command wrote, as its last lines (Ctrl+click opens them).</summary>
@@ -253,7 +291,8 @@ public static class LocalRunCli
             File.WriteAllText(gitignore, $"# Written by {CommandName}: everything it writes here stays out of git.\n*\n");
     }
 
-    private static void OpenWithDefaultApp(string filePath)
+    /// <returns>Whether it was started.</returns>
+    private static bool OpenWithDefaultApp(string filePath)
     {
         try
         {
@@ -276,11 +315,14 @@ public static class LocalRunCli
             else
             {
                 logger.LogWarning("Unsupported platform: cannot open {Path}", filePath);
+                return false;
             }
+            return true;
         }
         catch (Exception ex)
         {
-            logger.LogWarning("Could not open the graph: {Error}", ex.Message);
+            logger.LogWarning("Could not open {Path}: {Error}", filePath, ex.Message);
+            return false;
         }
     }
 
@@ -300,8 +342,8 @@ public static class LocalRunCli
         Console.WriteLine("  build [options]");
         Console.WriteLine("      Scan a directory tree for projects and write their dependency graph to a config file.");
         Console.WriteLine("      Options:");
-        Console.WriteLine("        --root <dir>            Directory to scan (default: current directory)");
-        Console.WriteLine("        --local-nuget <dir>     Local NuGet feed to repack into (default: ~/.localnuget)");
+        Console.WriteLine("        --root <dir>            Directory to scan (default: your settings, else current directory)");
+        Console.WriteLine("        --local-nuget <dir>     Local NuGet feed to repack into (default: your settings, else ~/.localnuget)");
         Console.WriteLine($"        --config <file>         Config file to write (default: {DefaultConfigPath})");
         Console.WriteLine("        --users-of <names>      Keep the given projects and all that depend on them, transitively");
         Console.WriteLine("        --deps-of <names>       Keep the given projects and all they depend on, transitively");
@@ -336,7 +378,7 @@ public static class LocalRunCli
         Console.WriteLine("        --patch                 Increment patch version");
         Console.WriteLine("        --next                  Continue a prerelease (1.5.0-alpha.9 -> 1.5.0-alpha.10), or patch a release");
         Console.WriteLine("        --alpha                 Shorthand for --next --suffix alpha");
-        Console.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (default: local; e.g., 'dev', 'beta.2')");
+        Console.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (default: your settings, else local; e.g., 'dev', 'beta.2')");
         Console.WriteLine("                                An iteration number follows it: 1.4.3-dev.1, then .2 when packed again");
         Console.WriteLine("        --clean                 Clean projects before restoring them");
         Console.WriteLine("        --go                    Execute the plan right away, as 'go' does (default: only write it)");
@@ -355,6 +397,14 @@ public static class LocalRunCli
         Console.WriteLine("        --exclude <names>       Executables not to run, e.g. the one you debug from your IDE");
         Console.WriteLine();
 
+        Console.WriteLine("  settings [options]");
+        Console.WriteLine("      Create your settings file if missing (all commented out), then open it. It holds what differs");
+        Console.WriteLine("      from one user to the next: the local NuGet feed, the root to scan, the default suffix.");
+        Console.WriteLine("      An option given on the command line always wins over it.");
+        Console.WriteLine("      Options:");
+        Console.WriteLine($"        --path                  Only print where the file is (default: ~/.lrun/settings.json, or ${UserSettings.PathVariable})");
+        Console.WriteLine();
+
         Console.WriteLine("  help");
         Console.WriteLine("      Show this help message.");
         Console.WriteLine();
@@ -364,6 +414,7 @@ public static class LocalRunCli
         Console.WriteLine();
 
         Console.WriteLine("Example:");
+        Console.WriteLine($"  {CommandName} settings                        (once per machine: your local feed, your repos folder...)");
         Console.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp --plot");
         Console.WriteLine($"  {CommandName} plot --open                     (the same graph, opened)");
         Console.WriteLine($"  {CommandName} pack --patch --suffix dev       (review .lrun/repack.config.json, then:)");
