@@ -414,6 +414,7 @@ public static class LocalRunCli
         Console.WriteLine();
 
         Console.WriteLine("Example:");
+        Console.WriteLine($"  {CommandName} settings                        (once per machine: your local feed, your repos folder...)");
         Console.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp --plot");
         Console.WriteLine($"  {CommandName} plot --open                     (the same graph, opened)");
         Console.WriteLine($"  {CommandName} pack --patch --suffix dev       (review .lrun/repack.config.json, then:)");

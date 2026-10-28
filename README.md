@@ -202,6 +202,10 @@ Say your repositories are checked out under `~/work/repos`, and you changed `Sha
 `OrderGateway` (an executable) consumes through two intermediate libraries.
 
 ```sh
+# 0. Once per machine: set what differs from one user to the next (your local feed, your repos folder...).
+#    Opens ~/.lrun/settings.json, all commented out; skip it if the defaults suit you.
+lrun settings
+
 cd ~/work
 
 # 1. Graph everything that depends on the library you changed, and plot it (Ctrl+click the printed link)
