@@ -75,28 +75,52 @@ public class DependencyGraph
     /// <summary>Test projects left out by <see cref="FromSource"/> (without <c>--tests</c>), by name.</summary>
     public IReadOnlyList<string> LeftOutTests { get; private init; } = [];
 
-    public static DependencyGraph FromSource(string rootPath, string[] csprojs, bool includeProjectsWithoutSolutions, bool includeTests = false)
+    /// <param name="evaluate">
+    /// Asks MSBuild for the version and package id of the projects whose csproj XML cannot tell them
+    /// (<see cref="MsBuildEvaluator.NeedsEvaluation"/>), in parallel; null reads the csproj XML only (<c>--csproj</c>).
+    /// A null result for a project falls back to the XML, with its warning.
+    /// </param>
+    public static DependencyGraph FromSource(string rootPath, string[] csprojs, bool includeProjectsWithoutSolutions, bool includeTests = false,
+        Func<string, EvaluatedProject?>? evaluate = null)
     {
         var projectToSolution = SolutionScanner.BuildProjectToSolutionMap(rootPath);
         var scanned = new List<(ProjectNode Project, List<string> PackageReferences)>();
         var leftOutTests = new List<string>();
+
+        var kept = new List<(string Csproj, XDocument Doc)>();
         foreach (var csproj in csprojs.Order())
         {
             var doc = XDocument.Load(csproj);
-            var ns = doc.Root!.Name.Namespace;
-
             string name = Path.GetFileNameWithoutExtension(csproj);
             if (!includeTests && IsTestProject(doc))
             {
                 leftOutTests.Add(name);
                 continue;
             }
+            kept.Add((csproj, doc));
+        }
+        var evaluated = EvaluateWhereNeeded(kept, evaluate);
+
+        foreach (var (csproj, doc) in kept)
+        {
+            var ns = doc.Root!.Name.Namespace;
+            string name = Path.GetFileNameWithoutExtension(csproj);
             string type = doc.Descendants(ns + "OutputType")
                 .Select(desc => desc.Value)
                 .Any(desc => desc == "Exe") ? "executable" : "library";
 
-
-            var version = ReadVersion(doc, csproj);
+            string? packageId;
+            ProjectVersion version;
+            if (evaluated.TryGetValue(csproj, out var fromMsBuild))
+            {
+                version = ProjectVersion.Parse(fromMsBuild.Version);
+                packageId = string.Equals(fromMsBuild.PackageId, name, StringComparison.OrdinalIgnoreCase) ? null : fromMsBuild.PackageId;
+            }
+            else
+            {
+                version = ReadVersion(doc, csproj);
+                packageId = ReadPackageId(doc, name);
+            }
 
             if (!projectToSolution.TryGetValue(name, out var solutionPath))
             {
@@ -106,7 +130,7 @@ public class DependencyGraph
             scanned.Add((new ProjectNode
             {
                 Name = name,
-                PackageId = ReadPackageId(doc, name),
+                PackageId = packageId,
                 Path = Path.GetRelativePath(rootPath, csproj),
                 SolutionPath = solutionPath,
                 Type = type,
@@ -139,6 +163,39 @@ public class DependencyGraph
             });
         }
         return new DependencyGraph(projects) { LeftOutTests = leftOutTests };
+    }
+
+    /// <summary>Projects asked of MSBuild at once: each is a process of about a second.</summary>
+    private const int MaxConcurrentEvaluations = 8;
+
+    private static Dictionary<string, EvaluatedProject> EvaluateWhereNeeded(
+        List<(string Csproj, XDocument Doc)> projects, Func<string, EvaluatedProject?>? evaluate)
+    {
+        var results = new Dictionary<string, EvaluatedProject>();
+        if (evaluate == null)
+            return results;
+
+        var folderCache = new Dictionary<string, bool>();
+        var needed = projects.Where(p => MsBuildEvaluator.NeedsEvaluation(p.Doc, p.Csproj, folderCache))
+            .Select(p => p.Csproj).ToList();
+        if (needed.Count == 0)
+            return results;
+
+        logger.LogInformation("[⚙ ] Asking MSBuild for the version and package id of {Count} project(s) whose csproj does not tell them ('--csproj' skips this)...", needed.Count);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var answers = new EvaluatedProject?[needed.Count];
+        Parallel.For(0, needed.Count, new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentEvaluations },
+            i => answers[i] = evaluate(needed[i]));
+
+        for (int i = 0; i < needed.Count; i++)
+        {
+            if (answers[i] is { } answer)
+                results[needed[i]] = answer;
+            else
+                logger.LogWarning("MSBuild could not evaluate {Project}, its csproj is read as is (version and package id may be wrong)", needed[i]);
+        }
+        logger.LogDebug("Evaluated {Count} projects in {ElapsedMs}ms", needed.Count, stopwatch.ElapsedMilliseconds);
+        return results;
     }
 
     /// <summary>

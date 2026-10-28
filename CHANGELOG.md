@@ -7,6 +7,13 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Changed
+
+- `build` asks MSBuild (`dotnet msbuild -getProperty`) for the version and package id of the projects whose csproj
+  can't tell them: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above the project that sets
+  them or imports other files. About a second per project, 8 at a time, only for those projects. If MSBuild fails on
+  one, its csproj is read as before, with a warning. `build --csproj` skips it and reads the csproj files as they are.
+
 ## [0.3.1] - 2026-10-28
 
 ### Added

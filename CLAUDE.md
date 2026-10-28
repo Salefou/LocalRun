@@ -217,5 +217,6 @@ Listed for the user in README "Known limitations". Do not fix silently; propose 
 
 - Batch git operations across the repos of a config (`lrun git …`, keep going on failure, summary):
   floated by the user on 2026-10-24, postponed until they hit enough real use cases. Never stash/reset on the user's behalf.
-- Versions and package ids come from the csproj XML only (`Directory.Build.props` and `$(…)` values unseen).
-  `dotnet msbuild -getProperty` would be exact but costs ~1 s per project; deferred to 0.3.0 at the earliest (2026-10-27).
+- MSBuild evaluation (`MsBuildEvaluator`, user's choices 2026-10-29: fallback only, `--csproj` skips it) covers the
+  props files above a project and its own `<Import>`s/`$(…)`; not environment or global properties, nor
+  `Directory.Packages.props`. Fixing a project flagged wrongly = adjust `NeedsEvaluation`, not "always evaluate" (~1 s each).
