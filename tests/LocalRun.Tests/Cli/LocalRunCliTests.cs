@@ -66,4 +66,32 @@ public class LocalRunCliTests
             Directory.Delete(folder, recursive: true);
         }
     }
+
+    [Fact]
+    public void WorkFolder_IgnoresItselfInGit_WithoutTouchingAnyOtherFolder()
+    {
+        string cwd = Directory.CreateTempSubdirectory("localrun-cwd-").FullName;
+        try
+        {
+            string gitignore = Path.Combine(cwd, LocalRunCli.WorkFolder, ".gitignore");
+
+            LocalRunCli.PrepareFolderOf(Path.Combine(cwd, "elsewhere", "localrun.config.json"), cwd);
+            Assert.True(Directory.Exists(Path.Combine(cwd, "elsewhere")));
+            Assert.False(File.Exists(Path.Combine(cwd, "elsewhere", ".gitignore")));
+            Assert.False(File.Exists(gitignore));
+
+            LocalRunCli.PrepareFolderOf(Path.Combine(cwd, LocalRunCli.WorkFolder, "plots", "dependencies"), cwd);
+            Assert.True(Directory.Exists(Path.Combine(cwd, LocalRunCli.WorkFolder, "plots")));
+            Assert.Contains("\n*\n", File.ReadAllText(gitignore));
+
+            // A .gitignore of the user's is kept
+            File.WriteAllText(gitignore, "plots/\n");
+            LocalRunCli.PrepareFolderOf(Path.Combine(cwd, LocalRunCli.WorkFolder, "localrun.config.json"), cwd);
+            Assert.Equal("plots/\n", File.ReadAllText(gitignore));
+        }
+        finally
+        {
+            Directory.Delete(cwd, recursive: true);
+        }
+    }
 }

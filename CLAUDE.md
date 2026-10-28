@@ -90,7 +90,8 @@ shell escaping.
 - **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values`, then call
   `EnsureAllConsumed()` before doing work. Unknown/repeated/malformed options must fail, not be ignored.
 - **No machine-specific paths**: every path is an option, defaulting to a file in the current
-  directory (`localrun.config.json`, `repack.config.json`, `lrun-visuals/dependencies-<date-time>`) or
+  directory's `.lrun` folder (`localrun.config.json`, `repack.config.json`, `plots/dependencies-<date-time>`;
+  `.lrun` ignores itself with a `.gitignore` of `*`) or
   `~/.localnuget`.
   Never reintroduce paths relative to `bin/` (the old `..\..\..\Output` hack) or `~/source/repos`.
 - **Non-interactive CLI**: nothing in `src/LocalRun` may prompt, read stdin or open windows
@@ -196,6 +197,9 @@ shell escaping.
   behind a corporate proxy; a CDN was the POC). Grouping is a view only: filters and `go` stay per project.
   Default layout (user's idea): one full-width band per solution, columns = project depth (no ELK); ELK's free
   layout stays as an option, its connected components laid out apart (it packed unrelated solutions inside cycle loops).
+- 2026-10-28, branch `claude/lrun-folder` (0.3.0): default outputs moved into `.lrun/` (user's request: one folder to
+  ignore in git), `lrun-visuals/` → `.lrun/plots/`. `.lrun` writes its own `.gitignore` (`*`). No fallback to the old
+  files, only a hint in the not-found error.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz (until 0.3.0).
 
 ## Known issues / candidate tasks

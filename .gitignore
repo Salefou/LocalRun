@@ -364,9 +364,7 @@ FodyWeavers.xsd
 
 #region Custom
 # LocalRun outputs when run from the repo (default file names)
-localrun.config.json
-repack.config.json
-lrun-visuals/
+.lrun/
 nupkg/
 # Output folders of the former REPL
 Output/

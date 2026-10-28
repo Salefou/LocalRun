@@ -14,6 +14,10 @@ bumps the minor version, anything else the patch.
   one node, down to the solution-level graph, where solutions depending on each other both ways are flagged in red.
   Hovering or clicking a project highlights its users and dependencies, with the matching `--users-of` /
   `--deps-of` flags and the full `lrun build` command to copy; search, zoom and pan. The page is self-contained and works offline.
+- **Breaking:** the files LocalRun writes by default go into a `.lrun` folder of the current directory:
+  `.lrun/localrun.config.json`, `.lrun/repack.config.json` and `.lrun/plots/` (was `lrun-visuals/`). The folder
+  ignores itself in git (a `.gitignore` of `*`, written with it). Move existing configs into `.lrun`, or pass
+  `--config` / `--repack-config`: when the default is missing but an old one is found, the error says so.
 - The tool no longer bundles Graphviz (about 20 MB of native binaries): `plot` now works on any platform.
 
 ## [0.2.2] - 2026-10-27

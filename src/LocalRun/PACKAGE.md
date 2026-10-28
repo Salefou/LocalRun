@@ -21,7 +21,7 @@ Requires the .NET 8 SDK. Tested on Windows x64.
 
 ```sh
 lrun build --root ./repos --users-of MyCompany.Pricing --with-services --plot   # what uses Pricing, plotted
-lrun pack --patch --suffix dev                                                 # plan the versions: repack.config.json
+lrun pack --patch --suffix dev                                                 # plan the versions: .lrun/repack.config.json
 lrun go                                                                        # pack them into the local feed
 lrun up                                                                        # build and run the services; Ctrl+C stops them
 ```
