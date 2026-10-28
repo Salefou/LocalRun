@@ -206,6 +206,9 @@ shell escaping.
 - 2026-10-28, branch `claude/lrun-folder` (0.3.0): default outputs moved into `.lrun/` (user's request: one folder to
   ignore in git), `lrun-visuals/` → `.lrun/plots/`. `.lrun` writes its own `.gitignore` (`*`). No fallback to the old
   files, only a hint in the not-found error.
+- 2026-10-28, branch `claude/user-settings` (0.3.1): `lrun settings` and `~/.lrun/settings.json` for per-user defaults.
+  The command was first asked for as `config`, renamed to `settings` (user's choice) because `config` already means the
+  generated files (`--config`, `localrun.config.json`). Git-style `settings <key> [value]` floated, not built.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz (until 0.3.0).
 
 ## Known issues / candidate tasks
