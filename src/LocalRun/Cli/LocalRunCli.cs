@@ -25,9 +25,15 @@ public static class LocalRunCli
     /// <summary>Name of the installed command, used in messages and help.</summary>
     public const string CommandName = "lrun";
 
-    private const string DefaultConfigPath = "localrun.config.json";
-    private const string DefaultRepackConfigPath = "repack.config.json";
-    private const string DefaultVisualsFolder = "lrun-visuals";
+    /// <summary>
+    /// Folder of the current directory holding every file LocalRun writes by default, so one line ignores them all;
+    /// it holds its own <c>.gitignore</c> anyway.
+    /// </summary>
+    internal const string WorkFolder = ".lrun";
+
+    private static readonly string DefaultConfigPath = Path.Combine(WorkFolder, "localrun.config.json");
+    private static readonly string DefaultRepackConfigPath = Path.Combine(WorkFolder, "repack.config.json");
+    private static readonly string DefaultVisualsFolder = Path.Combine(WorkFolder, "plots");
 
     private static readonly ILogger logger = Log.For(typeof(LocalRunCli).FullName!);
 
@@ -133,12 +139,13 @@ public static class LocalRunCli
         bool open = args.Flag("--open");
         args.EnsureAllConsumed();
 
-        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
         await PlotGraphAsync(config, outputPath, open, written);
     }
 
     private static async Task PlotGraphAsync(LocalRunConfig config, string outputPath, bool open, List<string> written)
     {
+        PrepareFolderOf(Path.GetFullPath(outputPath));
         string htmlPath = await GraphPage.GenerateAsync(config, outputPath);
         written.Add(htmlPath);
         if (open)
@@ -166,7 +173,7 @@ public static class LocalRunCli
         bool go = args.Flag("--go");
         args.EnsureAllConsumed();
 
-        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
         RepackConfig repackConfig = await new RepackConfigBuilder().BuildRepackConfig(config, repackOptions);
         await WriteToFile(repackConfigPath, repackConfig);
         written.Add(repackConfigPath);
@@ -182,7 +189,7 @@ public static class LocalRunCli
         string repackConfigPath = args.Value("--repack-config") ?? DefaultRepackConfigPath;
         args.EnsureAllConsumed();
 
-        RepackConfig repackConfig = await ReadFromFile<RepackConfig>(repackConfigPath, "pack");
+        RepackConfig repackConfig = await ReadFromFile<RepackConfig>(repackConfigPath, "--repack-config", "pack");
         await new RepackExecutor().RepackAndRebuildAsync(repackConfig);
     }
 
@@ -192,7 +199,7 @@ public static class LocalRunCli
         List<string>? exclude = args.Values("--exclude");
         args.EnsureAllConsumed();
 
-        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "build");
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
         await new RunProcessor().RunAsync(config, exclude);
     }
 
@@ -205,20 +212,45 @@ public static class LocalRunCli
             logger.LogInformation("     {Path}", path);
     }
 
-    private static async Task<T> ReadFromFile<T>(string pathToFile, string producingCommand)
+    private static async Task<T> ReadFromFile<T>(string pathToFile, string option, string producingCommand)
         where T : class
     {
         string fullPath = Path.GetFullPath(pathToFile);
         if (!File.Exists(fullPath))
-            throw new FileNotFoundException($"'{fullPath}' not found. Run '{CommandName} {producingCommand}' first.");
+        {
+            // Before 0.3.0, the default files were written in the current directory itself
+            string legacy = Path.GetFullPath(Path.GetFileName(fullPath));
+            string hint = Path.GetDirectoryName(fullPath) == Path.GetFullPath(WorkFolder) && File.Exists(legacy)
+                ? $" Found '{legacy}', written by an older {CommandName}: move it into '{WorkFolder}', or point at it with {option}."
+                : "";
+            throw new FileNotFoundException($"'{fullPath}' not found. Run '{CommandName} {producingCommand}' first.{hint}");
+        }
         return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(fullPath))
             ?? throw new InvalidDataException($"'{fullPath}' is empty.");
     }
 
     private static async Task WriteToFile<T>(string fullPath, T content)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        PrepareFolderOf(fullPath);
         await File.WriteAllTextAsync(fullPath, JsonSerializer.Serialize(content, WriteOptions));
+    }
+
+    /// <summary>
+    /// Creates the folder of a file about to be written. Within the work folder of <paramref name="currentDirectory"/>
+    /// (default: the current directory), also writes the work folder's <c>.gitignore</c> ignoring all of it, unless one is there.
+    /// </summary>
+    internal static void PrepareFolderOf(string fullPath, string? currentDirectory = null)
+    {
+        string folder = Path.GetDirectoryName(fullPath)!;
+        Directory.CreateDirectory(folder);
+
+        string workFolder = Path.GetFullPath(Path.Combine(currentDirectory ?? Directory.GetCurrentDirectory(), WorkFolder));
+        string relative = Path.GetRelativePath(workFolder, folder);
+        if (relative.StartsWith("..") || Path.IsPathRooted(relative))
+            return;
+        string gitignore = Path.Combine(workFolder, ".gitignore");
+        if (!File.Exists(gitignore))
+            File.WriteAllText(gitignore, $"# Written by {CommandName}: everything it writes here stays out of git.\n*\n");
     }
 
     private static void OpenWithDefaultApp(string filePath)
@@ -334,7 +366,7 @@ public static class LocalRunCli
         Console.WriteLine("Example:");
         Console.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp --plot");
         Console.WriteLine($"  {CommandName} plot --open                     (the same graph, opened)");
-        Console.WriteLine($"  {CommandName} pack --patch --suffix dev       (review repack.config.json, then:)");
+        Console.WriteLine($"  {CommandName} pack --patch --suffix dev       (review .lrun/repack.config.json, then:)");
         Console.WriteLine($"  {CommandName} go");
         Console.WriteLine($"  {CommandName} pack --patch --suffix dev --go  (both steps at once)");
         Console.WriteLine($"  {CommandName} up");

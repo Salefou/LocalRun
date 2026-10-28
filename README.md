@@ -210,7 +210,7 @@ lrun build --root ./repos --users-of Shared.Pricing --plot
 # 2. Or plot the current config again, opening the page directly
 lrun plot --open
 
-# 3. Plan a patch bump with a "dev" suffix, then review repack.config.json
+# 3. Plan a patch bump with a "dev" suffix, then review .lrun/repack.config.json
 lrun pack --patch --suffix dev
 
 # 4. Pack everything into ~/.localnuget, in dependency order
@@ -252,7 +252,7 @@ Scan a directory tree and write its dependency graph to a config file.
 |---|---|---|
 | `--root <dir>` | current directory | Directory scanned recursively for `*.csproj` and `*.sln`. |
 | `--local-nuget <dir>` | `~/.localnuget` | Local NuGet feed that `go` will pack into. Stored in the config. |
-| `--config <file>` | `localrun.config.json` | Config file to write. Parent directories are created. |
+| `--config <file>` | `.lrun/localrun.config.json` | Config file to write. Parent directories are created. |
 | `--users-of <names…>` | — | Keep only the given projects and everything that depends on them, directly or transitively. "What do I need to repack if I change X?" |
 | `--deps-of <names…>` | — | Keep only the given projects and everything they depend on, directly or transitively. "What does executable Y need?" |
 | `--union` | off | With both filters: keep the users of `--users-of` **or** the dependencies of `--deps-of`, instead of the projects between them. |
@@ -261,7 +261,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 | `--tests` | off | Keep the test projects. By default `build` leaves them out (and lists them): projects referencing `Microsoft.NET.Test.Sdk`, setting `<IsTestProject>true</IsTestProject>`, or using the `MSTest.Sdk` project SDK. |
 | `--csproj` | off | Don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` records each project's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
-| `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `lrun-visuals/dependencies-<date-time>.html`, printed as a link). |
+| `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `.lrun/plots/dependencies-<date-time>.html`, printed as a link). |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
 The two flags are AND'ed: with `--users-of X --deps-of Y` you get **the projects between X and Y**,
@@ -342,8 +342,8 @@ plot is what `pack`, `go` and `up` act on.
 
 | Option | Default | Description |
 |---|---|---|
-| `--config <file>` | `localrun.config.json` | Config file to read. |
-| `--output <path>` | `lrun-visuals/dependencies-<yyyyMMdd-HHmmss>` | Output path **without extension**. The default never overwrites an earlier graph (`-2`, `-3`, … within the same second). |
+| `--config <file>` | `.lrun/localrun.config.json` | Config file to read. |
+| `--output <path>` | `.lrun/plots/dependencies-<yyyyMMdd-HHmmss>` | Output path **without extension**. The default never overwrites an earlier graph (`-2`, `-3`, … within the same second). |
 | `--open` | off | Open the page with the default browser (Windows, macOS `open`, Linux `xdg-open`). |
 
 The page is printed as a `file:///…` link: in Windows Terminal or VS Code, Ctrl+click opens it in the
@@ -357,8 +357,8 @@ Builds nothing, unless `--go` is given: then the plan is still written, and exec
 
 | Option | Default | Description |
 |---|---|---|
-| `--config <file>` | `localrun.config.json` | Config file to read. |
-| `--repack-config <file>` | `repack.config.json` | Repack config file to write. |
+| `--config <file>` | `.lrun/localrun.config.json` | Config file to read. |
+| `--repack-config <file>` | `.lrun/repack.config.json` | Repack config file to write. |
 | `--patch` / `--minor` / `--major` | no bump | Version component to increment. At most one. |
 | `--suffix <text>` | `local` | Prerelease label to set, without the dash, followed by the iteration number: `--suffix dev` → `1.4.3-dev.1`, then `1.4.3-dev.2` the next time. Letters, digits, `-` and `.`-separated parts. Never empty: see [why](#versioning-rules). |
 | `--next` | — | Continue a prerelease: `1.5.0-alpha.9` → `1.5.0-alpha.10` (with `--suffix alpha`). A release, or a prerelease whose label sorts above the new one, is patch-bumped instead: `1.4.2` → `1.4.3-alpha.1`. |
@@ -399,7 +399,7 @@ no solution references get none.
 
 | Option | Default | Description |
 |---|---|---|
-| `--repack-config <file>` | `repack.config.json` | Repack config file to read. |
+| `--repack-config <file>` | `.lrun/repack.config.json` | Repack config file to read. |
 
 The first failing `dotnet` command fails the whole command (exit code `1`); its output is in the log.
 
@@ -445,7 +445,7 @@ starting the next: by design, each service is expected to wait for (or retry) th
 
 | Option | Default | Description |
 |---|---|---|
-| `--config <file>` | `localrun.config.json` | Config file to read. |
+| `--config <file>` | `.lrun/localrun.config.json` | Config file to read. |
 | `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `up` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). |
 
 ```sh
@@ -461,7 +461,12 @@ with exit code `2`.
 
 ## The files LocalRun reads and writes
 
-All files are indented JSON, safe to commit, diff or edit by hand between steps.
+By default, every file LocalRun writes goes into a `.lrun` folder of the current directory (`--config`,
+`--repack-config` and `--output` change that). `.lrun` holds a `.gitignore` ignoring all of it, written with the
+folder (yours is kept if you write one), so running `lrun` from a repository never adds untracked files. The local
+feed (`~/.localnuget`) lives elsewhere.
+
+The configs are indented JSON, safe to commit, diff or edit by hand between steps.
 
 ### `localrun.config.json` — written by `build`
 
@@ -514,7 +519,7 @@ they are ignored.)
 
 Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`.
 
-### `lrun-visuals/dependencies-<date-time>.html` — written by `plot` (or `build --plot`)
+### `plots/dependencies-<date-time>.html` — written by `plot` (or `build --plot`)
 
 One self-contained page per graph, about 1.6 MB, mostly the inlined layout library (delete the folder when you're
 done). It holds a copy of the graph, so it doesn't change when the config does.
@@ -752,7 +757,9 @@ publishing ones, to check a release would build and pack.
 ## Troubleshooting
 
 **`'…localrun.config.json' not found. Run 'lrun build' first.`** — the path is resolved against the
-current directory. Run from the directory where you ran `build`, or pass `--config`.
+current directory. Run from the directory where you ran `build`, or pass `--config`. When it adds `Found
+'…\localrun.config.json', written by an older lrun`: before 0.3.0 the files were written in the current directory
+itself; move them into `.lrun` (or point at them with `--config` / `--repack-config`).
 
 **`go` fails restoring a package (`NU1101`)** — restore uses your `NuGet.config` sources plus the
 local feed. Check that the package's source is configured for that project (`dotnet nuget list source`),

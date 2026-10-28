@@ -7,6 +7,8 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-28
+
 ### Changed
 
 - **Breaking:** `plot` (and `build --plot`) writes an interactive HTML page, `<output>.html`, instead of the
@@ -14,6 +16,10 @@ bumps the minor version, anything else the patch.
   one node, down to the solution-level graph, where solutions depending on each other both ways are flagged in red.
   Hovering or clicking a project highlights its users and dependencies, with the matching `--users-of` /
   `--deps-of` flags and the full `lrun build` command to copy; search, zoom and pan. The page is self-contained and works offline.
+- **Breaking:** the files LocalRun writes by default go into a `.lrun` folder of the current directory:
+  `.lrun/localrun.config.json`, `.lrun/repack.config.json` and `.lrun/plots/` (was `lrun-visuals/`). The folder
+  ignores itself in git (a `.gitignore` of `*`, written with it). Move existing configs into `.lrun`, or pass
+  `--config` / `--repack-config`: when the default is missing but an old one is found, the error says so.
 - The tool no longer bundles Graphviz (about 20 MB of native binaries): `plot` now works on any platform.
 
 ## [0.2.2] - 2026-10-27
@@ -108,7 +114,8 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Salefou/LocalRun/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Salefou/LocalRun/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Salefou/LocalRun/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Salefou/LocalRun/compare/v0.1.1...v0.2.0

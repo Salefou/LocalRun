@@ -192,7 +192,7 @@ Variations worth trying:
 - **Debugging one service**: `lrun up --exclude LrSample.RiskService` logs `Not running
   LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
   IDE (`:5102` stays free for it). `--exclude LrSample.Pricing` is rejected (exit code 2): it's a library.
-- **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `lrun-visuals/dependencies-<date-time>.html` and prints
+- **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `.lrun/plots/dependencies-<date-time>.html` and prints
   it as a `file:///` link; Ctrl+click it (Windows Terminal, VS Code) to open it in the browser.
 
 ### 5. Iterate, then continue from the latest versions
