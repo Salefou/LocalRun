@@ -32,8 +32,14 @@ internal class RepackConfigBuilder
         logger.LogInformation("[⚙ ] Building repack config in dependency order...");
         var dependencyGraph = DependencyGraph.FromConfig(config);
 
-        var bumps = repackOptions.BumpOptions is { BumpType: not BumpType.None };
-        var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => BaseVersion(proj, bumps), StringComparer.OrdinalIgnoreCase);
+        var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => BaseVersion(proj).Version, StringComparer.OrdinalIgnoreCase);
+        var ahead = config.Projects.Where(proj => BaseVersion(proj).CsprojAhead).Select(proj => proj.Name).ToList();
+        if (ahead.Count != 0)
+        {
+            const int shown = 5;
+            logger.LogWarning("The csproj version is higher than the latest on your sources for {Count} project(s): pack starts from the csproj version, not from the latest. {Projects}",
+                ahead.Count, string.Join(", ", ahead.Take(shown)) + (ahead.Count > shown ? $", … ({ahead.Count - shown} more)" : ""));
+        }
         var toVersions = fromVersions.ToDictionary(
             entry => entry.Key,
             entry => repackOptions.BumpOptions?.Bump(entry.Value) ?? entry.Value with { },
@@ -95,21 +101,20 @@ internal class RepackConfigBuilder
     }
 
     /// <summary>
-    /// What <c>pack</c> starts from. The latest version on the sources recorded by <c>build</c> wins: the csproj version may lag
-    /// behind releases and your builds. Except without a bump (only the suffix), when a csproj ahead of the latest is the version
-    /// being developed (<c>11.0.0-preview</c> while <c>10.7.0</c> is released): the local build is a prerelease of it. "Ahead" is
-    /// the number alone: <c>1.5.0</c> against <c>1.5.0-alpha.9</c> is the same release, whose alpha iterations go on.
+    /// What <c>pack</c> starts from: the higher of the latest version on the sources recorded by <c>build</c> and the csproj
+    /// version. The latest wins over a csproj that lags behind releases and your builds; the csproj wins when it is ahead, being the
+    /// version in development (<c>11.0.0-preview</c> while <c>10.7.0</c> is released). "Higher" is the number alone: <c>1.5.0</c>
+    /// against <c>1.5.0-alpha.9</c> is the same release, whose alpha iterations go on from the latest.
     /// </summary>
-    internal static ProjectVersion BaseVersion(ProjectNode project, bool bumps)
+    /// <returns>The base, and whether it is the csproj version ahead of a latest (the caller warns).</returns>
+    internal static (ProjectVersion Version, bool CsprojAhead) BaseVersion(ProjectNode project)
     {
         if (project.LatestVersion is not { } latest)
-            return project.Version;
-        if (!bumps
-            && NuGetVersion.TryParse(project.Version.AsVersionString(), out var csproj)
+            return (project.Version, false);
+        bool csprojAhead = NuGetVersion.TryParse(project.Version.AsVersionString(), out var csproj)
             && NuGetVersion.TryParse(latest.AsVersionString(), out var found)
-            && csproj.Version > found.Version)
-            return project.Version;
-        return latest;
+            && csproj.Version > found.Version;
+        return csprojAhead ? (project.Version, true) : (latest, false);
     }
 
     /// <summary>

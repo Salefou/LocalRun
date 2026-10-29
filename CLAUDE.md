@@ -123,10 +123,10 @@ shell escaping.
   `LatestVersion` from **all** the sources a restore from the project's folder would use, plus the config's local
   feed even when no NuGet.Config lists it (`go` restores with it as an additional source; `samples/NuGet.config`
   clears the user sources). The user disables sources in NuGet.Config to narrow it; `--csproj` opts out. When the csproj version
-  is higher than that latest (ABP: `11.0.0-preview` in development, `10.7.0` released), `build` warns once, and `pack` with
-  no bump flag (suffix only) starts from the csproj (`RepackConfigBuilder.BaseVersion`); with a bump flag the latest stays the
-  base (user's choice, 2026-10-29: "keep the feed one, warn" first, then "higher of the two for a first local-only build").
-  "Higher" is the number alone, so `1.5.0` vs `1.5.0-alpha.9` keeps the alpha iterations going. `pack` uses it over the
+  is higher than that latest (ABP: `11.0.0-preview` in development, `10.7.0` released), `pack` starts from the csproj, bump flag
+  or not, and warns once (`RepackConfigBuilder.BaseVersion`; user's choice, 2026-10-29, after "keep the feed one, warn" and
+  "higher only without a bump flag"). "Higher" is the number alone, so `1.5.0` vs `1.5.0-alpha.9` keeps the alpha iterations
+  going. Otherwise `pack` uses the latest over the
   csproj `Version`. A suffix gets one iteration number `.N` appended (`PackageIterations`): 1 + the highest N
   of the planned versions known as a base or found in the local feed and the global packages folders,
   **shared by the whole plan**, no counter file. `--next` (`--alpha` = `--next --suffix alpha`, like npm's

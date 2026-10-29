@@ -44,26 +44,30 @@ public sealed class RepackConfigBuilderTests : IDisposable
         Assert.Equal("0.2.0-alpha.1", plan["New"].ToVersion.AsVersionString());
     }
 
-    [Fact]
-    public async Task WithoutABump_ACsprojAheadOfTheLatest_IsTheBase()
-    {
-        // 11.0.0-preview is being developed, 10.7.0 is the last release: the local build is a prerelease of the former
-        var plan = await Plan(new BumpOptions { BumpType = BumpType.None, Suffix = "local" },
-            Project("Lib", "11.0.0-preview", latestVersion: "10.7.0"));
-
-        Assert.Equal("11.0.0-preview", plan["Lib"].FromVersion.AsVersionString());
-        Assert.Equal("11.0.0-local.1", plan["Lib"].ToVersion.AsVersionString());
-    }
-
     [Theory]
-    [InlineData(BumpType.Patch, "11.0.0-preview", "10.7.0", "10.7.1-local.1")]    // a bump goes on from the latest
-    [InlineData(BumpType.None, "1.5.0", "1.5.0-alpha.9", "1.5.0-local.1")]        // same release: the latest stays the base
-    [InlineData(BumpType.None, "1.4.2", "1.5.0", "1.5.0-local.1")]                // csproj behind: the latest
-    public async Task TheLatestStaysTheBase_ExceptForACsprojAheadWithoutABump(BumpType bump, string csproj, string latest, string expected)
+    [InlineData(BumpType.None, "11.0.0-preview", "10.7.0", "11.0.0-preview", "11.0.0-local.1")]   // in development: the csproj, bump or not
+    [InlineData(BumpType.Patch, "11.0.0-preview", "10.7.0", "11.0.0-preview", "11.0.1-local.1")]
+    [InlineData(BumpType.None, "1.4.2", "1.5.0", "1.5.0", "1.5.0-local.1")]                        // csproj behind: the latest
+    [InlineData(BumpType.None, "1.5.0", "1.5.0-alpha.9", "1.5.0-alpha.9", "1.5.0-local.1")]        // same release: the latest, so alpha iterations go on
+    public async Task TheBase_IsTheHigherOfTheLatestAndTheCsprojVersion(BumpType bump, string csproj, string latest, string from, string to)
     {
         var plan = await Plan(new BumpOptions { BumpType = bump, Suffix = "local" }, Project("Lib", csproj, latestVersion: latest));
 
-        Assert.Equal(expected, plan["Lib"].ToVersion.AsVersionString());
+        Assert.Equal(from, plan["Lib"].FromVersion.AsVersionString());
+        Assert.Equal(to, plan["Lib"].ToVersion.AsVersionString());
+    }
+
+    [Theory]
+    [InlineData("11.0.0-preview", "10.7.0", true)]
+    [InlineData("10.7.0", "10.7.0", false)]
+    [InlineData("10.6.0", "10.7.0", false)]
+    [InlineData("10.7.0", "10.7.0-beta", false)]    // the number alone
+    [InlineData("3.0.0", null, false)]              // no latest: the csproj, nothing to warn about
+    public void BaseVersion_FlagsACsprojAheadOfTheLatest(string csproj, string? latest, bool ahead)
+    {
+        var (_, csprojAhead) = RepackConfigBuilder.BaseVersion(Project("Lib", csproj, latest));
+
+        Assert.Equal(ahead, csprojAhead);
     }
 
     [Fact]
