@@ -46,7 +46,9 @@ public sealed class RepackConfigBuilderTests : IDisposable
 
     [Theory]
     [InlineData(BumpType.None, "11.0.0-preview", "10.7.0", "11.0.0-preview", "11.0.0-local.1")]   // in development: the csproj, bump or not
-    [InlineData(BumpType.Patch, "11.0.0-preview", "10.7.0", "11.0.0-preview", "11.0.1-local.1")]
+    [InlineData(BumpType.Patch, "11.0.0-preview", "10.7.0", "11.0.0-preview", "11.0.0-local.1")]  // ... a bump flag would skip it
+    [InlineData(BumpType.Next, "11.0.0-preview", "10.7.0", "11.0.0-preview", "11.0.0-local.1")]
+    [InlineData(BumpType.Patch, "1.4.2", "1.5.0", "1.5.0", "1.5.1-local.1")]                       // csproj behind: a bump applies as usual
     [InlineData(BumpType.None, "1.4.2", "1.5.0", "1.5.0", "1.5.0-local.1")]                        // csproj behind: the latest
     [InlineData(BumpType.None, "1.5.0", "1.5.0-alpha.9", "1.5.0-alpha.9", "1.5.0-local.1")]        // same release: the latest, so alpha iterations go on
     public async Task TheBase_IsTheHigherOfTheLatestAndTheCsprojVersion(BumpType bump, string csproj, string latest, string from, string to)

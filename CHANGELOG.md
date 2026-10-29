@@ -15,7 +15,8 @@ bumps the minor version, anything else the patch.
   one, its csproj is read as before, with a warning. `build --csproj` skips it and reads the csproj files as they are.
 - `pack` starts from the higher of the latest version on your sources and the csproj version. When the csproj is ahead
   (e.g. `11.0.0-preview` in development while `10.7.0` is the latest release), it starts from the csproj, with a warning,
-  instead of the latest (whose `10.7.0-local.1` sorted below the release). "Higher" compares the number only:
+  instead of the latest (whose `10.7.0-local.1` sorted below the release), and ignores the bump flag for it: only the
+  suffix applies (`11.0.0-local.1`, not `11.0.1` with `--patch`). "Higher" compares the number only:
   `1.5.0` against `1.5.0-alpha.9` is the same release, so the alpha iterations go on from the latest.
 
 ## [0.3.1] - 2026-10-28

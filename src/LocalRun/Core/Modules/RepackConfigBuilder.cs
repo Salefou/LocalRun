@@ -37,12 +37,16 @@ internal class RepackConfigBuilder
         if (ahead.Count != 0)
         {
             const int shown = 5;
-            logger.LogWarning("The csproj version is higher than the latest on your sources for {Count} project(s): pack starts from the csproj version, not from the latest. {Projects}",
+            logger.LogWarning("The csproj version is higher than the latest on your sources for {Count} project(s): pack starts from the csproj version and ignores the bump flag for them, only the suffix applies. {Projects}",
                 ahead.Count, string.Join(", ", ahead.Take(shown)) + (ahead.Count > shown ? $", … ({ahead.Count - shown} more)" : ""));
         }
+
+        // A csproj ahead of the latest already is the version in development: a bump would skip it (11.0.0-preview, --patch → 11.0.1)
+        var withoutBump = repackOptions.BumpOptions == null ? null : new BumpOptions { BumpType = BumpType.None, Suffix = repackOptions.BumpOptions.Suffix };
+        var aheadNames = ahead.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var toVersions = fromVersions.ToDictionary(
             entry => entry.Key,
-            entry => repackOptions.BumpOptions?.Bump(entry.Value) ?? entry.Value with { },
+            entry => (aheadNames.Contains(entry.Key) ? withoutBump : repackOptions.BumpOptions)?.Bump(entry.Value) ?? entry.Value with { },
             StringComparer.OrdinalIgnoreCase);
 
         // Only a label set by the suffix is known to end the version (a kept label may carry +metadata)
