@@ -7,6 +7,8 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-29
+
 ### Changed
 
 - `build` asks MSBuild (`dotnet msbuild -getProperty`) for the version and package id of the projects whose csproj
@@ -134,7 +136,8 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/Salefou/LocalRun/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Salefou/LocalRun/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Salefou/LocalRun/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/Salefou/LocalRun/compare/v0.2.1...v0.2.2
