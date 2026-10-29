@@ -6,6 +6,7 @@ using LocalRun.Logger;
 using LocalRun.Options;
 using Microsoft.Extensions.Logging;
 using NuGet.Configuration;
+using NuGet.Versioning;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
@@ -31,8 +32,8 @@ internal class RepackConfigBuilder
         logger.LogInformation("[⚙ ] Building repack config in dependency order...");
         var dependencyGraph = DependencyGraph.FromConfig(config);
 
-        // The latest version on the sources recorded by 'build' wins: the csproj version may lag behind releases and your builds
-        var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => proj.LatestVersion ?? proj.Version, StringComparer.OrdinalIgnoreCase);
+        var bumps = repackOptions.BumpOptions is { BumpType: not BumpType.None };
+        var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => BaseVersion(proj, bumps), StringComparer.OrdinalIgnoreCase);
         var toVersions = fromVersions.ToDictionary(
             entry => entry.Key,
             entry => repackOptions.BumpOptions?.Bump(entry.Value) ?? entry.Value with { },
@@ -91,6 +92,24 @@ internal class RepackConfigBuilder
             RepackTrees = repackTrees,
             Clean = repackOptions.CleanBeforeRestore
         });
+    }
+
+    /// <summary>
+    /// What <c>pack</c> starts from. The latest version on the sources recorded by <c>build</c> wins: the csproj version may lag
+    /// behind releases and your builds. Except without a bump (only the suffix), when a csproj ahead of the latest is the version
+    /// being developed (<c>11.0.0-preview</c> while <c>10.7.0</c> is released): the local build is a prerelease of it. "Ahead" is
+    /// the number alone: <c>1.5.0</c> against <c>1.5.0-alpha.9</c> is the same release, whose alpha iterations go on.
+    /// </summary>
+    internal static ProjectVersion BaseVersion(ProjectNode project, bool bumps)
+    {
+        if (project.LatestVersion is not { } latest)
+            return project.Version;
+        if (!bumps
+            && NuGetVersion.TryParse(project.Version.AsVersionString(), out var csproj)
+            && NuGetVersion.TryParse(latest.AsVersionString(), out var found)
+            && csproj.Version > found.Version)
+            return project.Version;
+        return latest;
     }
 
     /// <summary>

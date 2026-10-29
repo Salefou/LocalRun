@@ -108,6 +108,25 @@ public class ConfigBuilder
             logger.LogInformation("  {Project}: {LatestVersion} (csproj {Version})", project, proj.LatestVersion, proj.Version);
         }
         logger.LogDebug("Fetched the latest versions of {Count} projects in {ElapsedMs}ms", config.Projects.Count, stopwatch.ElapsedMilliseconds);
+
+        var ahead = FindCsprojAhead(config.Projects);
+        if (ahead.Count != 0)
+        {
+            const int shown = 5;
+            logger.LogWarning("The csproj version is higher than the latest on your sources for {Count} project(s): pack starts from the csproj version without a bump flag, from the latest with one (--patch, --minor...). {Projects}",
+                ahead.Count, string.Join(", ", ahead.Take(shown)) + (ahead.Count > shown ? $", … ({ahead.Count - shown} more)" : ""));
+        }
+    }
+
+    /// <summary>The projects whose csproj version is higher than the latest found for them (the latter is what <c>pack</c> starts from), by name.</summary>
+    internal static List<string> FindCsprojAhead(IEnumerable<ProjectNode> projects)
+    {
+        return [.. projects
+            .Where(proj => proj.LatestVersion is { } latest
+                && NuGetVersion.TryParse(proj.Version.AsVersionString(), out var csproj)
+                && NuGetVersion.TryParse(latest.AsVersionString(), out var found)
+                && csproj > found)
+            .Select(proj => proj.Name)];
     }
 
     /// <summary>Projects looked up at once by <see cref="FetchLatestVersionsAsync"/>: enough to hide the latency of remote feeds.</summary>

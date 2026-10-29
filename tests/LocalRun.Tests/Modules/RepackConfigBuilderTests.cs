@@ -45,6 +45,28 @@ public sealed class RepackConfigBuilderTests : IDisposable
     }
 
     [Fact]
+    public async Task WithoutABump_ACsprojAheadOfTheLatest_IsTheBase()
+    {
+        // 11.0.0-preview is being developed, 10.7.0 is the last release: the local build is a prerelease of the former
+        var plan = await Plan(new BumpOptions { BumpType = BumpType.None, Suffix = "local" },
+            Project("Lib", "11.0.0-preview", latestVersion: "10.7.0"));
+
+        Assert.Equal("11.0.0-preview", plan["Lib"].FromVersion.AsVersionString());
+        Assert.Equal("11.0.0-local.1", plan["Lib"].ToVersion.AsVersionString());
+    }
+
+    [Theory]
+    [InlineData(BumpType.Patch, "11.0.0-preview", "10.7.0", "10.7.1-local.1")]    // a bump goes on from the latest
+    [InlineData(BumpType.None, "1.5.0", "1.5.0-alpha.9", "1.5.0-local.1")]        // same release: the latest stays the base
+    [InlineData(BumpType.None, "1.4.2", "1.5.0", "1.5.0-local.1")]                // csproj behind: the latest
+    public async Task TheLatestStaysTheBase_ExceptForACsprojAheadWithoutABump(BumpType bump, string csproj, string latest, string expected)
+    {
+        var plan = await Plan(new BumpOptions { BumpType = bump, Suffix = "local" }, Project("Lib", csproj, latestVersion: latest));
+
+        Assert.Equal(expected, plan["Lib"].ToVersion.AsVersionString());
+    }
+
+    [Fact]
     public async Task PackingAgain_TakesTheNextIteration_ForTheWholePlan()
     {
         Directory.CreateDirectory(Feed);

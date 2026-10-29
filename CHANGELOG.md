@@ -13,6 +13,10 @@ bumps the minor version, anything else the patch.
   can't tell them: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above the project that sets
   them or imports other files. About a second per project, 8 at a time, only for those projects. If MSBuild fails on
   one, its csproj is read as before, with a warning. `build --csproj` skips it and reads the csproj files as they are.
+- When a project's csproj version is higher than the latest on your sources (e.g. `11.0.0-preview` in development
+  while `10.7.0` is the latest release), `build` warns once, and `pack` without a bump flag starts from the csproj
+  version (`11.0.0-local.1`) instead of the latest (`10.7.0-local.1`, which sorts below the release). With a bump flag
+  it starts from the latest, as before. "Higher" compares the number only: `1.5.0` against `1.5.0-alpha.9` is the same release.
 
 ## [0.3.1] - 2026-10-28
 
