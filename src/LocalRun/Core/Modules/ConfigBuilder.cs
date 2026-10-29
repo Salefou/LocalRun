@@ -17,7 +17,8 @@ public class ConfigBuilder
         logger.LogInformation("[⚙ ] Building dependency graph from {RootPath}...", rootPath);
 
         string[] csprojs = Directory.GetFiles(rootPath, "*.csproj", SearchOption.AllDirectories);
-        var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal, options.IncludeTests);
+        var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal, options.IncludeTests,
+            evaluate: options.CsprojVersionsOnly ? null : MsBuildEvaluator.Evaluate);
         if (graph.LeftOutTests.Count != 0)
         {
             logger.LogInformation("[🧪] Left out {Count} test project(s) ('--tests' keeps them): {Projects}",

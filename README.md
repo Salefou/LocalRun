@@ -264,7 +264,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 | `--tests` | off | Keep the test projects. By default `build` leaves them out (and lists them): projects referencing `Microsoft.NET.Test.Sdk`, setting `<IsTestProject>true</IsTestProject>`, or using the `MSTest.Sdk` project SDK. |
-| `--csproj` | off | Don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` records each project's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
+| `--csproj` | off | Read the csproj files as they are: skip the MSBuild evaluation of versions and package ids (below), and don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` reads each csproj's version and package id from its XML, and asks MSBuild (`dotnet msbuild -getProperty`, about a second per project, 8 at a time) only for the projects whose XML can't tell: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above it that sets `Version`, `VersionPrefix`, `VersionSuffix`, `PackageId` or `AssemblyName` or imports other files. If MSBuild fails on a project, its csproj is read as is, with a warning. `build` also records each project's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. When a csproj version is higher than that latest (a `11.0.0-preview` in development while `10.7.0` is released), `pack` starts from the csproj version and warns once. That csproj already is the version in development, so a bump flag is ignored for it and only the suffix applies (`11.0.0-local.1`, with or without `--patch`). Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
 | `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `.lrun/plots/dependencies-<date-time>.html`, printed as a link). |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
@@ -834,8 +834,10 @@ Exit it and re-run the script.
   project folders mark the whole repository, even when only docs changed.
 - `build` queries the sources of 8 projects at a time; a source that can't be reached costs NuGet's retries (about
   30 s) once per run, then is skipped (`--csproj` skips the queries altogether).
-- Versions and package ids are read from the `.csproj` itself: ones set in a `Directory.Build.props`, or built from
-  MSBuild properties (`$(Prefix).Lib`), aren't seen.
+- Versions and package ids come from the `.csproj` XML, and from MSBuild for the projects it can't tell (see
+  `--csproj`). The test is conservative on files it can follow (`Directory.Build.props` / `.targets` above the
+  project) but not on others: a value set by an environment variable, a global property or a `Directory.Packages.props`
+  isn't looked for, so a project not flagged is read as is.
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
   told apart, so they're all left out of the graph (with an error), rather than handled.
 - `plot` groups projects by solution or top folder, but the other commands still work project by project:

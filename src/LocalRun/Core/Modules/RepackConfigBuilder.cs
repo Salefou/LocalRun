@@ -6,6 +6,7 @@ using LocalRun.Logger;
 using LocalRun.Options;
 using Microsoft.Extensions.Logging;
 using NuGet.Configuration;
+using NuGet.Versioning;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
@@ -31,11 +32,21 @@ internal class RepackConfigBuilder
         logger.LogInformation("[⚙ ] Building repack config in dependency order...");
         var dependencyGraph = DependencyGraph.FromConfig(config);
 
-        // The latest version on the sources recorded by 'build' wins: the csproj version may lag behind releases and your builds
-        var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => proj.LatestVersion ?? proj.Version, StringComparer.OrdinalIgnoreCase);
+        var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => BaseVersion(proj).Version, StringComparer.OrdinalIgnoreCase);
+        var ahead = config.Projects.Where(proj => BaseVersion(proj).CsprojAhead).Select(proj => proj.Name).ToList();
+        if (ahead.Count != 0)
+        {
+            const int shown = 5;
+            logger.LogWarning("The csproj version is higher than the latest on your sources for {Count} project(s): pack starts from the csproj version and ignores the bump flag for them, only the suffix applies. {Projects}",
+                ahead.Count, string.Join(", ", ahead.Take(shown)) + (ahead.Count > shown ? $", … ({ahead.Count - shown} more)" : ""));
+        }
+
+        // A csproj ahead of the latest already is the version in development: a bump would skip it (11.0.0-preview, --patch → 11.0.1)
+        var withoutBump = repackOptions.BumpOptions == null ? null : new BumpOptions { BumpType = BumpType.None, Suffix = repackOptions.BumpOptions.Suffix };
+        var aheadNames = ahead.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var toVersions = fromVersions.ToDictionary(
             entry => entry.Key,
-            entry => repackOptions.BumpOptions?.Bump(entry.Value) ?? entry.Value with { },
+            entry => (aheadNames.Contains(entry.Key) ? withoutBump : repackOptions.BumpOptions)?.Bump(entry.Value) ?? entry.Value with { },
             StringComparer.OrdinalIgnoreCase);
 
         // Only a label set by the suffix is known to end the version (a kept label may carry +metadata)
@@ -91,6 +102,23 @@ internal class RepackConfigBuilder
             RepackTrees = repackTrees,
             Clean = repackOptions.CleanBeforeRestore
         });
+    }
+
+    /// <summary>
+    /// What <c>pack</c> starts from: the higher of the latest version on the sources recorded by <c>build</c> and the csproj
+    /// version. The latest wins over a csproj that lags behind releases and your builds; the csproj wins when it is ahead, being the
+    /// version in development (<c>11.0.0-preview</c> while <c>10.7.0</c> is released). "Higher" is the number alone: <c>1.5.0</c>
+    /// against <c>1.5.0-alpha.9</c> is the same release, whose alpha iterations go on from the latest.
+    /// </summary>
+    /// <returns>The base, and whether it is the csproj version ahead of a latest (the caller warns).</returns>
+    internal static (ProjectVersion Version, bool CsprojAhead) BaseVersion(ProjectNode project)
+    {
+        if (project.LatestVersion is not { } latest)
+            return (project.Version, false);
+        bool csprojAhead = NuGetVersion.TryParse(project.Version.AsVersionString(), out var csproj)
+            && NuGetVersion.TryParse(latest.AsVersionString(), out var found)
+            && csproj.Version > found.Version;
+        return csprojAhead ? (project.Version, true) : (latest, false);
     }
 
     /// <summary>

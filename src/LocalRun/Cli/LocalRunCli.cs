@@ -354,8 +354,9 @@ public static class LocalRunCli
         Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
         Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
         Console.WriteLine("        --tests                 Keep the test projects (left out by default)");
-        Console.WriteLine("        --csproj                Don't query your NuGet sources and local feed for the latest versions:");
-        Console.WriteLine("                                pack then starts from the csproj versions (default: from the latest)");
+        Console.WriteLine("        --csproj                Read the csproj files as they are: don't ask MSBuild for versions and package ids");
+        Console.WriteLine("                                set elsewhere (props files, $(...)), and don't query your NuGet sources and local");
+        Console.WriteLine("                                feed for the latest versions (pack then starts from the csproj versions)");
         Console.WriteLine("        --plot                  Then plot the graph, as 'plot' does with its defaults");
         Console.WriteLine();
 

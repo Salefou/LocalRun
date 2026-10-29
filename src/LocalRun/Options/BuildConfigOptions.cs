@@ -20,6 +20,9 @@ public class BuildConfigOptions
     /// <summary>Also keep the executables affected by the kept projects, with the libraries in between.</summary>
     public bool WithServices { get; internal set; }
 
-    /// <summary>Skip querying the NuGet sources: <c>pack</c> then starts from the csproj versions.</summary>
+    /// <summary>
+    /// Read the csproj XML only: no MSBuild evaluation of versions and package ids, no query of the NuGet sources
+    /// (<c>pack</c> then starts from the csproj versions).
+    /// </summary>
     public bool CsprojVersionsOnly { get; internal set; }
 }
