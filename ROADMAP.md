@@ -44,19 +44,37 @@ surprised or limited it, never dropped) and **progress** (only worth showing whe
   what the user should do.
 - **Paths:** a command that generates files still prints their paths, always. The "Written:" footer and the hyperlinks
   (`LinkPaths`, OSC 8) go: the user opens the page with `plot --open` and finds names in it, not in the log.
-  `build --plot` doesn't open the page today (no `--open` on `build`): candidate, `build --plot --open`.
-- **Emoji go.** The "running ... -> done" contrast stays, as one progress line: on a terminal it is overwritten in place
-  (`Packing 4/12 ...`) and ends as `<done glyph> Packed 12 libraries in 41 s`; when output is redirected, only the final line.
+  **`build --plot` opens the page** (user, 2026-11-04), but only on a terminal: when output is redirected it still writes
+  the page and prints its path, without launching a browser (an agent can't read a ~1.7 MB inlined HTML page, and a
+  window popping up on its machine helps nobody). `plot --open` stays as it is.
+- **Emoji go.** The "running ... -> done" contrast stays through one line per **depth**, printed before the step with what
+  it is about to do (`› Depth 2/5: Lib.A, Lib.B, Lib.C`; a long list is abbreviated, "and 47 more"), and a closing line
+  `✓ Packed 12 libraries in 41 s`. Not an in-place overwritten line: it is fragile and the per-depth line already works the
+  same in a terminal and in a pipe, with a bounded volume (depth count, not project count). It applies to `go`, `pack` and
+  `pack --dry-run`, which prints the same lines without running them.
 - **One visual language.** A few symbols, each meaning one thing; colour = level and service identity (so `[WRN]` / `[ERR]`
-  prefixes can go on a terminal). Glyphs must have **no emoji variant**, because `✔ ✖ ▶` were seen rendering with
-  inconsistent widths in Windows Terminal. Candidates: `✓` done, `×` or `✗` failed, `›` or `▸` start, `■` stopped,
-  `→` change. Pending: the user checks the candidates in Windows Terminal and Git Bash; fallback = words with colour.
-- **Plain mode = output redirected** (CI, pipes, the agent, which was said to use pipes): ASCII only, no colours, no
-  in-place updates, one line per finished step. An environment variable can force it. `up`'s tag colours stay on terminals.
+  prefixes can go on a terminal). Glyphs must have **no emoji variant** (`✔ ✖ ▶` rendered with inconsistent widths).
+  **Chosen set, checked in Windows Terminal and Git Bash (user, 2026-11-04):** `✓` done, `×` failed (or `✗`), `›` or `▸`
+  start, `■` stopped, `→` change. ASCII fallbacks when output is redirected: `ok`, `FAILED`, `>`, `-`, `->`.
+- **Plain mode = output redirected.** Redirection means "nobody is watching a terminal": no colours, no glyphs, one line
+  per step. That covers CI, pipes and an agent using pipes, but it is **not the same thing as "agent"**: a human running
+  `lrun build | tee log` is redirected too, and an agent given a pseudo-terminal isn't. So two separate axes: *presentation*
+  (terminal or not, automatic) and *format* (text or JSON, explicit with `--json`, item 1), never switching to JSON
+  because of a pipe. For a wrapper that always wants machine output, an environment variable (`LOCALRUN_OUTPUT=json|plain`)
+  sets it once instead of on every call.
 - `up` stays as it is (the colours solved finding one service among several).
 
-**Not decided:** the exact `build` summary (counts by type, what was left out and why, the plot path); the final glyph set;
-whether `build` gets `--open`.
+**`build` summary (proposed; the same facts feed `--json`):**
+1. What was scanned: root, solutions, projects by type (`212 projects: 160 libraries, 31 executables, 21 tests`).
+2. What was kept and why, when a filter applies: `Kept 34 of 212 (--deps-of WebApp, --with-services)`; with `--git-changes`,
+   one line per repository with changes (as today, without the emoji).
+3. What was left out and needs attention, always shown: name collisions (names and paths, as an error), cycles removed,
+   an empty selection. Test projects left out: one line with the `--tests` hint.
+4. The executables that `up` would start (names, abbreviated), so a human and an agent both see the services in play.
+5. The config path, and the plot path when plotted (printed in full, no hyperlink).
+6. The next step: `Next: lrun pack` (a hint a human and an agent both use; dropped when `--plot` already said what to do).
+
+**Not decided:** the wording of the above; `×` or `✗`, `›` or `▸` (pick on sight); the exact environment variable name.
 
 **Touches:** `LocalRunConsoleFormatter` (prefixes, links) and its tests, every `[emoji]` message (about 30), `RepackExecutor`
 and `RepackConfigBuilder` (output filtering and the collapsed plan), `LocalRunCli` (`pack`, `PrintWritten`, help), README,
