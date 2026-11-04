@@ -8,6 +8,9 @@ read its "How it works" and "Known limitations" sections before changing behavio
 LocalRun: a .NET 8 tool that scans a tree of repositories, builds the project dependency graph,
 and repacks changed libraries into a local NuGet feed / runs executables, in dependency order.
 
+This repository is public (GitHub, and the package on nuget.org): commits, files and PR/issue text are
+public and permanent. Keep personal and work details out; "at work" is as specific as it gets.
+
 - `src/LocalRun/` — the non-interactive `lrun` CLI, packed as a .NET tool. It also contains the whole
   engine (`Core/`, `Options/`, `Logger/`).
 - `tests/LocalRun.Tests/` — xUnit, references `src/LocalRun`; folders mirror it.
