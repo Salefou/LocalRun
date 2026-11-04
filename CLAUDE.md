@@ -108,7 +108,7 @@ shell escaping.
   `~/.localnuget`.
   Never reintroduce paths relative to `bin/` (the old `..\..\..\Output` hack) or `~/source/repos`.
 - **Non-interactive CLI**: nothing in `src/LocalRun` may prompt, read stdin or open windows
-  unless asked by a flag (`plot --open`). There is no interactive front end any more (the REPL
+  unless asked by a flag (`plot --open`; `build --plot` opens the page on a terminal only). There is no interactive front end any more (the REPL
   was removed on 2026-10-24); don't add one without asking.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
 - Dependency graph semantics (layered Kahn, depth = longest path from a root, name-sorted layers,
@@ -146,8 +146,15 @@ shell escaping.
 
 - File layout: `namespace X;` first, then `using`s, file-scoped. Most files start with a UTF-8 BOM.
 - Logging: `private static readonly ILogger<T> logger = Log.For<T>();` (`Log.For(name)` for static
-  classes). Messages are structured templates, often with an emoji prefix (`[📦]`, `[✔ ]`, `[⚙ ]`).
+  classes). Messages are structured templates, with no emoji or mark of their own.
   `Log.Shutdown()` must run once at process exit to flush the background console queue.
+- **Output** (user feedback, 2026-11-04, 0.4.0): a command prints its result (including the paths it wrote), its
+  diagnostics (never dropped) and progress for slow steps only (`LogEvents.Progress`, shown on a terminal only). No
+  narration (one line per step or per project). Marks are event ids (`LogEvents.Start/Done/Failed/Stopped`), which the
+  formatter renders as `› ✓ × ■` on a terminal and `> ok FAILED -` when redirected (`Terminal.IsAttached`); a change is
+  `Terminal.Arrow`. Glyphs must have no emoji variant (`✔ ✖ ▶` don't qualify). On a terminal the colour says the
+  level; redirected, `[WRN]` / `[ERR]` prefixes do. Long lists go through `Text.Abbreviate` ("and N more"), and `go`
+  prints one line per depth, never per project. Of `dotnet` output, only warning and error lines, verbatim, not deduplicated.
 - Level via `LOCALRUN_LOG_LEVEL`. Errors log the message; `LogDebug(ex, …)` carries the stack trace.
 - Options objects live in `Options/`, one parser per command (`*OptionsParser.Parse(CommandLineArgs)`).
 - New command: see README "Adding a command". Update `LocalRunCli.PrintHelp` and README together.
@@ -226,6 +233,10 @@ shell escaping.
   `Microsoft.Build` was judged not worth a dependency for now (revisit if large real-world repos are slow). Found on the ABP
   clone (a test bed, kept out of context: `AGENTS.md` there): csproj `11.0.0-preview` against `10.7.0` released, hence the
   "higher of the two" base. The rule was settled over four messages; the final one is in "Base and iteration".
+- 2026-11-04, branch `claude/output-redesign` (0.4.0): ROADMAP item 0. `pack` packs (`--dry-run` plans only, `--go`
+  rejected with a pointer, not aliased), output reduced to results and diagnostics (see "Output"), `build --plot` opens
+  the page on a terminal. `go` now runs every tree depth by depth together, so each depth gets one line (trees used to
+  run independently in parallel). The `Written:` footer and OSC 8 links were dropped.
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz (until 0.3.0).
 
 ## Known issues / candidate tasks

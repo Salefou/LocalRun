@@ -21,9 +21,9 @@ Requires the .NET 8 SDK. Tested on Windows x64.
 
 ```sh
 lrun settings                                                                  # once per machine: your local feed, repos folder... (opens the file)
-lrun build --root ./repos --users-of MyCompany.Pricing --with-services --plot   # what uses Pricing, plotted
-lrun pack --patch --suffix dev                                                 # plan the versions: .lrun/repack.config.json
-lrun go                                                                        # pack them into the local feed
+lrun build --root ./repos --users-of MyCompany.Pricing --with-services --plot   # what uses Pricing, plotted and opened
+lrun pack --patch --suffix dev                                                 # plan the versions, pack them into the local feed
+                                                                               # (--dry-run: only the plan, .lrun/repack.config.json; then lrun go)
 lrun up                                                                        # build and run the services; Ctrl+C stops them
 ```
 

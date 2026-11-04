@@ -9,6 +9,27 @@ bumps the minor version, anything else the patch.
 
 ### Changed
 
+- **Breaking:** `pack` packs. It writes the plan to `repack.config.json` first, as before, then executes it as `go` does.
+  `pack --dry-run` only writes the plan (and prints the depths it would run), for review or hand editing before `go`.
+  `pack --go` is gone (exit code `2`, with a pointer to `--dry-run`).
+- Output redesigned: each command prints its result, its warnings and errors, and nothing else. No emoji and no per-step
+  sentences. The `Written:` footer and the clickable links are gone; every command still prints the paths of the files it
+  writes (`Config:`, `Plan:`, `Plot:`).
+  - `build` prints what it scanned (projects, solutions, libraries, executables), what a filter kept (`Kept 6 of 11
+    (--deps-of …)`), the test projects left out on one line, the executables `up` would start, and the next step. The
+    per-project list of latest versions became one line (Debug has the details).
+  - `pack` prints the versions once for the whole plan (`Versions: local.60 → local.61, 12 projects`) and lists only
+    the projects that differ.
+  - `go` and `pack` print one line per depth before running it (`› Depth 2/5: Lib.A, Lib.B and 47 more`), then
+    `✓ Packed 12 projects in 41 s`. Of the `dotnet` output, only warning and error lines are printed, verbatim; MSBuild's
+    summary repeating them is turned off. A command failing without an error line still prints its whole output.
+    Every tree of the plan now goes depth by depth together, so each depth gets one line.
+  - On a terminal, colour says the level (the `[WRN]` / `[ERR]` prefixes are gone there) and marks without emoji
+    variants say how a step went: `›` starting, `✓` done, `×` failed, `■` stopped, `→` a change. Redirected output
+    is plain: no colours, `[WRN]` / `[ERR]` prefixes, `>`, `ok`, `FAILED`, `-`, `->`, and no progress lines.
+- `build --plot` opens the page in the browser, on a terminal only: with output redirected (CI, a script, an agent),
+  it writes the page and prints its path without starting a browser.
+
 - `up`: the `[name]` tag now always has the service's color, whatever the level of the line (0.3.2 shaded it). The message
   carries the level instead: as printed for information, orange for warnings, red for errors, grey for debug.
 
