@@ -214,6 +214,11 @@ shell escaping.
 - 2026-10-28, branch `claude/user-settings` (0.3.1): `lrun settings` and `~/.lrun/settings.json` for per-user defaults.
   The command was first asked for as `config`, renamed to `settings` (user's choice) because `config` already means the
   generated files (`--config`, `localrun.config.json`). Git-style `settings <key> [value]` floated, not built.
+- 2026-10-29, branch `claude/msbuild-fallback` (0.3.2): `build` asks MSBuild for versions and package ids only where the
+  csproj XML cannot tell (`MsBuildEvaluator`; ~1 s per project, 73 s for ABP's 512 flagged projects); an in-process
+  `Microsoft.Build` was judged not worth a dependency for now (revisit if real repos at work are slow). Found on the ABP
+  clone (a test bed, kept out of context: `AGENTS.md` there): csproj `11.0.0-preview` against `10.7.0` released, hence the
+  "higher of the two" base. The rule was settled over four messages; the final one is in "Base and iteration".
 - Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz (until 0.3.0).
 
 ## Known issues / candidate tasks
