@@ -63,7 +63,9 @@ shell escaping.
   branch (`origin/HEAD` → `origin/main` → `origin/master`); being behind is not a change. Per project
   (deepest folder owning the file); a file outside every project folder marks the whole repo. Guiding
   rule: **when unsure, keep more** (no base, unreadable repo, not in git → changed, with a warning),
-  since extra projects are easy to delete from the config/plot. Never fetch.
+  since extra projects are easy to delete from the config/plot. The tool never fetches (the README tells
+  users to run `git fetch` themselves). This rule is about `GitChangeDetector`, not you: fetching while you
+  work is expected, see the git state check in the user's global instructions.
 
 - **Planned versions reach referenced projects**: `RepackExecutor` sets each project's `PackageVersion`
   through a generated props file (`CustomBeforeMicrosoftCommonProps`, matched by
