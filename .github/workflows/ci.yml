@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build-and-test:
-    # Windows, like the team's machines: the install script targets Windows PowerShell
+    # Windows, the main target: the install script targets Windows PowerShell
     runs-on: windows-latest
     timeout-minutes: 20
 

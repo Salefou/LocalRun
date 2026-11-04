@@ -4,7 +4,7 @@ Feature requests and candidate tasks for LocalRun, so that none lives only in a 
 started unless it says so: propose it, don't build it silently (see "Known issues / candidate tasks" in `CLAUDE.md`).
 When an item ships, move its line to `CHANGELOG.md` and delete it here; when it is rejected, say why in one line below.
 
-Opened 2026-11-04. Each item is marked **(user)** when the user asked for it, **(claude)** when it was suggested.
+Opened 2026-11-04. Each item is marked **(user)** when it came from user feedback, **(claude)** when it was suggested.
 
 **Theme: use LocalRun as a tool for agents** on a large microservice platform (dozens of repos, hundreds of projects).
 An agent can't watch a terminal, hold a foreground process, or parse an emoji-prefixed log: it needs results it can
@@ -30,7 +30,7 @@ facts worth reporting, not that chatter; deciding what human mode says comes bef
 **Model.** A command says three things: the **result** (what it produced or decided), **diagnostics** (anything that
 surprised or limited it, never dropped) and **progress** (only worth showing when a step is slow, and only on a terminal).
 
-**Decisions** (user's answers, 2026-11-04):
+**Decisions** (user feedback, 2026-11-04):
 - **`pack` packs.** Plan-only becomes `pack --dry-run`; `--go` is dropped, not aliased. `go` stays, to run a plan
   edited by hand (e.g. to leave out a bad package pushed to the artifactory) and as the second half of a CI pipeline
   (`pack --dry-run`, review the plan, `go`). The plan file `repack.config.json` is **always** written, dry run or not, before
@@ -43,7 +43,7 @@ surprised or limited it, never dropped) and **progress** (only worth showing whe
   restore, "Building dependency graph...", "Settings file: ..."). Keep one line when a step is slow or when it changes
   what the user should do.
 - **Paths:** a command that generates files still prints their paths, always. The "Written:" footer and the hyperlinks
-  (`LinkPaths`, OSC 8) go: the user opens the page with `plot --open` and finds names in it, not in the log.
+  (`LinkPaths`, OSC 8) go: users open the page with `plot --open` and find names in it, not in the log.
   **`build --plot` opens the page** (user, 2026-11-04), but only on a terminal: when output is redirected it still writes
   the page and prints its path, without launching a browser (an agent can't read a ~1.7 MB inlined HTML page, and a
   window popping up on its machine helps nobody). `plot --open` stays as it is.
@@ -183,7 +183,7 @@ Ideas:
   `project-build-failed`, `ambiguous-name`, …) plus the failing project and the first compiler errors. The string is the
   real contract; the number is a coarse shortcut. Number few things, name many.
 - `--strict`: turn the warnings that mean "I left things out" (name collisions, cycles removed, unreadable repo) into a
-  non-zero exit. Today they exit `0` on purpose (user, 2026-10-24); strictness must be opt-in.
+  non-zero exit. Today they exit `0` on purpose (user feedback, 2026-10-24); strictness must be opt-in.
 - Any code that was `1` and moves is a visible change: while 0.x, bump the minor and list it in the CHANGELOG. Document
   the table in `--help` and the README.
 
@@ -262,7 +262,7 @@ so a failure becomes a fixable task. Related: `go --dry-run` printing the order 
 ### A3. `up` an agent can use **(claude)**
 Today `up` runs in the foreground until Ctrl+C. An agent can't hold that. Candidates, each its own decision:
 `up --detach` writing a state file in `.lrun/` (pids, ports from launch settings, start time), `lrun ps` to list them,
-`lrun down` to stop them, `lrun logs <service> [--tail N] [--level warn]`. Readiness stays out by design (user,
+`lrun down` to stop them, `lrun logs <service> [--tail N] [--level warn]`. Readiness stays out by design (user feedback,
 2026-10-24): if wanted, make it opt-in (`--wait <service>=<url>` or a log pattern), never the default.
 Also `up --only <names>`; today there is only `--exclude`.
 
