@@ -138,6 +138,72 @@ public class DependencyGraphTests
         Assert.Equal(1, graph.ComputeNameToDepth()["Downstream"]);
     }
 
+    // A project whose dependencies are all project references, as in a csproj read by build
+    private static ProjectNode Referencing(string name, params string[] projectReferences) =>
+        new() { Name = name, Path = $"{name}/{name}.csproj", Type = "library", Version = ProjectVersion.Parse("1.0.0"),
+            Dependencies = [.. projectReferences], ProjectReferences = projectReferences };
+
+    [Fact]
+    public void RemoveCycles_LeavesOutWhatReachesTheCycleThroughProjectReferences()
+    {
+        // Top -proj-> A (cycle); Outer -proj-> Top; ByPackage -pkg-> Top, so it restores Top's published package
+        var graph = Graph(
+            Referencing("A", "B"),
+            Referencing("B", "A"),
+            Referencing("Top", "A"),
+            Referencing("Outer", "Top"),
+            Project("ByPackage", "Top"),
+            Referencing("Free"));
+
+        var cycle = Assert.Single(graph.RemoveCycles());
+
+        Assert.Equal(["A", "B"], cycle.Projects);
+        Assert.Equal(["Outer", "Top"], cycle.LeftOutWith);
+        Assert.Equal(["ByPackage"], cycle.Dependents);
+        Assert.Equal(["ByPackage", "Free"], graph.TopologicalOrder().Select(p => p.Name).Order());
+    }
+
+    [Fact]
+    public void RemoveCycles_KeepsWhatUsesTheCycleAsPackages()
+    {
+        var graph = Graph(Referencing("A", "B"), Referencing("B", "A"), Project("Top", "A"));
+
+        var cycle = Assert.Single(graph.RemoveCycles());
+
+        Assert.Empty(cycle.LeftOutWith);
+        Assert.Equal(["Top"], cycle.Dependents);
+        Assert.Equal(["Top"], graph.TopologicalOrder().Select(p => p.Name));
+    }
+
+    [Fact]
+    public void FromSource_RecordsWhichDependenciesAreProjectReferences_WithoutWritingThem()
+    {
+        string root = Directory.CreateTempSubdirectory("localrun-refs-").FullName;
+        try
+        {
+            foreach (var name in new[] { "Lib", "Pkg", "App" })
+                Directory.CreateDirectory(Path.Combine(root, name));
+            File.WriteAllText(Path.Combine(root, "Lib", "Lib.csproj"), """<Project Sdk="Microsoft.NET.Sdk" />""");
+            File.WriteAllText(Path.Combine(root, "Pkg", "Pkg.csproj"), """<Project Sdk="Microsoft.NET.Sdk" />""");
+            File.WriteAllText(Path.Combine(root, "App", "App.csproj"), """
+                <Project Sdk="Microsoft.NET.Sdk"><ItemGroup>
+                  <ProjectReference Include="..\Lib\Lib.csproj" /><PackageReference Include="Pkg" Version="1.*" />
+                </ItemGroup></Project>
+                """);
+            string[] csprojs = Directory.GetFiles(root, "*.csproj", SearchOption.AllDirectories);
+
+            var app = DependencyGraph.FromSource(root, csprojs, includeProjectsWithoutSolutions: true).AllProjects.Single(p => p.Name == "App");
+
+            Assert.Equal(["Lib", "Pkg"], app.Dependencies.Order());
+            Assert.Equal(["Lib"], app.ProjectReferences);
+            Assert.DoesNotContain("ProjectReferences", System.Text.Json.JsonSerializer.Serialize(app));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void RemoveCycles_ReportsEachCycleAndSelfReferenceSeparately()
     {

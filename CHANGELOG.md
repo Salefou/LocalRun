@@ -27,6 +27,9 @@ bumps the minor version, anything else the patch.
   - On a terminal, colour says the level (the `[WRN]` / `[ERR]` prefixes are gone there) and marks without emoji
     variants say how a step went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped, `→` a change. Redirected output
     is plain: no colours, `[WRN]` / `[ERR]` prefixes, `>`, `+`, `ok`, `FAILED`, `-`, `->`, and no progress lines.
+- `build` also leaves out, with a warning, the projects that reach a dependency cycle through project references,
+  directly or through other projects: their restore failed on the cycle (`MSB4006`), so `pack` failed on them. Projects
+  using them as packages are still kept, without that dependency.
 - `build --plot` opens the page in the browser, on a terminal only: with output redirected (CI, a script, an agent),
   it writes the page and prints its path without starting a browser.
 
