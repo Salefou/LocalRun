@@ -76,14 +76,14 @@ public static class GitChangeDetector
                 var (baseName, baseCommit) = FindDefaultBranch(repo);
                 if (baseCommit == null)
                 {
-                    logger.LogWarning("[🔀] {Repo}: no origin/HEAD, origin/main or origin/master to compare with, whole repo counted as changed",
+                    logger.LogWarning("{Repo}: no origin/HEAD, origin/main or origin/master to compare with, whole repo counted as changed",
                         repoLabel);
                     return all;
                 }
                 var mergeBase = repo.ObjectDatabase.FindMergeBase(head, baseCommit);
                 if (mergeBase == null)
                 {
-                    logger.LogWarning("[🔀] {Repo}: HEAD shares no history with {Base}, whole repo counted as changed", repoLabel, baseName);
+                    logger.LogWarning("{Repo}: HEAD shares no history with {Base}, whole repo counted as changed", repoLabel, baseName);
                     return all;
                 }
                 if (mergeBase.Sha != head.Sha)
@@ -100,23 +100,23 @@ public static class GitChangeDetector
 
             if (paths.Count == 0)
             {
-                logger.LogDebug("[🔀] {Repo}: no pending changes", repoLabel);
+                logger.LogDebug("{Repo}: no pending changes", repoLabel);
                 return [];
             }
 
             var (changed, outside) = MapToProjects(workDir, projects, paths);
             if (outside.Count != 0)
             {
-                logger.LogInformation("[🔀] {Repo}: {Reasons} -> whole repo (changes outside project folders: {Files})",
+                logger.LogInformation("{Repo}: {Reasons} -> whole repo (changes outside project folders: {Files})",
                     repoLabel, string.Join(", ", reasons), Abbreviate(outside));
                 return all;
             }
-            logger.LogInformation("[🔀] {Repo}: {Reasons} -> {Projects}", repoLabel, string.Join(", ", reasons), string.Join(", ", changed));
+            logger.LogInformation("{Repo}: {Reasons} -> {Projects}", repoLabel, string.Join(", ", reasons), string.Join(", ", changed));
             return changed;
         }
         catch (LibGit2SharpException ex)
         {
-            logger.LogWarning("[🔀] {Repo}: could not read the repository ({Error}), whole repo counted as changed", repoLabel, ex.Message);
+            logger.LogWarning("{Repo}: could not read the repository ({Error}), whole repo counted as changed", repoLabel, ex.Message);
             return all;
         }
     }

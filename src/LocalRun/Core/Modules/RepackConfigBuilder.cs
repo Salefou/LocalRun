@@ -29,16 +29,14 @@ internal class RepackConfigBuilder
 
     public Task<RepackConfig> BuildRepackConfig(LocalRunConfig config, RepackOptions repackOptions)
     {
-        logger.LogInformation("[⚙ ] Building repack config in dependency order...");
         var dependencyGraph = DependencyGraph.FromConfig(config);
 
         var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => BaseVersion(proj).Version, StringComparer.OrdinalIgnoreCase);
         var ahead = config.Projects.Where(proj => BaseVersion(proj).CsprojAhead).Select(proj => proj.Name).ToList();
         if (ahead.Count != 0)
         {
-            const int shown = 5;
             logger.LogWarning("The csproj version is higher than the latest on your sources for {Count} project(s): pack starts from the csproj version and ignores the bump flag for them, only the suffix applies. {Projects}",
-                ahead.Count, string.Join(", ", ahead.Take(shown)) + (ahead.Count > shown ? $", … ({ahead.Count - shown} more)" : ""));
+                ahead.Count, Text.Abbreviate(ahead, shown: 5));
         }
 
         // A csproj ahead of the latest already is the version in development: a bump would skip it (11.0.0-preview, --patch → 11.0.1)
@@ -54,7 +52,7 @@ internal class RepackConfigBuilder
         {
             var packageIds = config.Projects.ToDictionary(proj => proj.Name, proj => proj.PackageIdOrName, StringComparer.OrdinalIgnoreCase);
             int iteration = PackageIterations.Next(toVersions.Select(entry => (packageIds[entry.Key], entry.Value, fromVersions[entry.Key])), PackageFolders(config));
-            logger.LogInformation("[🔢] Iteration {Iteration} ({Reason})", iteration,
+            logger.LogDebug("Iteration {Iteration} ({Reason})", iteration,
                 iteration == 1 ? "first pack of these versions" : $"up to .{iteration - 1} found on the sources, in the local feed or in the NuGet cache");
             foreach (var name in toVersions.Keys.ToList())
                 toVersions[name] = toVersions[name] with { PatchAndSuffix = $"{toVersions[name].PatchAndSuffix}.{iteration}" };
@@ -70,8 +68,6 @@ internal class RepackConfigBuilder
             {
                 var version = fromVersions[proj.Name];
                 var bumpedVersion = toVersions[proj.Name];
-                logger.LogInformation("[📦] Writing repack config of {Project} ({FromVersion}) to ({ToVersion})...", proj.Name, version, bumpedVersion);
-
                 string pathToCsproj = Path.Combine(config.RootPath, proj.Path);
                 if (OverridesPackageVersion(pathToCsproj))
                 {
@@ -96,12 +92,31 @@ internal class RepackConfigBuilder
                     .ThenBy(proj => proj.PathToCsproj)]
             });
         }
+        LogVersions([.. config.Projects.Select(proj => (proj.Name, fromVersions[proj.Name], toVersions[proj.Name]))]);
         return Task.FromResult(new RepackConfig()
         {
             LocalNugetPath = config.LocalNugetPath,
             RepackTrees = repackTrees,
             Clean = repackOptions.CleanBeforeRestore
         });
+    }
+
+    /// <summary>The plan's versions: the change most projects share, once, then a line per project that differs.</summary>
+    private static void LogVersions(IReadOnlyList<(string Name, ProjectVersion From, ProjectVersion To)> plan)
+    {
+        if (plan.Count == 0)
+        {
+            logger.LogWarning("Nothing to pack: the config holds no project.");
+            return;
+        }
+        var (common, commonCount, others) = VersionChanges.Summarize(plan, Terminal.Arrow);
+        if (common != null)
+        {
+            logger.LogInformation("Versions: {Change}, {Projects}{Others}", common, Text.Count(commonCount, "project"),
+                others.Count == 0 ? string.Empty : $"; {others.Count} other(s):");
+        }
+        foreach (var (name, change) in others)
+            logger.LogInformation(common == null ? "{Project}: {Change}" : "  {Project}: {Change}", name, change);
     }
 
     /// <summary>

@@ -31,6 +31,12 @@ public class LocalRunCliTests
         Assert.Equal(LocalRunCli.ExitUsage, await LocalRunCli.RunAsync(args));
     }
 
+    [Fact]
+    public async Task PackGo_IsGone_PackPacks()
+    {
+        Assert.Equal(LocalRunCli.ExitUsage, await LocalRunCli.RunAsync(["pack", "--go"]));
+    }
+
     [Theory]
     [InlineData("version")]
     [InlineData("--version")]

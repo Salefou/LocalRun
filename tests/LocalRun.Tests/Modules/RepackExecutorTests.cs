@@ -6,14 +6,33 @@ using System.Xml.Linq;
 
 public class RepackExecutorTests
 {
-    private static ProjectRepack Repack(string name, string path, string toVersion) => new()
+    private static ProjectRepack Repack(string name, string path, string toVersion, int depth = 0) => new()
     {
         Name = name,
         PathToCsproj = path,
-        Depth = 0,
+        Depth = depth,
         FromVersion = ProjectVersion.Parse("1.0.0"),
         ToVersion = ProjectVersion.Parse(toVersion),
     };
+
+    [Fact]
+    public void Depths_GatherEveryTree_InDepthOrder()
+    {
+        var config = new RepackConfig
+        {
+            LocalNugetPath = "feed",
+            Clean = false,
+            RepackTrees =
+            [
+                new() { Projects = [Repack("Core", "Core.csproj", "1.0.1", 0), Repack("Api", "Api.csproj", "1.0.1", 2)] },
+                new() { Projects = [Repack("Island", "Island.csproj", "1.0.1", 0), Repack("Bridge", "Bridge.csproj", "1.0.1", 1)] },
+            ],
+        };
+
+        var depths = RepackExecutor.Depths(config);
+
+        Assert.Equal([["Core", "Island"], ["Bridge"], ["Api"]], depths.Select(depth => depth.Select(proj => proj.Name)));
+    }
 
     [Fact]
     public void VersionsProps_GivesEachProjectItsOwnPlannedVersion()
