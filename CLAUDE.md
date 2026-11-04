@@ -223,7 +223,9 @@ shell escaping.
 
 ## Known issues / candidate tasks
 
-Listed for the user in README "Known limitations". Do not fix silently; propose them:
+Listed for the user in README "Known limitations". Do not fix silently; propose them.
+Feature requests (machine output, exit codes, `status`, `--since`, `--verify`, agent-oriented ideas) live in
+`ROADMAP.md`: read it before designing anything of that kind, and update it when one ships or is rejected.
 
 - Batch git operations across the repos of a config (`lrun git …`, keep going on failure, summary):
   floated by the user on 2026-10-24, postponed until they hit enough real use cases. Never stash/reset on the user's behalf.
