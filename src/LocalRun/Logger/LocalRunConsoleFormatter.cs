@@ -43,6 +43,7 @@ public sealed class LocalRunConsoleFormatter : ConsoleFormatter
             var id when id == LogEvents.Start.Id => (onTerminal ? "›" : ">", "\x1B[36m"),
             var id when id == LogEvents.Done.Id => (onTerminal ? "✓" : "ok", "\x1B[32m"),
             var id when id == LogEvents.Failed.Id => (onTerminal ? "×" : "FAILED", "\x1B[31m"),
+            var id when id == LogEvents.Launched.Id => (onTerminal ? "▸" : "+", "\x1B[36m"),
             var id when id == LogEvents.Stopped.Id => (onTerminal ? "■" : "-", "\x1B[90m"),
             _ => (null, string.Empty),
         };

@@ -69,7 +69,7 @@ public class RunProcessor : IRunProcessor
         {
             foreach (var exe in executables)
             {
-                logger.LogInformation(LogEvents.Start, "Starting {Project}", exe.Name);
+                logger.LogInformation(LogEvents.Launched, "Starting {Project}", exe.Name);
                 running.Add(RunningProcess.Start(exe.Name.PadRight(prefixWidth),
                     "dotnet", $"run --no-build --project \"{FullPath(config, exe)}\"{SolutionProperties.Arguments(exe.SolutionPath)}",
                     job: job, style: styles?[exe.Name]));

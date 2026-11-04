@@ -25,8 +25,8 @@ bumps the minor version, anything else the patch.
     summary repeating them is turned off. A command failing without an error line still prints its whole output.
     Every tree of the plan now goes depth by depth together, so each depth gets one line.
   - On a terminal, colour says the level (the `[WRN]` / `[ERR]` prefixes are gone there) and marks without emoji
-    variants say how a step went: `›` starting, `✓` done, `×` failed, `■` stopped, `→` a change. Redirected output
-    is plain: no colours, `[WRN]` / `[ERR]` prefixes, `>`, `ok`, `FAILED`, `-`, `->`, and no progress lines.
+    variants say how a step went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped, `→` a change. Redirected output
+    is plain: no colours, `[WRN]` / `[ERR]` prefixes, `>`, `+`, `ok`, `FAILED`, `-`, `->`, and no progress lines.
 - `build --plot` opens the page in the browser, on a terminal only: with output redirected (CI, a script, an agent),
   it writes the page and prints its path without starting a browser.
 

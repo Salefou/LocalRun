@@ -18,6 +18,9 @@ public static class LogEvents
     /// <summary><c>×</c> / <c>FAILED</c>: a step or the command failed.</summary>
     public static readonly EventId Failed = new(3, "failed");
 
+    /// <summary><c>▸</c> / <c>+</c>: a process started, running until it stops (<see cref="Stopped"/>).</summary>
+    public static readonly EventId Launched = new(6, "launched");
+
     /// <summary><c>■</c> / <c>-</c>: a process stopped.</summary>
     public static readonly EventId Stopped = new(4, "stopped");
 

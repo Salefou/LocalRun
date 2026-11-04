@@ -150,8 +150,8 @@ shell escaping.
   `Log.Shutdown()` must run once at process exit to flush the background console queue.
 - **Output** (user feedback, 2026-11-04, 0.4.0): a command prints its result (including the paths it wrote), its
   diagnostics (never dropped) and progress for slow steps only (`LogEvents.Progress`, shown on a terminal only). No
-  narration (one line per step or per project). Marks are event ids (`LogEvents.Start/Done/Failed/Stopped`), which the
-  formatter renders as `› ✓ × ■` on a terminal and `> ok FAILED -` when redirected (`Terminal.IsAttached`); a change is
+  narration (one line per step or per project). Marks are event ids (`LogEvents.Start/Launched/Done/Failed/Stopped`;
+  Launched = a process `up` started, Start = any other step about to run), which the formatter renders as `› ▸ ✓ × ■` on a terminal and `> + ok FAILED -` when redirected (`Terminal.IsAttached`); a change is
   `Terminal.Arrow`. Glyphs must have no emoji variant (`✔ ✖ ▶` don't qualify). On a terminal the colour says the
   level; redirected, `[WRN]` / `[ERR]` prefixes do. Long lists go through `Text.Abbreviate` ("and N more"), and `go`
   prints one line per depth, never per project. Of `dotnet` output, only warning and error lines, verbatim, not deduplicated.

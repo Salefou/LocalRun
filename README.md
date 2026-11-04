@@ -470,8 +470,8 @@ without a chance to stop them (Task Manager, `taskkill /F`, stopping a debugger 
 Windows ends them too, so they don't keep holding their ports and build output.
 
 ```
-› Starting LrSample.RiskService
-› Starting LrSample.OrderGateway
+▸ Starting LrSample.RiskService
+▸ Starting LrSample.OrderGateway
 ✓ 2 processes started. Press Ctrl+C to stop them all.
 [LrSample.RiskService ] RiskService listening on http://localhost:5102/
 [LrSample.OrderGateway] OrderGateway listening on http://localhost:5101/
@@ -666,7 +666,7 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 |---|---|
 | Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `up` inherit the console.) |
 | Exit codes | `0` success · `1` the command failed (missing file, `dotnet` failure, dependency cycle, …) · `2` invalid command line. |
-| Output | Human-readable log lines on **stdout**. Redirected, they are plain: warnings and errors prefixed `[WRN] ` / `[ERR] `, steps marked `>` (starting), `ok`, `FAILED`, `-` (stopped), no colours, no progress lines. Of `go`'s child `dotnet` processes, only warning and error lines are forwarded; `up` forwards its services' output. |
+| Output | Human-readable log lines on **stdout**. Redirected, they are plain: warnings and errors prefixed `[WRN] ` / `[ERR] `, steps marked `>` (starting), `+` (process started), `ok`, `FAILED`, `-` (stopped), no colours, no progress lines. Of `go`'s child `dotnet` processes, only warning and error lines are forwarded; `up` forwards its services' output. |
 | Results | The JSON / HTML files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
 | Side effects | `--open` launches a viewer; `go` writes packages to the feed; `up` starts processes. |
 
@@ -734,9 +734,9 @@ decided, the paths of the files it wrote), its **diagnostics** (warnings and err
 terminal only, **progress** for the slow steps (scanning, MSBuild evaluation, querying the NuGet sources).
 
 On a terminal, colour says the level (yellow warnings, red errors, grey debug) and a few marks say how a step
-went: `›` starting, `✓` done, `×` failed, `■` stopped, `→` a change. When output is redirected (a pipe, a file,
-CI), the output is plain: no colours, `[DBG]` / `[WRN]` / `[ERR]` prefixes, and the marks become `>`, `ok`,
-`FAILED`, `-` and `->`. `NO_COLOR` turns the colours off on a terminal too (the prefixes come back).
+went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped, `→` a change. When
+output is redirected (a pipe, a file, CI), the output is plain: no colours, `[DBG]` / `[WRN]` / `[ERR]` prefixes,
+and the marks become `>`, `+`, `ok`, `FAILED`, `-` and `->`. `NO_COLOR` turns the colours off on a terminal too (the prefixes come back).
 
 The minimum level is `Information`. Override it with the `LOCALRUN_LOG_LEVEL` environment variable
 (`Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`, `None`). `Debug` adds timings and the

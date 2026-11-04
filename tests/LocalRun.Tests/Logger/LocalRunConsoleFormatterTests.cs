@@ -46,6 +46,7 @@ public class LocalRunConsoleFormatterTests
         { LogEvents.Start.Id, "›", ">" },
         { LogEvents.Done.Id, "✓", "ok" },
         { LogEvents.Failed.Id, "×", "FAILED" },
+        { LogEvents.Launched.Id, "▸", "+" },
         { LogEvents.Stopped.Id, "■", "-" },
     };
 
