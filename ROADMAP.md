@@ -12,6 +12,7 @@ parse, failures it can classify, queries that don't write anything, and services
 
 ## Suggested order
 
+0. **Output redesign** (0): decide what human mode says, so machine output serialises facts, not chatter.
 1. **Machine output** (1) and **error codes** (2): everything else reports through them.
 2. **`status`** (3) and **`build --verify`** (5): read-only questions, with a shared "what does this config hold" model.
 3. **`--since`** (4): extends `GitChangeDetector`, independent of the rest.
@@ -20,6 +21,46 @@ parse, failures it can classify, queries that don't write anything, and services
 ---
 
 ## Requested
+
+### 0. Output redesign, human mode first **(user, 2026-11-04)**
+
+Why first: today's messages are REPL-era chatter (an emoji and a sentence per step). `--json` (1) should serialise the
+facts worth reporting, not that chatter; deciding what human mode says comes before a second renderer.
+
+**Model.** A command says three things: the **result** (what it produced or decided), **diagnostics** (anything that
+surprised or limited it, never dropped) and **progress** (only worth showing when a step is slow, and only on a terminal).
+
+**Decisions** (user's answers, 2026-11-04):
+- **`pack` packs.** Plan-only becomes `pack --dry-run`; `--go` is dropped, not aliased. `go` stays, to run a plan
+  edited by hand (e.g. to leave out a bad package pushed to the artifactory) and as the second half of a CI pipeline
+  (`pack --dry-run`, review the plan, `go`). The plan file `repack.config.json` is **always** written, dry run or not, before
+  anything runs, so a failure can be inspected. Breaking: minor bump (0.4.0), CHANGELOG entry.
+- **Versions collapsed.** The iteration is shared by the whole plan, so print it once (`local.60 -> local.61, 12 projects`)
+  and list a project only when it differs. The full per-project plan is in `repack.config.json` and `--dry-run`.
+- **Dotnet output:** every warning and error, verbatim, **not deduplicated** (multi-target projects print the same warning
+  per framework, and their owners want to see it); nothing else from the child process.
+- **No narration.** Drop the per-step sentences ("Starting repack...", "Took Nms", a line per project and per pack/clean/
+  restore, "Building dependency graph...", "Settings file: ..."). Keep one line when a step is slow or when it changes
+  what the user should do.
+- **Paths:** a command that generates files still prints their paths, always. The "Written:" footer and the hyperlinks
+  (`LinkPaths`, OSC 8) go: the user opens the page with `plot --open` and finds names in it, not in the log.
+  `build --plot` doesn't open the page today (no `--open` on `build`): candidate, `build --plot --open`.
+- **Emoji go.** The "running ... -> done" contrast stays, as one progress line: on a terminal it is overwritten in place
+  (`Packing 4/12 ...`) and ends as `<done glyph> Packed 12 libraries in 41 s`; when output is redirected, only the final line.
+- **One visual language.** A few symbols, each meaning one thing; colour = level and service identity (so `[WRN]` / `[ERR]`
+  prefixes can go on a terminal). Glyphs must have **no emoji variant**, because `✔ ✖ ▶` were seen rendering with
+  inconsistent widths in Windows Terminal. Candidates: `✓` done, `×` or `✗` failed, `›` or `▸` start, `■` stopped,
+  `→` change. Pending: the user checks the candidates in Windows Terminal and Git Bash; fallback = words with colour.
+- **Plain mode = output redirected** (CI, pipes, the agent, which was said to use pipes): ASCII only, no colours, no
+  in-place updates, one line per finished step. An environment variable can force it. `up`'s tag colours stay on terminals.
+- `up` stays as it is (the colours solved finding one service among several).
+
+**Not decided:** the exact `build` summary (counts by type, what was left out and why, the plot path); the final glyph set;
+whether `build` gets `--open`.
+
+**Touches:** `LocalRunConsoleFormatter` (prefixes, links) and its tests, every `[emoji]` message (about 30), `RepackExecutor`
+and `RepackConfigBuilder` (output filtering and the collapsed plan), `LocalRunCli` (`pack`, `PrintWritten`, help), README,
+`samples/README.md` (rerun it), CHANGELOG. Do it before `--json`, on its own branch.
 
 ### 1. `--json` / `--porcelain` machine-friendly output **(user)**
 
