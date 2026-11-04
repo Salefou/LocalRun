@@ -160,7 +160,6 @@ public class DependencyGraph
                 Type = project.Type,
                 Version = project.Version,
                 Dependencies = deps,
-                ProjectReferences = project.Dependencies.ToHashSet(StringComparer.OrdinalIgnoreCase),
             });
         }
         return new DependencyGraph(projects) { LeftOutTests = leftOutTests };
@@ -382,17 +381,12 @@ public class DependencyGraph
         }
     }
 
-    /// <summary>
-    /// A dependency cycle that was left out of the graph, the projects left out with it because they reach it through
-    /// <c>ProjectReference</c>s, and the projects kept without their dependency on either.
-    /// </summary>
-    public sealed record DependencyCycle(IReadOnlyList<string> Projects, IReadOnlyList<string> LeftOutWith, IReadOnlyList<string> Dependents);
+    /// <summary>A dependency cycle that was left out of the graph, and the projects that depended on it.</summary>
+    public sealed record DependencyCycle(IReadOnlyList<string> Projects, IReadOnlyList<string> Dependents);
 
     /// <summary>
-    /// Removes every project that is part of a dependency cycle, so the rest of the graph can still be ordered. Projects
-    /// reaching a cycle through <c>ProjectReference</c>s go with it: a restore walks project references, so theirs would fail
-    /// on the cycle. Projects depending on those through packages are kept, without those dependencies (they restore the
-    /// published packages).
+    /// Removes every project that is part of a dependency cycle, so the rest of the graph can still be
+    /// ordered. Projects depending on a cycle are kept, without those dependencies.
     /// </summary>
     public List<DependencyCycle> RemoveCycles()
     {
@@ -403,42 +397,15 @@ public class DependencyGraph
             return [];
 
         var inCycle = cycles.SelectMany(cycle => cycle).ToHashSet();
-        var removedNodes = new HashSet<Node>(inCycle);
-        var removed = new List<DependencyCycle>();
-        foreach (var cycle in cycles)
-        {
-            var leftOutWith = ProjectReferencersOf(cycle, inCycle);
-            removedNodes.UnionWith(leftOutWith);
-            var gone = cycle.Concat(leftOutWith).ToHashSet();
-            removed.Add(new DependencyCycle(
-                Names(cycle),
-                Names(leftOutWith),
-                Names(gone.SelectMany(node => node.Dependents).Where(node => !gone.Contains(node) && !inCycle.Contains(node)).Distinct())));
-        }
-        // A project left out with one cycle isn't kept for another
-        removed = [.. removed
-            .Select(cycle => cycle with { Dependents = [.. cycle.Dependents.Where(name => !removedNodes.Any(node => node.Project.Name == name))] })
-            .OrderBy(cycle => cycle.Projects[0], StringComparer.OrdinalIgnoreCase)];
-        Prune([.. _nodesPerName.Values.Where(node => !removedNodes.Contains(node))]);
+        var removed = cycles
+            .Select(cycle => new DependencyCycle(
+                [.. cycle.Select(node => node.Project.Name).Order(StringComparer.OrdinalIgnoreCase)],
+                [.. cycle.SelectMany(node => node.Dependents).Where(node => !inCycle.Contains(node))
+                    .Select(node => node.Project.Name).Distinct().Order(StringComparer.OrdinalIgnoreCase)]))
+            .OrderBy(cycle => cycle.Projects[0], StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        Prune([.. _nodesPerName.Values.Where(node => !inCycle.Contains(node))]);
         return removed;
-
-        static List<string> Names(IEnumerable<Node> nodes) => [.. nodes.Select(node => node.Project.Name).Order(StringComparer.OrdinalIgnoreCase)];
-    }
-
-    /// <summary>The projects outside every cycle that reach <paramref name="cycle"/> through project references, transitively.</summary>
-    private static HashSet<Node> ProjectReferencersOf(HashSet<Node> cycle, HashSet<Node> inCycle)
-    {
-        var found = new HashSet<Node>();
-        var pending = new Queue<Node>(cycle);
-        while (pending.TryDequeue(out var node))
-        {
-            foreach (var dependent in node.Dependents)
-            {
-                if (!inCycle.Contains(dependent) && dependent.Project.ProjectReferences.Contains(node.Project.Name) && found.Add(dependent))
-                    pending.Enqueue(dependent);
-            }
-        }
-        return found;
     }
 
     /// <summary>Tarjan's algorithm over the DependsOn edges.</summary>

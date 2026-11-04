@@ -45,8 +45,8 @@ What each part is there to exercise:
 
 `lrun build` run from the repository root scans `samples/` too. Its only expected warnings are the
 intended ones: `LrSample.Orphan` in no solution, the `LrEdge.Shared` name collision (an error, with
-`LrEdge.Consumer` kept without it), and the `LrEdge.A, LrEdge.B, LrEdge.C` cycle with `LrEdge.Top` left
-out with it. Any other warning is a regression. `lrun pack` from the root then packs everything kept (26 projects).
+`LrEdge.Consumer` kept without it), and the `LrEdge.A, LrEdge.B, LrEdge.C` cycle with `LrEdge.Top` kept
+without it. Any other warning is a regression.
 
 ## Setup
 
@@ -276,7 +276,7 @@ lrun build --root edge-cases/non-planar --config edge.json --plot
 
 | Case | What happens |
 |---|---|
-| `cycle/`: A → B → C → A, with A → Base and Top → A (project references) | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `Left out with it, as they reach it through project references (their restore would fail): LrEdge.Top`. The config holds Base only, and `lrun pack` packs it (before 0.4.0, Top was kept and its restore failed with `MSB4006 circular dependency`) |
+| `cycle/`: A → B → C → A, with A → Base and Top → A | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `LrEdge.Top` kept without its dependency on it. The config holds Base and Top |
 | `name-collision/`: two `LrEdge.Shared` | Succeeds (exit 0) with `[ERR] Several projects are named LrEdge.Shared, all left out of the config: repo-one\…, repo-two\…` and a warning that `LrEdge.Consumer` is kept without its dependency on it. The config holds Consumer only. Adding `--users-of LrEdge.Shared` fails with `Ambiguous project(s)`, exit code 2 |
 | `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Succeeds with no warning: `.slnx` solutions (the .NET 10 SDK default) are read like `.sln` ones. A `Did not find any solution referencing …LrEdge.Modern` warning means `.slnx` support regressed |
 | `non-planar/`: the two smallest graphs that can't be drawn without crossings, as dependency graphs. `k33/`: K₃,₃, every `LrEdge.Desk.*` (X, Y, Z, in `Desks.slnx`) uses every `LrEdge.Feed.*` (A, B, C, in `Feeds.slnx`). `k5/`: K₅, each `LrEdge.K<i>` uses every `K<j>` with j < i, odd ones in `Odd.slnx` and even ones in `Even.slnx` (project references within a solution, package references across) | Succeeds with no warning, 11 projects. The page reads `11 projects · 4 solutions · ⚠ 1 group cycle`: no project cycle, but Odd and Even use each other (K1 → K2 → K3), so their frames and the edges between them are red. Hovering K3 lights K4, K5 in orange and K1, K2 in blue. *Collapse all* leaves Feeds → Desks (`×9`) and Odd ⇄ Even (3 edges each way). With the default bands, Odd and Even are adjacent bands and the K edges zigzag between them, all pointing right; collapsed, Odd → Even points right and Even → Odd loops back on the left. With *Layout: free*, the layout has to route around the cycle and some K edges loop back around the frames; `lrun build --root edge-cases --plot` then shows the K₅ part on its own, the other edge cases packed beside it, never inside its loops |

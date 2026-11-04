@@ -114,10 +114,7 @@ shell escaping.
 - Dependency graph semantics (layered Kahn, depth = longest path from a root, name-sorted layers,
   cycles throw) are covered by `tests/LocalRun.Tests/Graph/DependencyGraphTests.cs`. `build` calls
   `RemoveCycles()` (Tarjan SCC) after the filters, so cycles are left out with a warning instead of
-  failing; the throw in `TopologicalClassOrder` stays as the safety net for hand-edited configs. Projects reaching a
-  cycle through `ProjectReference`s (`ProjectNode.ProjectReferences`, known at scan time only, not in the config) go with
-  it, since their restore would fail (MSB4006); package users stay, without the edge (user feedback, 2026-11-04: what
-  `build` leaves out must not fail `pack`). Name-collision dependents stay: their project reference names one path.
+  failing; the throw in `TopologicalClassOrder` stays as the safety net for hand-edited configs.
 - **Name collisions** (user feedback, 2026-10-24): projects are keyed by file name, so the
   `DependencyGraph` constructor leaves out *every* project of a shared name (`Collisions`); `build` logs
   an error with their paths, a warning for the dependents kept without the edge, still writes the

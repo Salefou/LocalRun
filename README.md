@@ -89,10 +89,8 @@ so you can **inspect or hand-edit** the plan between steps.
   the longest path from a root (a project with no dependencies), so every dependency sits at a strictly
   lower depth than its dependents. Within a depth, projects are sorted by name so output is deterministic.
 - A **dependency cycle** cannot be ordered, so `build` leaves its projects out of the config, with a
-  warning naming them, and carries on with the rest. Projects reaching the cycle through
-  `ProjectReference`s, directly or through other projects, are left out with it, in a second warning: a restore
-  walks project references, so theirs would fail on the cycle (`MSB4006`). Projects using any of them as a
-  package are kept without that dependency, named in a third warning: they restore the published package.
+  warning naming them, and carries on with the rest. Projects that depended on the cycle are kept
+  without that dependency, and named in a second warning: packing or running them may fail.
   (A cycle written into a config by hand still fails the command that reads it.)
 - Projects are identified **by file name**, since that's all a dependency names. When several projects
   share a name (e.g. a library copied into two repos), `build` can't tell which one a dependency means,
@@ -848,8 +846,7 @@ folder keeps the first copy. `pack` plans a new iteration each time, but running
 plan repacks the same versions: run `pack` again instead, or `dotnet nuget locals global-packages --clear`.
 
 **`Dependency cycle left out of the config: A, B`** — the listed projects reference each other, possibly
-through packages, so `build` dropped them, with the projects that project-reference them (`Left out with it`).
-Break the cycle to get them back. `Dependency cycle
+through packages, so `build` dropped them. Break the cycle to get them back. `Dependency cycle
 detected, cannot order` comes instead from a command reading a config whose cycle was added by hand.
 
 **Build fails with "file is locked by LocalRun"** — a LocalRun process (often a debug session) is still

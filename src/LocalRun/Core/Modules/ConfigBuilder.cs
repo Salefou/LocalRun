@@ -62,11 +62,6 @@ public class ConfigBuilder
         foreach (var cycle in graph.RemoveCycles())
         {
             logger.LogWarning("Dependency cycle left out of the config: {Projects}", string.Join(", ", cycle.Projects));
-            if (cycle.LeftOutWith.Count != 0)
-            {
-                logger.LogWarning("  Left out with it, as they reach it through project references (their restore would fail): {Projects}",
-                    Text.Abbreviate(cycle.LeftOutWith));
-            }
             if (cycle.Dependents.Count != 0)
             {
                 logger.LogWarning("  Kept without their dependency on it (packing or running them may fail): {Dependents}",

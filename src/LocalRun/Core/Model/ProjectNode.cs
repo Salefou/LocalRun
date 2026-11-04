@@ -29,13 +29,6 @@ public class ProjectNode
 
     public required List<string> Dependencies { get; init; }
 
-    /// <summary>
-    /// The <see cref="Dependencies"/> that are <c>ProjectReference</c>s, which a restore walks into (the others are packages).
-    /// Known while <c>build</c> scans the sources only: not written to the config.
-    /// </summary>
-    [JsonIgnore]
-    public IReadOnlyCollection<string> ProjectReferences { get; init; } = [];
-
     public override string ToString()
     {
         return $"{Name}({Type})->[{string.Join(", ", Dependencies)}]";
