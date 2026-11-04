@@ -7,6 +7,8 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-05
+
 ### Changed
 
 - **Breaking:** `pack` packs. It writes the plan to `repack.config.json` first, as before, then executes it as `go` does.
@@ -25,11 +27,11 @@ bumps the minor version, anything else the patch.
     summary repeating them is turned off. A command failing without an error line still prints its whole output.
     Every tree of the plan now goes depth by depth together, so each depth gets one line.
   - On a terminal, colour says the level (the `[WRN]` / `[ERR]` prefixes are gone there) and marks without emoji
-    variants say how a step went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped, `→` a change. Redirected output
-    is plain: no colours, `[WRN]` / `[ERR]` prefixes, `>`, `+`, `ok`, `FAILED`, `-`, `->`, and no progress lines.
+    variants say how a step went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped,
+    `→` a change. Redirected output is plain: no colours, `[WRN]` / `[ERR]` prefixes, `>`, `+`, `ok`, `FAILED`, `-`,
+    `->`, and no progress lines.
 - `build --plot` opens the page in the browser, on a terminal only: with output redirected (CI, a script, an agent),
   it writes the page and prints its path without starting a browser.
-
 - `up`: the `[name]` tag now always has the service's color, whatever the level of the line (0.3.2 shaded it). The message
   carries the level instead: as printed for information, orange for warnings, red for errors, grey for debug.
 
@@ -170,7 +172,8 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Salefou/LocalRun/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/Salefou/LocalRun/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Salefou/LocalRun/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Salefou/LocalRun/compare/v0.2.2...v0.3.0
