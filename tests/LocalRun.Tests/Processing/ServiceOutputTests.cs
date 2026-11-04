@@ -48,9 +48,9 @@ public class ServiceOutputTests
 
         foreach (var name in first.Keys)
         {
-            Assert.Equal(first[name].Tag(name, OutputLevel.Information), second[name].Tag(name, OutputLevel.Information));
+            Assert.Equal(first[name].Tag(name), second[name].Tag(name));
         }
-        var tags = new[] { "Batch", "Gateway", "Reports", "Risk" }.Select(name => first[name].Tag("x", OutputLevel.Information)).ToList();
+        var tags = new[] { "Batch", "Gateway", "Reports", "Risk" }.Select(name => first[name].Tag("x")).ToList();
         Assert.Equal(4, tags.Distinct().Count());
     }
 
@@ -64,16 +64,20 @@ public class ServiceOutputTests
     }
 
     [Fact]
-    public void Tag_shades_the_service_hue_by_level_and_keeps_errors_red()
+    public void Tag_has_the_service_color_whatever_the_level()
     {
         var style = ServiceStyle.Assign(["Gateway", "Risk"])["Risk"];
 
-        string debug = style.Tag("Risk", OutputLevel.Debug);
-        string info = style.Tag("Risk", OutputLevel.Information);
-        string warning = style.Tag("Risk", OutputLevel.Warning);
+        Assert.EndsWith("[Risk]\x1B[39m ", style.Tag("Risk"));
+        Assert.NotEqual(ServiceStyle.Assign(["Gateway", "Risk"])["Gateway"].Tag("Risk"), style.Tag("Risk"));
+    }
 
-        Assert.Equal(3, new[] { debug, info, warning }.Distinct().Count());
-        Assert.Equal(style.Tag("Risk", OutputLevel.Error), ServiceStyle.Assign(["Batch", "Risk"])["Batch"].Tag("Risk", OutputLevel.Error));
-        Assert.EndsWith("[Risk]\x1B[39m ", info);
+    [Fact]
+    public void Message_is_plain_for_information_orange_for_warnings_and_red_for_errors()
+    {
+        Assert.Equal("Started", ServiceStyle.Message("Started", OutputLevel.Information));
+        Assert.Equal("\x1B[38;2;255;165;0mSlow\x1B[39m", ServiceStyle.Message("Slow", OutputLevel.Warning));
+        Assert.Equal("\x1B[38;2;255;85;85mBoom\x1B[39m", ServiceStyle.Message("Boom", OutputLevel.Error));
+        Assert.Equal("\x1B[90mTick\x1B[39m", ServiceStyle.Message("Tick", OutputLevel.Debug));
     }
 }

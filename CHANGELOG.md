@@ -7,6 +7,11 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Changed
+
+- `up`: the `[name]` tag now always has the service's color, whatever the level of the line (0.3.2 shaded it). The message
+  carries the level instead: as printed for information, orange for warnings, red for errors, grey for debug.
+
 ## [0.3.2] - 2026-10-29
 
 ### Added

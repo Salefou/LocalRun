@@ -170,7 +170,7 @@ public class RunProcessor : IRunProcessor
 
         /// <param name="capture">When given, receives the output lines instead of the log.</param>
         /// <param name="job">When given, the process is added to it.</param>
-        /// <param name="style">When given, the output is shown with a colored tag, by the level read from each line.</param>
+        /// <param name="style">When given, the tag is colored by service and the message by the level read from each line.</param>
         public static RunningProcess Start(string? prefix, string fileName, string args, Action<string>? capture = null,
             ProcessJob? job = null, ServiceStyle? style = null)
         {
@@ -188,7 +188,7 @@ public class RunProcessor : IRunProcessor
             {
                 string line = ServiceOutput.StripAnsi(data);
                 lastLevel = ServiceOutput.DetectLevel(line) ?? lastLevel;
-                logger.LogInformation("{Tag}{Line}", style!.Tag(prefix!, lastLevel), line);
+                logger.LogInformation("{Tag}{Line}", style!.Tag(prefix!), ServiceStyle.Message(line, lastLevel));
             }
             process.OutputDataReceived += (_, e) =>
             {
