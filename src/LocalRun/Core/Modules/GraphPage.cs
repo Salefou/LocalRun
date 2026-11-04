@@ -2,8 +2,6 @@
 
 using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
-using LocalRun.Logger;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using System.Text.Json;
@@ -16,8 +14,6 @@ using System.Threading.Tasks;
 /// </summary>
 public static class GraphPage
 {
-    private static readonly ILogger logger = Log.For(typeof(GraphPage).FullName!);
-
     private const string ElkPlaceholder = "{{ELKJS}}";
     private const string DataPlaceholder = "{{GRAPH_DATA}}";
 
@@ -31,8 +27,6 @@ public static class GraphPage
         string htmlPath = $"{Path.GetFullPath(outputFilePath)}.html";
         Directory.CreateDirectory(Path.GetDirectoryName(htmlPath)!);
         await File.WriteAllTextAsync(htmlPath, ToHtml(config));
-        // As a file:// URI, which terminals (Windows Terminal, VS Code, ...) turn into a link: Ctrl+click opens the page
-        logger.LogInformation("[🖼️] Graph generated: {Uri}", new Uri(htmlPath).AbsoluteUri);
         return htmlPath;
     }
 

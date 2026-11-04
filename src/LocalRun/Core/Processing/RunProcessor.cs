@@ -28,7 +28,7 @@ public class RunProcessor : IRunProcessor
         List<ProjectNode> executables = PlanRun(config, exclude);
         if (exclude is { Count: > 0 })
         {
-            logger.LogInformation("[⏭ ] Not running {Projects}: start them yourself (e.g. from your IDE to debug them)",
+            logger.LogInformation("Not running {Projects}: start them yourself (e.g. from your IDE to debug them)",
                 string.Join(", ", exclude));
         }
         if (executables.Count == 0)
@@ -42,7 +42,7 @@ public class RunProcessor : IRunProcessor
         string feedSource = LocalFeedRestoreArgument(config);
         foreach (var exe in executables)
         {
-            logger.LogInformation("[🔨] Building {Project}...", exe.Name);
+            logger.LogInformation(LogEvents.Start, "Building {Project}", exe.Name);
             await RunToCompletionAsync("dotnet", $"build \"{FullPath(config, exe)}\" --nologo --verbosity quiet{feedSource}{SolutionProperties.Arguments(exe.SolutionPath)}");
         }
 
@@ -52,7 +52,7 @@ public class RunProcessor : IRunProcessor
             e.Cancel = true; // keep LocalRun alive to stop the processes properly
             if (!stopping.IsCancellationRequested)
             {
-                logger.LogInformation("[■] Stopping all processes...");
+                logger.LogInformation(LogEvents.Stopped, "Stopping all processes");
                 stopping.Cancel();
             }
         };
@@ -61,7 +61,7 @@ public class RunProcessor : IRunProcessor
         // Stops the processes even when LocalRun is killed, when the stopping code below can't run
         using var job = ProcessJob.TryCreate();
         int prefixWidth = executables.Max(exe => exe.Name.Length);
-        var styles = ServiceOutput.ColorsEnabled() ? ServiceStyle.Assign(executables.Select(exe => exe.Name)) : null;
+        var styles = Terminal.ColorsEnabled ? ServiceStyle.Assign(executables.Select(exe => exe.Name)) : null;
         var running = new List<RunningProcess>();
         // Processes that failed on their own, before any stop was requested: those make `up` fail
         List<RunningProcess> failed = [];
@@ -69,12 +69,12 @@ public class RunProcessor : IRunProcessor
         {
             foreach (var exe in executables)
             {
-                logger.LogInformation("[▶] Starting {Project}", exe.Name);
+                logger.LogInformation(LogEvents.Launched, "Starting {Project}", exe.Name);
                 running.Add(RunningProcess.Start(exe.Name.PadRight(prefixWidth),
                     "dotnet", $"run --no-build --project \"{FullPath(config, exe)}\"{SolutionProperties.Arguments(exe.SolutionPath)}",
                     job: job, style: styles?[exe.Name]));
             }
-            logger.LogInformation("[✔ ] {Count} process(es) started. Press Ctrl+C to stop them all.", running.Count);
+            logger.LogInformation(LogEvents.Done, "{Processes} started. Press Ctrl+C to stop them all.", Text.Count(running.Count, "process", "processes"));
 
             var allExited = Task.WhenAll(running.Select(process => process.Exited));
             await Task.WhenAny(allExited, Task.Delay(Timeout.Infinite, stopping.Token));
@@ -216,7 +216,7 @@ public class RunProcessor : IRunProcessor
             await process.WaitForExitAsync();
             if (prefix != null)
             {
-                logger.LogInformation("[■] {Project} exited with code {ExitCode}", prefix.Trim(), process.ExitCode);
+                logger.LogInformation(LogEvents.Stopped, "{Project} exited with code {ExitCode}", prefix.Trim(), process.ExitCode);
             }
             return process.ExitCode;
         }

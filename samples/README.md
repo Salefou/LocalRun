@@ -72,9 +72,17 @@ lrun plot --open
 ```
 
 - Warns that `LrSample.Orphan` is referenced by no solution.
-- Logs `[🌐] Fetching the latest versions on your NuGet sources and in …\samples\.feed ('--csproj' skips this)...`, then
-  `not found, pack will start from the csproj version …` for every project: `.feed/` is still empty and
-  nuget.org has no `LrSample.*`.
+- Prints (redirected; on a terminal `Querying your NuGet sources…` shows while it runs):
+
+  ```
+  Scanned …\samples\workspace: 11 projects in 5 solutions, 7 libraries and 4 executables
+  No project found on your sources: pack starts from the csproj versions
+  Services: LrSample.Island.App, LrSample.RiskService, LrSample.OrderGateway, LrSample.ReportCli
+  Config: …\samples\.lrun\localrun.config.json
+  Next: lrun pack
+  ```
+
+  Nothing is found: `.feed/` is still empty and nuget.org has no `LrSample.*`.
 - `localrun.config.json` lists the 11 projects; the page shows them in 6 frames (`Core.sln`, `Pricing.sln`,
   `Trading.sln`, `Reporting.sln`, `Island.sln`, and `(no solution)` holding Orphan with no edge), the two islands
   and the diamond, the executables in green and nothing dashed (no dependency outside the config). The header
@@ -93,11 +101,11 @@ Rebuild the config with each line and check the `Name`s in `localrun.config.json
 | `… --deps-of LrSample.OrderGateway` | Primitives, Logging, Pricing.Models, Pricing, OrderGateway |
 | `… --users-of LrSample.Logging --deps-of LrSample.OrderGateway` | Logging, Pricing, OrderGateway: the projects between them |
 | `… --users-of LrSample.Logging --deps-of LrSample.OrderGateway --union` | Primitives, Logging, Pricing.Models, Pricing, OrderGateway: both cones |
-| `… --users-of LrSample.Logging --deps-of LrSample.RiskService` | nothing, with a warning: RiskService doesn't use Logging |
+| `… --users-of LrSample.Logging --deps-of LrSample.RiskService` | nothing, with a warning: RiskService doesn't use Logging (`Kept 0 of 11 (…)`) |
 | `… --users-of LrSample.Logging --deps-of LrSample.RiskService --union` | Primitives, Logging, Pricing.Models, Pricing, RiskService, OrderGateway |
 | `… --union --users-of LrSample.Logging` | rejected, exit code 2: `--union` needs both flags |
 | `… --users-of LrSample.Pricing.Models --deps-of LrSample.RiskService` | Pricing.Models, RiskService |
-| … same `--with-services` | + Pricing, Reports, OrderGateway, ReportCli (logged as `--with-services added: …`) |
+| … same `--with-services` | + Pricing, Reports, OrderGateway, ReportCli (logged as `--with-services added: …`, then `Kept 6 of 11 (--users-of LrSample.Pricing.Models, --deps-of LrSample.RiskService, --with-services)`) |
 | `… --users-of LrSample.Primitives --deps-of LrSample.RiskService --with-services` | Primitives, Logging, Pricing.Models, Pricing, Reports, RiskService, OrderGateway, ReportCli: not the island, not Orphan |
 | `… --deps-of LrSample.RiskService --with-services` | the same 8 |
 | `… --with-services` | rejected, exit code 2: nothing to extend |
@@ -113,10 +121,25 @@ out, have a grey dashed outline with dashed edges and no version.
 
 ### 3. Version planning (nothing is built)
 
-Rebuild the full config (step 1), then compare the `Writing repack config of …` lines. Each command
-also logs `[🔢] Iteration 1 (first pack of these versions)`: nothing is packed yet.
+Rebuild the full config (step 1), then run each command below with `--dry-run` and compare the versions in
+`repack.config.json`. The first lines printed sum them up: the change 9 projects share, and the two whose
+prerelease label is replaced, e.g. for `lrun pack --dry-run --patch`:
 
-| Command | Logging `2.3.1-beta` | Pricing.Models `1.4.2.7` | Pricing `1.4` | RiskService `0.9.0-rc.1` |
+```
+Versions: patch bump, release -> local.1, 9 projects; 2 other(s):
+  LrSample.Logging: 2.3.1-beta -> 2.3.2-local.1
+  LrSample.RiskService: 0.9.0-rc.1 -> 0.9.1-local.1
+Plan: …\samples\.lrun\repack.config.json
+> Depth 1/4: LrSample.Island.Core, LrSample.Orphan, LrSample.Primitives
+> Depth 2/4: LrSample.Island.App, LrSample.Logging, LrSample.Pricing.Models
+> Depth 3/4: LrSample.Pricing, LrSample.Reports, LrSample.RiskService
+> Depth 4/4: LrSample.OrderGateway, LrSample.ReportCli
+Dry run, nothing packed. Next: lrun go (after editing the plan, if needed)
+```
+
+Every version ends in `.1`: nothing is packed yet.
+
+| Command (with `--dry-run`) | Logging `2.3.1-beta` | Pricing.Models `1.4.2.7` | Pricing `1.4` | RiskService `0.9.0-rc.1` |
 |---|---|---|---|---|
 | `lrun pack` | 2.3.1-local.1 | 1.4.2.7-local.1 | 1.4.0-local.1 | 0.9.0-local.1 |
 | `lrun pack --patch` | 2.3.2-local.1 | 1.4.3-local.1 | 1.4.1-local.1 | 0.9.1-local.1 |
@@ -128,20 +151,24 @@ also logs `[🔢] Iteration 1 (first pack of these versions)`: nothing is packed
 | `lrun pack --suffix -dev` | rejected, exit code 2 | | | |
 | `lrun pack --next --suffix dev` | 2.3.1-dev.1 | 1.4.3-dev.1 | 1.4.1-dev.1 | 0.9.1-dev.1 |
 | `lrun pack --remote` | rejected, exit code 2: `'--remote' is gone: 'lrun build' now records the latest versions…` | | | |
+| `lrun pack --go` | rejected, exit code 2: `'--go' was removed in 0.4.0: 'lrun pack' now packs…` | | | |
 
 `repack.config.json` has 3 trees (main graph, island, Orphan alone) and these depths:
 0 Island.Core, Orphan, Primitives · 1 Island.App, Logging, Pricing.Models · 2 Pricing, Reports, RiskService · 3 OrderGateway, ReportCli.
+The dry run prints them as above, the three trees together.
 
 ### 4. Pack and run
 
 ```powershell
 .\reset.cmd
 lrun build --root workspace --local-nuget .feed
-lrun pack --patch --suffix dev --go
+lrun pack --patch --suffix dev
 lrun up
 ```
 
-- `pack --go` packs depth by depth (the three trees in parallel) and puts 11 packages in `.feed/`.
+- `pack` prints the versions and the plan's path as in step 3, then a line per depth before packing it, and
+  `ok Packed 11 projects in 13 s` (`✓` on a terminal). Nothing else: the samples build without warnings. 11 packages
+  are in `.feed/`.
 - Each package declares the *planned* version of what it references, e.g.
   `LrSample.Pricing.1.4.1-dev.1` depends on `Pricing.Models 1.4.3-dev.1` and `Logging 2.3.2-dev.1`.
 - `up` builds the 4 executables one by one, then starts them side by side. Island.App and ReportCli
@@ -167,7 +194,7 @@ lrun up
   curl.exe http://localhost:5101/health  # ok
   ```
 
-- **Ctrl+C** in the `lrun up` terminal stops both: `[■] Stopping all processes...`, each service
+- **Ctrl+C** in the `lrun up` terminal stops both: `■ Stopping all processes`, each service
   prints `… stopped` and exits with code 0, and `up` exits with code 0. No `LrSample.*` process is
   left in Task Manager.
 - **Killing `lrun` from outside**: while they run, `taskkill /F /IM lrun.exe` from another terminal.
@@ -176,8 +203,14 @@ lrun up
 
 Variations worth trying:
 
-- `pack` without `--go`, edit `repack.config.json` (change a `ToVersion`, delete a project), then `lrun go`.
-- After a reset, `lrun pack --patch --suffix dev --clean --go` shows the `Cleaning` step.
+- `pack --dry-run`, edit `repack.config.json` (change a `ToVersion`, delete a project), then `lrun go`.
+- **A warning, then an error**: after a reset, add a file `TmpWarn.cs` holding
+  `namespace X; public class W { public void M() { int unused; } }` to `workspace/core/LrSample.Primitives`, then
+  `lrun pack`. Depth 1 prints the `warning CS0168` line once (`[WRN] …`, yellow on a terminal) and the pack succeeds.
+  Add `TmpErr.cs` holding `namespace X; public class E { public void M() { int x = "s"; } }` and run `lrun go`: the
+  warning, the `error CS0029` line, then `FAILED go failed: dotnet pack failed on LrSample.Primitives with exit code 1
+  (…)`, exit code 1. Delete both files afterwards.
+- After a reset, `lrun pack --patch --suffix dev --clean` runs `dotnet clean` first (nothing more is printed).
 - **A service failing at startup**: occupy RiskService's port from another PowerShell window first:
 
   ```powershell
@@ -193,18 +226,20 @@ Variations worth trying:
   LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
   IDE (`:5102` stays free for it). `--exclude LrSample.Pricing` is rejected (exit code 2): it's a library.
 - **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `.lrun/plots/dependencies-<date-time>.html` and prints
-  it as a `file:///` link; Ctrl+click it (Windows Terminal, VS Code) to open it in the browser.
+  its path (`Plot: …`). `build --plot` opens it in the browser from a terminal; piped (`lrun build … --plot | more`), it
+  doesn't.
 
 ### 5. Iterate, then continue from the latest versions
 
 Right after step 4 (no reset), pack again with the same command:
 
 ```powershell
-lrun pack --patch --suffix dev --go
+lrun pack --patch --suffix dev
 ```
 
-- Logs `[🔢] Iteration 2 (up to .1 found on the sources, in the local feed or in the NuGet cache)` and packs
-  `LrSample.Primitives (1.0.0) to (1.0.1-dev.2)`, and so on: `.feed/` now holds 22 packages, both iterations.
+- Prints `Versions: patch bump, release -> dev.2, 9 projects; 2 other(s):` (`LrSample.Logging: 2.3.1-beta -> 2.3.2-dev.2`,
+  `LrSample.RiskService: 0.9.0-rc.1 -> 0.9.1-dev.2`): iteration 2, since `.1` is in the feed. `.feed/` now holds 22
+  packages, both iterations.
 - RiskService's `.2` package depends on `Pricing.Models 1.4.3-dev.2` and `Primitives 1.0.1-dev.2`: `go` restores
   with `--force`, so its `*-*` references are re-resolved rather than kept from the first run.
 
@@ -218,16 +253,17 @@ lrun build --root workspace --local-nuget .feed --csproj
 lrun pack --next --suffix dev
 ```
 
-- `build` finds your packages in `.feed/` (a source in `NuGet.config`): `LrSample.Primitives: 1.0.1-dev.2
-  (csproj 1.0.0)`, `LrSample.Logging: 2.3.2-dev.2 (csproj 2.3.1-beta)`, recorded as `LatestVersion` in the
-  config. The plot shows `latest 1.0.1-dev.2` under Primitives' `1.0.0`.
-- `pack --next --suffix dev` continues the line: `LrSample.Primitives (1.0.1-dev.2) to (1.0.1-dev.3)`,
-  `LrSample.Logging (2.3.2-dev.2) to (2.3.2-dev.3)`, iteration 3.
-- `pack --patch --suffix dev` now bumps past it: `(1.0.1-dev.2) to (1.0.2-dev.1)`, iteration 1 since
-  `1.0.2-dev` was never packed.
-- With `--csproj`, `build` logs no `[🌐]` line and records no `LatestVersion`: `pack --next --suffix dev`
-  starts from the csproj versions, `LrSample.Primitives (1.0.0) to (1.0.1-dev.3)` (still iteration 3, shared
-  with what `.feed/` holds) and `LrSample.Logging (2.3.1-beta) to (2.3.1-dev.3)`.
+- `build` finds your packages in `.feed/` (a source in `NuGet.config`): `Latest versions found for all 11 projects`,
+  recorded as `LatestVersion` in the config (`1.0.1-dev.2` for Primitives, `2.3.2-dev.2` for Logging; with
+  `LOCALRUN_LOG_LEVEL=Debug`, a line per project). From a terminal the plot opens, and shows `latest 1.0.1-dev.2`
+  under Primitives' `1.0.0`.
+- `pack --next --suffix dev` continues the line: `Versions: dev.2 -> dev.3, 11 projects` (Primitives `1.0.1-dev.3`,
+  Logging `2.3.2-dev.3`).
+- `pack --patch --suffix dev` now bumps past it: `Versions: patch bump, dev.2 -> dev.1, 11 projects` (Primitives
+  `1.0.2-dev.1`), iteration 1 since `1.0.2-dev` was never packed.
+- With `--csproj`, `build` prints no `Latest versions` line and records no `LatestVersion`: `pack --next --suffix dev`
+  starts from the csproj versions, `Versions: patch bump, release -> dev.3, 9 projects` (Primitives `1.0.1-dev.3`,
+  still iteration 3, shared with what `.feed/` holds) and `LrSample.Logging: 2.3.1-beta -> 2.3.1-dev.3`.
 
 ### 6. Edge cases
 

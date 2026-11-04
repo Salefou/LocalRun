@@ -7,6 +7,19 @@ using LocalRun.Options;
 
 public class ConfigBuilderTests
 {
+    [Fact]
+    public void Filters_AreToldAsTyped_OrNullWithoutAny()
+    {
+        Assert.Null(ConfigBuilder.Filters(new BuildConfigOptions()));
+        Assert.Equal("--users-of A B, --git-changes, --deps-of WebApp, --with-services", ConfigBuilder.Filters(new BuildConfigOptions
+        {
+            RetainDependsOn = ["A", "B"],
+            RetainGitChanges = true,
+            RetainIsDependencyOf = ["WebApp"],
+            WithServices = true,
+        }));
+    }
+
     private static DependencyGraph Graph(params string[] names) => DependencyGraph.FromConfig(new LocalRunConfig
     {
         Projects = [.. names.Select(name => new ProjectNode

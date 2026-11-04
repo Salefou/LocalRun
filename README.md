@@ -52,9 +52,9 @@ LocalRun is a pipeline of small commands. Each step writes a JSON file that the 
 so you can **inspect or hand-edit** the plan between steps.
 
 ```
-              build                          pack                           go
+              build                     pack --dry-run                      go
  repos/ ───────────────► localrun.config.json ───────────────► repack.config.json ──────────► local NuGet feed
-                               │      │         └──────────── pack --go ─────────────┘        (~/.localnuget)
+                               │      │         └─────────────── pack ───────────────┘        (~/.localnuget)
                           plot │      │ up
                                ▼      ▼
                dependencies.html    dotnet run, executables in dependency order
@@ -68,11 +68,10 @@ so you can **inspect or hand-edit** the plan between steps.
 2. **`plot`** renders that graph as a self-contained interactive HTML page (no internet access needed).
 3. **`pack`** decides, for every project, the version it will be packed as: the config's version (the
    latest one when recorded, else the csproj's), bumped, with your suffix and an iteration number that
-   goes up each time you pack the same versions again. Nothing is built yet: the plan is written to
-   `repack.config.json` for you to review.
-4. **`go`** executes the plan: `dotnet restore` with the local feed added to your sources, then
+   goes up each time you pack the same versions again. The plan is written to `repack.config.json`, then
+   executed as `go` does. With `--dry-run`, it stops there, for you to review or edit the plan.
+4. **`go`** executes a plan: `dotnet restore` with the local feed added to your sources, then
    `dotnet pack --no-restore -o <feed>`, each project getting its planned version.
-   `pack --go` does steps 3 and 4 in one command, when you don't need to review the plan.
 5. **`up`** builds the executables of the config, then starts them all side by side, dependencies
    first, until they exit or you press Ctrl+C.
 
@@ -208,20 +207,17 @@ lrun settings
 
 cd ~/work
 
-# 1. Graph everything that depends on the library you changed, and plot it (Ctrl+click the printed link)
+# 1. Graph everything that depends on the library you changed, and plot it (the page opens in your browser)
 lrun build --root ./repos --users-of Shared.Pricing --plot
 
-# 2. Or plot the current config again, opening the page directly
+# 2. Or open the graph of the current config again
 lrun plot --open
 
-# 3. Plan a patch bump with a "dev" suffix, then review .lrun/repack.config.json
+# 3. Pack everything into ~/.localnuget with a patch bump and a "dev" suffix, in dependency order
 lrun pack --patch --suffix dev
+#    (to review .lrun/repack.config.json first: lrun pack --patch --suffix dev --dry-run, then lrun go)
 
-# 4. Pack everything into ~/.localnuget, in dependency order
-lrun go
-#    (steps 3 and 4 at once, without the review: lrun pack --patch --suffix dev --go)
-
-# 5. Start the executables
+# 4. Start the executables
 lrun up
 ```
 
@@ -250,7 +246,19 @@ General form: `lrun <command> [options]`.
 
 ### `build`
 
-Scan a directory tree and write its dependency graph to a config file.
+Scan a directory tree and write its dependency graph to a config file. It prints what it scanned, what a
+filter kept, what it left out and why (name collisions, cycles, test projects), the executables `up` would
+start, and the config's path:
+
+```
+Scanned C:\…\samples\workspace: 11 projects in 5 solutions, 7 libraries and 4 executables
+--with-services added: LrSample.OrderGateway, LrSample.Pricing, LrSample.ReportCli, LrSample.Reports
+Kept 6 of 11 (--users-of LrSample.Pricing.Models, --deps-of LrSample.RiskService, --with-services)
+Latest versions found for all 6 projects
+Services: LrSample.RiskService, LrSample.OrderGateway, LrSample.ReportCli
+Config: C:\…\samples\.lrun\localrun.config.json
+Next: lrun pack
+```
 
 | Option | Default | Description |
 |---|---|---|
@@ -265,7 +273,7 @@ Scan a directory tree and write its dependency graph to a config file.
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 | `--tests` | off | Keep the test projects. By default `build` leaves them out (and lists them): projects referencing `Microsoft.NET.Test.Sdk`, setting `<IsTestProject>true</IsTestProject>`, or using the `MSTest.Sdk` project SDK. |
 | `--csproj` | off | Read the csproj files as they are: skip the MSBuild evaluation of versions and package ids (below), and don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` reads each csproj's version and package id from its XML, and asks MSBuild (`dotnet msbuild -getProperty`, about a second per project, 8 at a time) only for the projects whose XML can't tell: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above it that sets `Version`, `VersionPrefix`, `VersionSuffix`, `PackageId` or `AssemblyName` or imports other files. If MSBuild fails on a project, its csproj is read as is, with a warning. `build` also records each project's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. When a csproj version is higher than that latest (a `11.0.0-preview` in development while `10.7.0` is released), `pack` starts from the csproj version and warns once. That csproj already is the version in development, so a bump flag is ignored for it and only the suffix applies (`11.0.0-local.1`, with or without `--patch`). Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
-| `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `.lrun/plots/dependencies-<date-time>.html`, printed as a link). |
+| `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `.lrun/plots/dependencies-<date-time>.html`), and open it in the browser. Only on a terminal: with output redirected, the page is written and its path printed. |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
 The two flags are AND'ed: with `--users-of X --deps-of Y` you get **the projects between X and Y**,
@@ -282,7 +290,7 @@ lrun build --root ./repos --users-of Shared.Pricing --deps-of OrderGateway --wit
 ```
 
 **`--with-services`** answers "which other services does this touch?". It adds every executable using
-any kept project, **and the libraries between them**, so `pack --go` repacks those libraries and the
+any kept project, **and the libraries between them**, so `pack` repacks those libraries and the
 added services really run the change. (A service getting a library as a package would otherwise keep
 the old build.) Libraries that use the kept projects but lead to no service stay out. `build` logs
 what the flag added.
@@ -307,7 +315,7 @@ When in doubt it counts more, not less: an extra project is easy to spot in the 
 (`Directory.Build.props`, `global.json`, …) marks every project of that repository, and so does a
 repository with no origin default branch to compare with, or one LocalRun can't read (with a warning).
 A project in no git repository counts as changed too.
-`build` logs, for each changed repository, why and which projects (`[🔀] …\repo-two: 2 uncommitted
+`build` logs, for each changed repository, why and which projects (`…\repo-two: 2 uncommitted
 file(s), 1 commit(s) on feature not on origin/main -> LrSample.Pricing`).
 Nothing is fetched: run `git fetch` first if origin may have moved. With no change at all, `build`
 warns and writes an empty config.
@@ -350,14 +358,14 @@ plot is what `pack`, `go` and `up` act on.
 | `--output <path>` | `.lrun/plots/dependencies-<yyyyMMdd-HHmmss>` | Output path **without extension**. The default never overwrites an earlier graph (`-2`, `-3`, … within the same second). |
 | `--open` | off | Open the page with the default browser (Windows, macOS `open`, Linux `xdg-open`). |
 
-The page is printed as a `file:///…` link: in Windows Terminal or VS Code, Ctrl+click opens it in the
-default browser.
+The path of the page is printed. `build --plot` opens it too, but only on a terminal: with output redirected
+(CI, a script, an agent), the page is written and its path printed, and no browser starts.
 
 ### `pack`
 
-Compute the version every project will be packed as, and write the plan to a repack config.
-Builds nothing, unless `--go` is given: then the plan is still written, and executed right away as
-[`go`](#go) would.
+Compute the version every project will be packed as, write the plan to a repack config, then execute it
+as [`go`](#go) does. The plan is written first, so a failed or surprising repack can be inspected. With
+`--dry-run`, `pack` stops there and prints the depths `go` would go through.
 
 | Option | Default | Description |
 |---|---|---|
@@ -368,21 +376,32 @@ Builds nothing, unless `--go` is given: then the plan is still written, and exec
 | `--next` | — | Continue a prerelease: `1.5.0-alpha.9` → `1.5.0-alpha.10` (with `--suffix alpha`). A release, or a prerelease whose label sorts above the new one, is patch-bumped instead: `1.4.2` → `1.4.3-alpha.1`. |
 | `--alpha` | — | Shorthand for `--next --suffix alpha`. Cannot be combined with another bump or `--suffix`. |
 | `--clean` | off | Make `go` run `dotnet clean` before restoring. |
-| `--go` | off | Execute the plan right after writing it (`pack` then `go` in one command). |
+| `--dry-run` | off | Only write the plan and print what would run. Run it later with `go`, edited or not. |
 
 ```sh
-lrun pack --patch --suffix dev          # write the plan, review it, then `lrun go`
-lrun pack --patch --suffix dev --go     # plan and execute in one go
+lrun pack --patch --suffix dev             # plan and pack
+lrun pack --patch --suffix dev --dry-run   # write the plan, review or edit it, then `lrun go`
 ```
 
-Since 0.2.0, `build` reads the versions on your NuGet sources: `pack --remote` is rejected (exit code `2`) with a pointer.
+The versions are printed once for the whole plan, since the iteration number is shared: the change most
+projects make, then a line for each project that differs (the full plan is in the repack config):
+
+```
+Versions: patch bump, release -> dev.1, 9 projects; 2 other(s):
+  LrSample.Logging: 2.3.1-beta -> 2.3.2-dev.1
+  LrSample.RiskService: 0.9.0-rc.1 -> 0.9.1-dev.1
+```
+
+Since 0.4.0, `pack` packs: `pack --go` is rejected (exit code `2`) with a pointer to `--dry-run`. Since 0.2.0,
+`build` reads the versions on your NuGet sources: `pack --remote` is rejected the same way.
 
 See [Versioning rules](#versioning-rules) for exactly how versions are computed.
 
 ### `go`
 
-Execute a repack config. For each connected component in parallel, depth by depth, all projects of
-a depth in parallel:
+Execute a repack config, as written by `pack --dry-run` and possibly edited by hand (to leave out a
+project, or change a version). Depth by depth, all projects of a depth in parallel, every tree of the plan
+together (a depth starts once the previous one is packed everywhere):
 
 1. `dotnet clean <csproj> --verbosity minimal` (only if the plan was made with `--clean`)
 2. `dotnet restore <csproj> --force -p:RestoreAdditionalProjectSources=<local feed> --verbosity minimal`:
@@ -405,7 +424,20 @@ no solution references get none.
 |---|---|---|
 | `--repack-config <file>` | `.lrun/repack.config.json` | Repack config file to read. |
 
-The first failing `dotnet` command fails the whole command (exit code `1`); its output is in the log.
+Output (`pack` prints the same, after the versions and the plan's path):
+
+```
+> Depth 1/4: LrSample.Island.Core, LrSample.Orphan, LrSample.Primitives
+[WRN] C:\…\TmpWarn.cs(1,53): warning CS0168: The variable 'unused' is declared but never used [C:\…\LrSample.Primitives.csproj]
+> Depth 2/4: LrSample.Island.App, LrSample.Logging, LrSample.Pricing.Models
+…
+ok Packed 11 projects in 15 s
+```
+
+A line per depth says what is about to run (a long list ends with `and N more`). Of the `dotnet` output, only
+the warnings and errors are printed, verbatim and all of them: a project targeting several frameworks prints a
+warning once per framework. The first failing `dotnet` command fails the whole command (exit code `1`); if it
+printed no error line, its whole output is printed before the failure.
 
 ### `up`
 
@@ -438,14 +470,14 @@ without a chance to stop them (Task Manager, `taskkill /F`, stopping a debugger 
 Windows ends them too, so they don't keep holding their ports and build output.
 
 ```
-[▶] Starting LrSample.RiskService
-[▶] Starting LrSample.OrderGateway
-[✔ ] 2 process(es) started. Press Ctrl+C to stop them all.
+▸ Starting LrSample.RiskService
+▸ Starting LrSample.OrderGateway
+✓ 2 processes started. Press Ctrl+C to stop them all.
 [LrSample.RiskService ] RiskService listening on http://localhost:5102/
 [LrSample.OrderGateway] OrderGateway listening on http://localhost:5101/
-[■] Stopping all processes...
-[■] LrSample.OrderGateway exited with code 0
-[■] LrSample.RiskService exited with code 0
+■ Stopping all processes
+■ LrSample.OrderGateway exited with code 0
+■ LrSample.RiskService exited with code 0
 ```
 
 Processes are started in dependency order, but `up` doesn't wait for one to be *ready* before
@@ -599,11 +631,11 @@ next pack plans `alpha.4` for both. A typical line of work:
 
 ```sh
 lrun build --root ./repos --users-of Shared.Pricing    # latest Shared.Pricing: 1.4.2, released
-lrun pack --alpha --go     # 1.4.3-alpha.1
-lrun pack --alpha --go     # after another change, same config: 1.4.3-alpha.2
+lrun pack --alpha     # 1.4.3-alpha.1
+lrun pack --alpha     # after another change, same config: 1.4.3-alpha.2
 # days later: rebuild, so the config holds the latest versions again (your 1.4.3-alpha.2)
 lrun build --root ./repos --users-of Shared.Pricing
-lrun pack --alpha --go     # 1.4.3-alpha.3
+lrun pack --alpha     # 1.4.3-alpha.3
 ```
 
 A line started with `--minor` (or `--major`) works the same while you keep the config: the base stays
@@ -634,7 +666,7 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 |---|---|
 | Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `up` inherit the console.) |
 | Exit codes | `0` success · `1` the command failed (missing file, `dotnet` failure, dependency cycle, …) · `2` invalid command line. |
-| Output | Human-readable log lines on **stdout**. Warnings and errors are prefixed `[WRN] ` / `[ERR] `; ANSI colours are dropped when output is redirected. Output of child `dotnet` processes is forwarded line by line (stderr lines as warnings). |
+| Output | Human-readable log lines on **stdout**. Redirected, they are plain: warnings and errors prefixed `[WRN] ` / `[ERR] `, steps marked `>` (starting), `+` (process started), `ok`, `FAILED`, `-` (stopped), no colours, no progress lines. Of `go`'s child `dotnet` processes, only warning and error lines are forwarded; `up` forwards its services' output. |
 | Results | The JSON / HTML files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
 | Side effects | `--open` launches a viewer; `go` writes packages to the feed; `up` starts processes. |
 
@@ -697,8 +729,14 @@ lrun plot --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/ou
 ## Logging
 
 Logging uses `Microsoft.Extensions.Logging` with a compact console formatter
-(`src/LocalRun/Logger/LocalRunConsoleFormatter.cs`): information lines are printed as-is, other levels get a
-`[DBG]`, `[WRN]` or `[ERR]` prefix, and colours are dropped when output is redirected.
+(`src/LocalRun/Logger/LocalRunConsoleFormatter.cs`). A command prints its **result** (what it produced or
+decided, the paths of the files it wrote), its **diagnostics** (warnings and errors, never dropped) and, on a
+terminal only, **progress** for the slow steps (scanning, MSBuild evaluation, querying the NuGet sources).
+
+On a terminal, colour says the level (yellow warnings, red errors, grey debug) and a few marks say how a step
+went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped, `→` a change. When
+output is redirected (a pipe, a file, CI), the output is plain: no colours, `[DBG]` / `[WRN]` / `[ERR]` prefixes,
+and the marks become `>`, `+`, `ok`, `FAILED`, `-` and `->`. `NO_COLOR` turns the colours off on a terminal too (the prefixes come back).
 
 The minimum level is `Information`. Override it with the `LOCALRUN_LOG_LEVEL` environment variable
 (`Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`, `None`). `Debug` adds timings and the

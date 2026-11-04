@@ -181,7 +181,7 @@ public class DependencyGraph
         if (needed.Count == 0)
             return results;
 
-        logger.LogInformation("[⚙ ] Asking MSBuild for the version and package id of {Count} project(s) whose csproj does not tell them ('--csproj' skips this)...", needed.Count);
+        logger.LogInformation(LogEvents.Progress, "Asking MSBuild for the version and package id of {Count} project(s) whose csproj does not tell them ('--csproj' skips this)...", needed.Count);
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var answers = new EvaluatedProject?[needed.Count];
         Parallel.For(0, needed.Count, new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentEvaluations },

@@ -12,7 +12,6 @@ parse, failures it can classify, queries that don't write anything, and services
 
 ## Suggested order
 
-0. **Output redesign** (0): decide what human mode says, so machine output serialises facts, not chatter.
 1. **Machine output** (1) and **error codes** (2): everything else reports through them.
 2. **`status`** (3) and **`build --verify`** (5): read-only questions, with a shared "what does this config hold" model.
 3. **`--since`** (4): extends `GitChangeDetector`, independent of the rest.
@@ -22,72 +21,19 @@ parse, failures it can classify, queries that don't write anything, and services
 
 ## Requested
 
-### 0. Output redesign, human mode first **(user, 2026-11-04)**
-
-Why first: today's messages are REPL-era chatter (an emoji and a sentence per step). `--json` (1) should serialise the
-facts worth reporting, not that chatter; deciding what human mode says comes before a second renderer.
-
-**Model.** A command says three things: the **result** (what it produced or decided), **diagnostics** (anything that
-surprised or limited it, never dropped) and **progress** (only worth showing when a step is slow, and only on a terminal).
-
-**Decisions** (user feedback, 2026-11-04):
-- **`pack` packs.** Plan-only becomes `pack --dry-run`; `--go` is dropped, not aliased. `go` stays, to run a plan
-  edited by hand (e.g. to leave out a bad package pushed to the artifactory) and as the second half of a CI pipeline
-  (`pack --dry-run`, review the plan, `go`). The plan file `repack.config.json` is **always** written, dry run or not, before
-  anything runs, so a failure can be inspected. Breaking: minor bump (0.4.0), CHANGELOG entry.
-- **Versions collapsed.** The iteration is shared by the whole plan, so print it once (`local.60 -> local.61, 12 projects`)
-  and list a project only when it differs. The full per-project plan is in `repack.config.json` and `--dry-run`.
-- **Dotnet output:** every warning and error, verbatim, **not deduplicated** (multi-target projects print the same warning
-  per framework, and their owners want to see it); nothing else from the child process.
-- **No narration.** Drop the per-step sentences ("Starting repack...", "Took Nms", a line per project and per pack/clean/
-  restore, "Building dependency graph...", "Settings file: ..."). Keep one line when a step is slow or when it changes
-  what the user should do.
-- **Paths:** a command that generates files still prints their paths, always. The "Written:" footer and the hyperlinks
-  (`LinkPaths`, OSC 8) go: users open the page with `plot --open` and find names in it, not in the log.
-  **`build --plot` opens the page** (user, 2026-11-04), but only on a terminal: when output is redirected it still writes
-  the page and prints its path, without launching a browser (an agent can't read a ~1.7 MB inlined HTML page, and a
-  window popping up on its machine helps nobody). `plot --open` stays as it is.
-- **Emoji go.** The "running ... -> done" contrast stays through one line per **depth**, printed before the step with what
-  it is about to do (`› Depth 2/5: Lib.A, Lib.B, Lib.C`; a long list is abbreviated, "and 47 more"), and a closing line
-  `✓ Packed 12 libraries in 41 s`. Not an in-place overwritten line: it is fragile and the per-depth line already works the
-  same in a terminal and in a pipe, with a bounded volume (depth count, not project count). It applies to `go`, `pack` and
-  `pack --dry-run`, which prints the same lines without running them.
-- **One visual language.** A few symbols, each meaning one thing; colour = level and service identity (so `[WRN]` / `[ERR]`
-  prefixes can go on a terminal). Glyphs must have **no emoji variant** (`✔ ✖ ▶` rendered with inconsistent widths).
-  **Chosen set, checked in Windows Terminal and Git Bash (user, 2026-11-04):** `✓` done, `×` failed (or `✗`), `›` or `▸`
-  start, `■` stopped, `→` change. ASCII fallbacks when output is redirected: `ok`, `FAILED`, `>`, `-`, `->`.
-- **Plain mode = output redirected.** Redirection means "nobody is watching a terminal": no colours, no glyphs, one line
-  per step. That covers CI, pipes and an agent using pipes, but it is **not the same thing as "agent"**: a human running
-  `lrun build | tee log` is redirected too, and an agent given a pseudo-terminal isn't. So two separate axes: *presentation*
-  (terminal or not, automatic) and *format* (text or JSON, explicit with `--json`, item 1), never switching to JSON
-  because of a pipe. For a wrapper that always wants machine output, an environment variable (`LOCALRUN_OUTPUT=json|plain`)
-  sets it once instead of on every call.
-- `up` stays as it is (the colours solved finding one service among several).
-
-**`build` summary (proposed; the same facts feed `--json`):**
-1. What was scanned: root, solutions, projects by type (`212 projects: 160 libraries, 31 executables, 21 tests`).
-2. What was kept and why, when a filter applies: `Kept 34 of 212 (--deps-of WebApp, --with-services)`; with `--git-changes`,
-   one line per repository with changes (as today, without the emoji).
-3. What was left out and needs attention, always shown: name collisions (names and paths, as an error), cycles removed,
-   an empty selection. Test projects left out: one line with the `--tests` hint.
-4. The executables that `up` would start (names, abbreviated), so a human and an agent both see the services in play.
-5. The config path, and the plot path when plotted (printed in full, no hyperlink).
-6. The next step: `Next: lrun pack` (a hint a human and an agent both use; dropped when `--plot` already said what to do).
-
-**Not decided:** the wording of the above; `×` or `✗`, `›` or `▸` (pick on sight); the exact environment variable name.
-
-**Touches:** `LocalRunConsoleFormatter` (prefixes, links) and its tests, every `[emoji]` message (about 30), `RepackExecutor`
-and `RepackConfigBuilder` (output filtering and the collapsed plan), `LocalRunCli` (`pack`, `PrintWritten`, help), README,
-`samples/README.md` (rerun it), CHANGELOG. Do it before `--json`, on its own branch.
-
 ### 1. `--json` / `--porcelain` machine-friendly output **(user)**
 
 Goal: every command can be driven by an agent or a script: no emoji, no decoration, a summary on stdout that can be
 parsed or at least read at a glance.
 
-What exists: messages are structured log templates with emoji prefixes (`[📦]`, `[✔ ]`, `[⚙ ]`), a colored
-`[WRN]` / `[ERR]` prefix, a `[📄] Written:` list at the end, OSC 8 hyperlinks on paths (`LocalRunConsoleFormatter`).
-`up` colors its tags on a terminal only.
+What exists (since the output redesign, 0.4.0): each command prints its result, diagnostics and, on a terminal only,
+progress. Marks are the event ids of the log calls (`LogEvents`: start, done, failed, stopped, progress), rendered by
+`LocalRunConsoleFormatter` as glyphs on a terminal or ASCII words when redirected (`Terminal.IsAttached`); messages carry
+no mark of their own. Paths are printed as `Config:` / `Plan:` / `Plot:` lines, no links. `up` colors its tags on a terminal only.
+
+Left over from the redesign (user, 2026-11-04): an environment variable for a wrapper that always wants machine output
+(`LOCALRUN_OUTPUT=json|plain`, name not decided) sets it once instead of on every call; it never switches to JSON because
+of a pipe. The glyphs `×` vs `✗` and `›` vs `▸` were to be picked on sight (`×` and `›` shipped).
 
 Ideas:
 - Two layers, as git does: `--porcelain` = stable, emoji-free text (one fact per line, `key=value` or tab separated);
@@ -125,14 +71,16 @@ in `--porcelain`?
 - `AddConsole(...)` has no `LogToStandardErrorThreshold` set, so **all logs go to stdout today**: in JSON mode the factory
   must be created with the threshold at `Trace`. Direct `Console.WriteLine` calls (`help`, `version`, `settings --path`) also
   write to stdout and need a JSON form.
-- Emoji live in the message templates (`[✔ ]`, `[📦]`, `[🔀]`), not in the formatter: the formatter has to strip a leading
-  `[…]` tag in this mode rather than every call site being edited.
-- `PrintWritten` already collects the files a command wrote: it becomes the document's `written` field.
-- `RunProcessor` already has the colors off in a redirected output; JSON mode must switch them off too (`ColorsEnabled`).
+- Marks are event ids (`LogEvents`), not text: in this mode the logs can use the plain rendering as is, and events can be
+  serialised by name.
+- The files a command wrote are logged (`Config:`, `Plan:`, `Plot:`), no longer collected (`PrintWritten` went with the
+  redesign): the `written` field needs them collected again, at the same call sites.
+- `RunProcessor` and the formatter have the colors off in a redirected output (`Terminal.ColorsEnabled`); JSON mode must
+  switch them off too.
 
 **Steps** (each is a commit; 1–4 are one PR, 5 and 6 are their own):
 1. **Mode plumbing.** `OutputMode` (Human, Json), set in `Main`; `Log` reads it when it builds the factory (stderr threshold,
-   a formatter variant without emoji, colors or links). Human mode is untouched: same bytes as today. Test: the formatter
+   the plain rendering: no colors, ASCII marks). Human mode is untouched: same bytes as today. Test: the formatter
    output with and without the mode.
 2. **Envelope.** `RunAsync` builds `{ schemaVersion, command, status, exitCode, durationMs, result, warnings, written,
    error }` and writes it as the last thing on stdout (UTF-8, no BOM, one line or indented: to decide, indented reads better

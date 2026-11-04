@@ -44,10 +44,6 @@ internal static partial class ServiceOutput
         if (InformationLine().IsMatch(line)) return OutputLevel.Information;
         return null;
     }
-
-    /// <summary>Colors are used on a terminal only, and not when NO_COLOR is set (https://no-color.org).</summary>
-    public static bool ColorsEnabled() =>
-        !Console.IsOutputRedirected && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"));
 }
 
 /// <summary>

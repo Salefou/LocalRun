@@ -14,15 +14,21 @@ public class ConfigBuilder
 
     public LocalRunConfig BuildConfig(string rootPath, BuildConfigOptions options, string localNugetRepoPath)
     {
-        logger.LogInformation("[⚙ ] Building dependency graph from {RootPath}...", rootPath);
+        logger.LogInformation(LogEvents.Progress, "Scanning {RootPath}...", rootPath);
 
         string[] csprojs = Directory.GetFiles(rootPath, "*.csproj", SearchOption.AllDirectories);
         var graph = DependencyGraph.FromSource(rootPath, csprojs, options.IncludeExternal, options.IncludeTests,
             evaluate: options.CsprojVersionsOnly ? null : MsBuildEvaluator.Evaluate);
+        var scanned = graph.AllProjects.ToList();
+        int executables = scanned.Count(proj => proj.Type == "executable");
+        logger.LogInformation("Scanned {RootPath}: {Projects} in {Solutions}, {Libraries} and {Executables}", rootPath,
+            Text.Count(scanned.Count, "project"),
+            Text.Count(scanned.Select(proj => proj.SolutionPath).Where(path => path != null).Distinct(StringComparer.OrdinalIgnoreCase).Count(), "solution"),
+            Text.Count(scanned.Count - executables, "library", "libraries"), Text.Count(executables, "executable"));
         if (graph.LeftOutTests.Count != 0)
         {
-            logger.LogInformation("[🧪] Left out {Count} test project(s) ('--tests' keeps them): {Projects}",
-                graph.LeftOutTests.Count, string.Join(", ", graph.LeftOutTests));
+            logger.LogInformation("Left out {Projects} ('--tests' keeps them): {Names}",
+                Text.Count(graph.LeftOutTests.Count, "test project"), Text.Abbreviate(graph.LeftOutTests));
         }
         foreach (var collision in graph.Collisions)
         {
@@ -43,8 +49,8 @@ public class ConfigBuilder
         var addedForServices = graph.Retain(usersOf, options.RetainIsDependencyOf, options.Union, options.WithServices);
         if (options.WithServices)
         {
-            logger.LogInformation("[⚙ ] --with-services added: {Projects}",
-                addedForServices.Count == 0 ? "nothing (no other service uses the kept projects)" : string.Join(", ", addedForServices));
+            logger.LogInformation("--with-services added: {Projects}",
+                addedForServices.Count == 0 ? "nothing (no other service uses the kept projects)" : Text.Abbreviate(addedForServices));
         }
         if (usersOf is { Count: > 0 } && options.RetainIsDependencyOf != null && !options.Union && !graph.AllProjects.Any())
         {
@@ -69,7 +75,21 @@ public class ConfigBuilder
             LocalNugetPath = localNugetRepoPath,
             Projects = [.. graph.TopologicalOrder()]
         };
+        if (Filters(options) is { } filters)
+            logger.LogInformation("Kept {Kept} of {Scanned} ({Filters})", config.Projects.Count, scanned.Count, filters);
         return config;
+    }
+
+    /// <summary>The filters given to <c>build</c>, as typed (<c>--deps-of WebApp, --with-services</c>), or null without any.</summary>
+    internal static string? Filters(BuildConfigOptions options)
+    {
+        List<string> filters = [];
+        if (options.RetainDependsOn != null) filters.Add($"--users-of {string.Join(" ", options.RetainDependsOn)}");
+        if (options.RetainGitChanges) filters.Add("--git-changes");
+        if (options.RetainIsDependencyOf != null) filters.Add($"--deps-of {string.Join(" ", options.RetainIsDependencyOf)}");
+        if (options.Union) filters.Add("--union");
+        if (options.WithServices) filters.Add("--with-services");
+        return filters.Count == 0 ? null : string.Join(", ", filters);
     }
 
     /// <summary>
@@ -79,7 +99,7 @@ public class ConfigBuilder
     /// </summary>
     public async Task FetchLatestVersionsAsync(LocalRunConfig config)
     {
-        logger.LogInformation("[🌐] Fetching the latest versions on your NuGet sources and in {LocalNugetPath} ('--csproj' skips this)...", config.LocalNugetPath);
+        logger.LogInformation(LogEvents.Progress, "Querying your NuGet sources and {LocalNugetPath} for the latest versions ('--csproj' skips this)...", config.LocalNugetPath);
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         using var nugetVersionChecker = new NugetVersionChecker();
         // go restores with the local feed as an additional source, whatever the NuGet.Config files say
@@ -100,13 +120,22 @@ public class ConfigBuilder
             string project = proj.PackageId == null ? proj.Name : $"{proj.Name} ({proj.PackageId})";
             if (latestPerProject[i] is not { } latest)
             {
-                logger.LogInformation("  {Project}: not found, pack will start from the csproj version {Version}", project, proj.Version);
+                logger.LogDebug("{Project}: not found, pack will start from the csproj version {Version}", project, proj.Version);
                 continue;
             }
             // Normalized keeps the prerelease label (1.4.2-beta); .Version would give 1.4.2.0
             proj.LatestVersion = ProjectVersion.Parse(latest.ToNormalizedString());
-            logger.LogInformation("  {Project}: {LatestVersion} (csproj {Version})", project, proj.LatestVersion, proj.Version);
+            logger.LogDebug("{Project}: {LatestVersion} (csproj {Version})", project, proj.LatestVersion, proj.Version);
         }
+        int found = config.Projects.Count(proj => proj.LatestVersion != null);
+        if (config.Projects.Count == 0)
+            return;
+        if (found == 0)
+            logger.LogInformation("No project found on your sources: pack starts from the csproj versions");
+        else if (found == config.Projects.Count)
+            logger.LogInformation("Latest versions found for all {Projects}", Text.Count(found, "project"));
+        else
+            logger.LogInformation("Latest versions found for {Found} of {Count} projects, the others start from their csproj version", found, config.Projects.Count);
         logger.LogDebug("Fetched the latest versions of {Count} projects in {ElapsedMs}ms", config.Projects.Count, stopwatch.ElapsedMilliseconds);
     }
 
@@ -120,10 +149,9 @@ public class ConfigBuilder
         var changed = GitChangeDetector.FindChangedProjects(csprojs.Select(csproj => (Path.GetFileNameWithoutExtension(csproj), csproj)))
             .Where(name => graph.TryGetFromName(name, out _))
             .ToList();
+        // The changed projects of each repository are listed by GitChangeDetector
         if (changed.Count == 0)
             logger.LogWarning("--git-changes: no pending changes under {RootPath}, nothing to keep", rootPath);
-        else
-            logger.LogInformation("[🔀] --git-changes: {Projects} changed, kept with all their users", string.Join(", ", changed));
         return changed;
     }
 
