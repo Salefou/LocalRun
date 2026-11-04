@@ -61,6 +61,7 @@ public class RunProcessor : IRunProcessor
         // Stops the processes even when LocalRun is killed, when the stopping code below can't run
         using var job = ProcessJob.TryCreate();
         int prefixWidth = executables.Max(exe => exe.Name.Length);
+        var styles = ServiceOutput.ColorsEnabled() ? ServiceStyle.Assign(executables.Select(exe => exe.Name)) : null;
         var running = new List<RunningProcess>();
         // Processes that failed on their own, before any stop was requested: those make `up` fail
         List<RunningProcess> failed = [];
@@ -70,7 +71,8 @@ public class RunProcessor : IRunProcessor
             {
                 logger.LogInformation("[▶] Starting {Project}", exe.Name);
                 running.Add(RunningProcess.Start(exe.Name.PadRight(prefixWidth),
-                    "dotnet", $"run --no-build --project \"{FullPath(config, exe)}\"{SolutionProperties.Arguments(exe.SolutionPath)}", job: job));
+                    "dotnet", $"run --no-build --project \"{FullPath(config, exe)}\"{SolutionProperties.Arguments(exe.SolutionPath)}",
+                    job: job, style: styles?[exe.Name]));
             }
             logger.LogInformation("[✔ ] {Count} process(es) started. Press Ctrl+C to stop them all.", running.Count);
 
@@ -168,8 +170,9 @@ public class RunProcessor : IRunProcessor
 
         /// <param name="capture">When given, receives the output lines instead of the log.</param>
         /// <param name="job">When given, the process is added to it.</param>
+        /// <param name="style">When given, the output is shown with a colored tag, by the level read from each line.</param>
         public static RunningProcess Start(string? prefix, string fileName, string args, Action<string>? capture = null,
-            ProcessJob? job = null)
+            ProcessJob? job = null, ServiceStyle? style = null)
         {
             var process = Process.Start(new ProcessStartInfo(fileName, args)
             {
@@ -179,16 +182,26 @@ public class RunProcessor : IRunProcessor
             })!;
             job?.Add(process, prefix?.Trim() ?? fileName);
             string tag = prefix == null ? string.Empty : $"[{prefix}] ";
+            // Continuation lines (stack frames, the message under a "fail:" line) carry no level: they keep the last one
+            var lastLevel = OutputLevel.Information;
+            void LogColored(string data)
+            {
+                string line = ServiceOutput.StripAnsi(data);
+                lastLevel = ServiceOutput.DetectLevel(line) ?? lastLevel;
+                logger.LogInformation("{Tag}{Line}", style!.Tag(prefix!, lastLevel), line);
+            }
             process.OutputDataReceived += (_, e) =>
             {
                 if (e.Data == null) return;
                 if (capture != null) capture(e.Data);
+                else if (style != null && prefix != null) LogColored(e.Data);
                 else logger.LogInformation("{Tag}{Line}", tag, e.Data);
             };
             process.ErrorDataReceived += (_, e) =>
             {
                 if (e.Data == null) return;
                 if (capture != null) capture(e.Data);
+                else if (style != null && prefix != null) LogColored(e.Data);
                 else logger.LogWarning("{Tag}{Line}", tag, e.Data);
             };
             process.BeginOutputReadLine();

@@ -9,6 +9,14 @@ bumps the minor version, anything else the patch.
 
 ## [0.3.2] - 2026-10-29
 
+### Added
+
+- `up` colors each service's `[name]` tag on a terminal, so the interleaved output is easier to follow. The hues are spread
+  evenly in the alphabetical order of the executables' names. The tag's shade follows the level of the line, read from its
+  text (`info:` / `warn:` / `fail:`, Serilog's `INF` / `WRN` / `ERR`, …): dimmer for debug, lighter for warnings, and red
+  for errors. Lines without a level (stack frames, continuations) keep the previous one. The colors a service prints
+  itself are removed. Nothing changes when the output is redirected or `NO_COLOR` is set.
+
 ### Changed
 
 - `build` asks MSBuild (`dotnet msbuild -getProperty`) for the version and package id of the projects whose csproj

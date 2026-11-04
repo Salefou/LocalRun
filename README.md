@@ -420,7 +420,10 @@ the services, as `docker compose up` does for containers:
    properties of the project's solution, as in `go`.
 2. **Start** them all, in dependency order, with `dotnet run --no-build --project <csproj>`, without
    waiting for each one. `dotnet run` still applies the project's `launchSettings.json` (URLs,
-   environment variables). Every output line is prefixed with the project name.
+   environment variables). Every output line is prefixed with the project name. On a terminal the
+   prefix is colored: one hue per service (spread evenly in alphabetical order), a shade per level
+   read from the line (dimmer for debug, lighter for warnings), and red for errors. The colors a
+   service prints itself are removed. Redirected output, or `NO_COLOR` set, stays plain.
 3. **Wait** until they have all exited. One-shot jobs simply finish; services run until you press
    **Ctrl+C**. They all receive it (they share the console). Whatever is still running 10 seconds later
    is killed, with its child processes.
