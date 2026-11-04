@@ -192,6 +192,20 @@ Ideas:
   repository commit, or a sidecar file in the feed) would let `--verify` also say "packed from an older commit than
   HEAD". Heavier; later.
 
+### 6. Projects depending on a left-out cycle fail `pack` **(user, 2026-11-05)**
+
+What happens: `build` leaves a dependency cycle out of the config (`RemoveCycles`) but keeps the projects depending on
+it, without that edge, with a warning ("packing or running them may fail"). When such a project reaches the cycle
+through a `ProjectReference`, its `dotnet restore` still walks into the cycle and fails with `MSB4006 circular
+dependency`, so `pack` / `go` fail (exit 1). Same in 0.3.3. Reproduced by `samples/edge-cases/cycle` (`LrEdge.Top`), and
+so by `lrun build` then `lrun pack` from the repository root. Package users of the cycle restore fine (the published
+package), and so do name-collision dependents (their project reference names one path).
+
+Tried and reverted (PR #23, commits 29d91c0 / 157b5a5): `build` leaving out, with the cycle, every project reaching it
+through project references (needs the reference kind at scan time: `ProjectNode.ProjectReferences`, not written to the
+config). The user has **another flow in mind**: ask what it is before designing anything; the reverted commit holds
+the reference-kind plumbing and tests, reusable whatever the flow.
+
 ---
 
 ## Suggested (agents on a big platform)
