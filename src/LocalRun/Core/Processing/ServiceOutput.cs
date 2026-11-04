@@ -51,8 +51,8 @@ internal static partial class ServiceOutput
 }
 
 /// <summary>
-/// The color of a service's `[name]` tag: its hue tells the service, its lightness tells the level of the line
-/// (dimmer for debug, lighter for warnings). Errors are red whatever the service.
+/// The colors of a service's output: its `[name]` tag always has the service's hue, and the message is colored by
+/// the level of the line (orange for warnings, red for errors), so the two never get mixed up.
 /// </summary>
 internal sealed class ServiceStyle
 {
@@ -78,18 +78,21 @@ internal sealed class ServiceStyle
             .ToDictionary(entry => entry.name, entry => entry.style, StringComparer.Ordinal);
     }
 
-    /// <summary>The tag, colored for the level, followed by a space.</summary>
-    public string Tag(string name, OutputLevel level)
+    /// <summary>The tag in the service's color, followed by a space.</summary>
+    public string Tag(string name)
     {
-        var (r, g, b) = level switch
-        {
-            OutputLevel.Error => FromHsl(0, 0.85, 0.6),
-            OutputLevel.Warning => FromHsl(hue, Saturation, 0.78),
-            OutputLevel.Debug => FromHsl(hue, Saturation, 0.45),
-            _ => FromHsl(hue, Saturation, 0.62),
-        };
+        var (r, g, b) = FromHsl(hue, Saturation, 0.62);
         return $"\x1B[38;2;{r};{g};{b}m[{name}]{ResetForeground} ";
     }
+
+    /// <summary>The line colored for its level: orange for warnings, red for errors, dim for debug, as printed otherwise.</summary>
+    public static string Message(string line, OutputLevel level) => level switch
+    {
+        OutputLevel.Error => $"\x1B[38;2;255;85;85m{line}{ResetForeground}",
+        OutputLevel.Warning => $"\x1B[38;2;255;165;0m{line}{ResetForeground}",
+        OutputLevel.Debug => $"\x1B[90m{line}{ResetForeground}",
+        _ => line,
+    };
 
     internal static (int R, int G, int B) FromHsl(double hue, double saturation, double lightness)
     {
