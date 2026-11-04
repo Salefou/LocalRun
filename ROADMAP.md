@@ -48,6 +48,69 @@ Ideas:
 Open questions: global flag or per command? NDJSON for every command or only the long ones? Do warnings stay human text
 in `--porcelain`?
 
+#### Plan for 1: `--json` (proposed, not started)
+
+**Decisions proposed** (the open questions above, answered; change any of them before work starts):
+- `--json` only. `--porcelain` waits until a shell user asks. A global flag, accepted by every command, before or after it.
+- One JSON document on stdout for every command, **including failures and usage errors**: an agent always has exactly one
+  thing to parse. Logs go to stderr in this mode, without emoji, colors or hyperlinks.
+- NDJSON events only for `up` (3 below); every other command is short enough for one final document.
+- Warnings stay text at first, but are captured into the document (see step 3), so nothing is lost while codes are added.
+
+**What I found in the code** (drives the order below):
+- `Log` builds its `ILoggerFactory` in a **static initializer**, and `LocalRunCli` holds a static `logger`, so the factory
+  exists before `RunAsync` parses anything. The mode therefore has to be known earlier than argument parsing: `Program.Main`
+  looks for `--json` in `args` and records it in a small separate static (`OutputMode`, not in `Log`, whose members
+  would trigger the initializer), then `RunAsync` removes the flag and consumes it like any other. Tests of `RunAsync`
+  must set `OutputMode` themselves.
+- `AddConsole(...)` has no `LogToStandardErrorThreshold` set, so **all logs go to stdout today**: in JSON mode the factory
+  must be created with the threshold at `Trace`. Direct `Console.WriteLine` calls (`help`, `version`, `settings --path`) also
+  write to stdout and need a JSON form.
+- Emoji live in the message templates (`[✔ ]`, `[📦]`, `[🔀]`), not in the formatter: the formatter has to strip a leading
+  `[…]` tag in this mode rather than every call site being edited.
+- `PrintWritten` already collects the files a command wrote: it becomes the document's `written` field.
+- `RunProcessor` already has the colors off in a redirected output; JSON mode must switch them off too (`ColorsEnabled`).
+
+**Steps** (each is a commit; 1–4 are one PR, 5 and 6 are their own):
+1. **Mode plumbing.** `OutputMode` (Human, Json), set in `Main`; `Log` reads it when it builds the factory (stderr threshold,
+   a formatter variant without emoji, colors or links). Human mode is untouched: same bytes as today. Test: the formatter
+   output with and without the mode.
+2. **Envelope.** `RunAsync` builds `{ schemaVersion, command, status, exitCode, durationMs, result, warnings, written,
+   error }` and writes it as the last thing on stdout (UTF-8, no BOM, one line or indented: to decide, indented reads better
+   in a terminal and parses the same). `error = { code, message }`, with `code` a short stable string (`usage`,
+   `config-not-found`, `command-failed`, …) that item 2 will refine. `UsageException` and any other exception go through
+   it as well. `version`, `help` and `settings --path` get their `result`.
+3. **Captured warnings.** A logger provider, added in this mode only, copies every Warning and Error log into the
+   envelope as `{ code: "unspecified", message, level }`. No call site changes yet; real codes follow where an agent would
+   branch on them (`name-collision`, `cycle-removed`, `no-git-base`, `csproj-ahead-of-latest`, `not-in-git`).
+4. **`build` and `pack` results.** `build`: config path, counts by type, projects left out with the reason (collision,
+   cycle, filter), the git-changes reasons when `--git-changes` was used. `pack`: the plan as a list of
+   `{ project, from, to }`. **To read first:** what `ConfigBuilder` and `RepackConfigBuilder` already keep of this
+   (`DependencyGraph.Collisions` exists), so they expose data rather than recompute it.
+5. **`go`, `plot`, `settings`.** `go`: a per-project outcome (package id, version, duration, failed or not) which means
+   `RepackExecutor` collects results instead of only logging them; the first failure still fails the command, and the
+   envelope carries the last output lines of the failing `dotnet` command (A2 will parse them).
+6. **`up` events.** NDJSON on stdout, one object per line: `starting`, `started`, `exited` (code), `stopping`, then the
+   final envelope. Service output lines are **not** in stdout by default (volume, and a real agent wants them filtered):
+   they are written to `.lrun/logs/<service>.log` (A4), and the `started` event carries that path. If lines are wanted
+   inline, an explicit `--lines` is a later decision.
+
+**Tests** (the contract is the point):
+- Per command, run `RunAsync` with `Console.Out` / `Console.Error` redirected: stdout parses as exactly one JSON document
+  (or NDJSON for `up`), stderr holds the logs, and neither contains an emoji, an ESC character, or an OSC link.
+- Failure and usage paths: stdout still parses, `status` is `failed`, `exitCode` matches the process code.
+- A snapshot of each command's JSON shape (property names only) so renaming a field is a visible, deliberate change.
+- Human mode unchanged: the existing formatter and CLI tests must keep passing as they are.
+
+**Docs and release:** a README "Machine output" section (envelope, `schemaVersion`, the stdout/stderr rule, one example
+per command), `PrintHelp`, a CHANGELOG line. A new flag that changes nothing without it is a patch while 0.x. Changing
+a field later bumps `schemaVersion`, never silently.
+
+**Risks:** the static-initializer ordering above is the one that bites (a logger created too early stays in human mode);
+Windows console encodings can add a BOM or mangle UTF-8 when stdout is a pipe, hence a test through a real redirected
+process, not only `Console.SetOut`; `go` and `up` run long-lived children whose output must never leak into stdout in this
+mode (they are captured, as `RunToCompletionAsync` already does for builds).
+
 ### 2. Finer exit codes **(user)**
 
 What exists: `0` success, `1` command failed, `2` invalid command line; "external code relies on them" (`CLAUDE.md`).
