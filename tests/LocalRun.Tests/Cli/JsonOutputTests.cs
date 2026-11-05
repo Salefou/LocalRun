@@ -97,7 +97,7 @@ public sealed class JsonOutputTests : IDisposable
     [InlineData("version", "--json", "--json")]
     [InlineData("version", "--json", "yes")]
     [InlineData("nope", "--json")]
-    [InlineData("--json")]
+    [InlineData("--strict", "nope", "--json")]
     public async Task UsageErrors_StillWriteADocument(params string[] args)
     {
         var run = await LrunAsync(args);
@@ -112,12 +112,26 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal(0, run.Json.GetProperty("diagnostics").GetArrayLength());
     }
 
+    [Theory]
+    [InlineData("--json")]
+    [InlineData("--json", "--strict")]
+    public async Task NoCommand_GivesTheHelp_AsAUsageError(params string[] args)
+    {
+        var run = await LrunAsync(args);
+
+        Assert.Equal(LocalRunCli.ExitUsage, run.ExitCode);
+        AssertPlain(run);
+        Assert.Equal(JsonValueKind.Null, run.Json.GetProperty("command").ValueKind);
+        Assert.Equal("usage", run.Json.GetProperty("error").GetProperty("code").GetString());
+        Assert.Contains("--strict", run.Json.GetProperty("result").GetProperty("help").GetString());
+    }
+
     [Fact]
     public async Task AMissingConfig_HasItsOwnCode()
     {
         var run = await LrunAsync("plot", "--json");
 
-        Assert.Equal(LocalRunCli.ExitFailure, run.ExitCode);
+        Assert.Equal(LocalRunCli.ExitInput, run.ExitCode);
         AssertPlain(run);
         Assert.Equal("config-not-found", run.Json.GetProperty("error").GetProperty("code").GetString());
         Assert.Contains("lrun build", run.Json.GetProperty("error").GetProperty("message").GetString());
@@ -128,7 +142,7 @@ public sealed class JsonOutputTests : IDisposable
     {
         var run = await LrunAsync("build", "--root", Path.Combine(workDir, "nowhere"), "--json");
 
-        Assert.Equal(LocalRunCli.ExitFailure, run.ExitCode);
+        Assert.Equal(LocalRunCli.ExitInput, run.ExitCode);
         Assert.Equal("root-not-found", run.Json.GetProperty("error").GetProperty("code").GetString());
     }
 
@@ -173,6 +187,7 @@ public sealed class JsonOutputTests : IDisposable
         var error = Assert.Single(build.Json.GetProperty("diagnostics").EnumerateArray(),
             diagnostic => diagnostic.GetProperty("level").GetString() == "error");
         Assert.StartsWith("Several projects are named Dup", error.GetProperty("message").GetString());
+        Assert.Equal("name-collision", error.GetProperty("code").GetString());
         Assert.Equal([config], build.Json.GetProperty("written").EnumerateArray().Select(path => path.GetString()));
         Assert.Contains("Dup", build.Stderr);
 
@@ -219,9 +234,9 @@ public sealed class JsonOutputTests : IDisposable
 
         var go = await LrunAsync("go", "--json");
 
-        Assert.Equal(LocalRunCli.ExitFailure, go.ExitCode);
+        Assert.Equal(LocalRunCli.ExitDotnetFailed, go.ExitCode);
         AssertPlain(go);
-        Assert.Equal("command-failed", go.Json.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("dotnet-failed", go.Json.GetProperty("error").GetProperty("code").GetString());
         var result = go.Json.GetProperty("result");
         Assert.False(result.GetProperty("packed").GetBoolean());
         var packages = result.GetProperty("packages").EnumerateArray().ToDictionary(package => package.GetProperty("project").GetString()!);
@@ -236,6 +251,116 @@ public sealed class JsonOutputTests : IDisposable
         Assert.NotEqual(0, failure.GetProperty("output").GetArrayLength());
         Assert.Equal("skipped", packages["Top"].GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, packages["Top"].GetProperty("durationMs").ValueKind);
+    }
+
+    private string WriteLibAndApp()
+    {
+        string root = Path.Combine(workDir, "repos");
+        WriteCsproj(root, "Lib", """<Project Sdk="Microsoft.NET.Sdk" />""");
+        WriteCsproj(root, "App", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+              <ItemGroup><ProjectReference Include="..\Lib\Lib.csproj" /></ItemGroup>
+            </Project>
+            """);
+        return root;
+    }
+
+    private static IEnumerable<string?> Codes(Run run) =>
+        run.Json.GetProperty("diagnostics").EnumerateArray().Select(diagnostic => diagnostic.GetProperty("code").GetString());
+
+    [Fact]
+    public async Task Strict_IgnoresWhatIsExpected()
+    {
+        string root = WriteLibAndApp();
+
+        // Warns that no solution references them: expected, not a reason to fail
+        var run = await LrunAsync("--strict", "build", "--root", root, "--include-external", "--csproj", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, run.ExitCode);
+        Assert.Contains("no-solution", Codes(run));
+    }
+
+    [Fact]
+    public async Task Strict_FailsWhatLeftSomethingOut_AfterWritingIt()
+    {
+        string root = WriteLibAndApp();
+        WriteCsproj(Path.Combine(root, "One"), "Dup", """<Project Sdk="Microsoft.NET.Sdk" />""");
+        WriteCsproj(Path.Combine(root, "Two"), "Dup", """<Project Sdk="Microsoft.NET.Sdk" />""");
+
+        var run = await LrunAsync("build", "--root", root, "--include-external", "--csproj", "--strict", "--json");
+
+        Assert.Equal(LocalRunCli.ExitStrict, run.ExitCode);
+        AssertPlain(run);
+        Assert.Equal("failed", run.Json.GetProperty("status").GetString());
+        var error = run.Json.GetProperty("error");
+        Assert.Equal("strict", error.GetProperty("code").GetString());
+        Assert.Contains("name-collision", error.GetProperty("message").GetString());
+        // The diagnostics are the reasons; the refusal itself is the error
+        Assert.DoesNotContain("strict", Codes(run));
+        Assert.NotEqual(JsonValueKind.Null, run.Json.GetProperty("result").ValueKind);
+        Assert.True(File.Exists(Path.Combine(workDir, ".lrun", "localrun.config.json")));
+        Assert.Contains("--strict", run.Stderr);
+    }
+
+    [Fact]
+    public async Task Strict_FailsWithoutJsonToo()
+    {
+        string root = WriteLibAndApp();
+        WriteCsproj(Path.Combine(root, "One"), "Dup", """<Project Sdk="Microsoft.NET.Sdk" />""");
+        WriteCsproj(Path.Combine(root, "Two"), "Dup", """<Project Sdk="Microsoft.NET.Sdk" />""");
+
+        var run = await LrunAsync("build", "--root", root, "--include-external", "--csproj", "--strict");
+
+        Assert.Equal(LocalRunCli.ExitStrict, run.ExitCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AnEmptySelection_Succeeds_WithAMarker(bool strict)
+    {
+        string root = Directory.CreateDirectory(Path.Combine(workDir, "empty")).FullName;
+
+        string feed = Path.Combine(workDir, "feed");
+
+        var build = await LrunAsync([.. new[] { "build", "--root", root, "--local-nuget", feed, "--csproj", "--json" },
+            .. strict ? ["--strict"] : Array.Empty<string>()]);
+
+        Assert.Equal(LocalRunCli.ExitSuccess, build.ExitCode);
+        Assert.Equal(["empty-selection"], Codes(build));
+
+        var pack = await LrunAsync("pack", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, pack.ExitCode);
+        Assert.Equal(["empty-selection"], Codes(pack));
+        Assert.Equal(0, pack.Json.GetProperty("result").GetProperty("packages").GetArrayLength());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("{ not json")]
+    [InlineData("null")]
+    public async Task AnInvalidConfig_IsAnInputError(string content)
+    {
+        Directory.CreateDirectory(Path.Combine(workDir, ".lrun"));
+        File.WriteAllText(Path.Combine(workDir, ".lrun", "localrun.config.json"), content);
+
+        var run = await LrunAsync("plot", "--json");
+
+        Assert.Equal(LocalRunCli.ExitInput, run.ExitCode);
+        Assert.Equal("config-invalid", run.Json.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task InvalidSettings_AreAnInputError()
+    {
+        File.WriteAllText(Path.Combine(workDir, "settings.json"), """{ "root": "relative/path" }""");
+
+        var run = await LrunAsync("build", "--json");
+
+        Assert.Equal(LocalRunCli.ExitInput, run.ExitCode);
+        Assert.Equal("settings-invalid", run.Json.GetProperty("error").GetProperty("code").GetString());
     }
 
     private static void WriteCsproj(string root, string name, string content)

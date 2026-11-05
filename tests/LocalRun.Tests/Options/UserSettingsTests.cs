@@ -65,7 +65,7 @@ public class UserSettingsTests : IDisposable
     {
         string path = Write(content);
 
-        var ex = Assert.Throws<InvalidDataException>(() => UserSettings.Load(path));
+        var ex = Assert.Throws<SettingsInvalidException>(() => UserSettings.Load(path));
 
         Assert.Contains(path, ex.Message);
     }

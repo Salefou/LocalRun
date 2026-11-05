@@ -39,7 +39,7 @@ internal sealed class ProcessJob : IDisposable
         var handle = CreateJobObject(IntPtr.Zero, null);
         if (handle.IsInvalid)
         {
-            logger.LogWarning("Could not create a job object ({Error}): processes will outlive LocalRun if it is killed",
+            logger.LogWarning(DiagnosticEvents.JobObjectFailed, "Could not create a job object ({Error}): processes will outlive LocalRun if it is killed",
                 new Win32Exception(Marshal.GetLastWin32Error()).Message);
             handle.Dispose();
             return null;
@@ -51,7 +51,7 @@ internal sealed class ProcessJob : IDisposable
         };
         if (!SetInformationJobObject(handle, JobObjectExtendedLimitInformation, ref info, (uint)ExtendedLimitInformationSize))
         {
-            logger.LogWarning("Could not configure the job object ({Error}): processes will outlive LocalRun if it is killed",
+            logger.LogWarning(DiagnosticEvents.JobObjectFailed, "Could not configure the job object ({Error}): processes will outlive LocalRun if it is killed",
                 new Win32Exception(Marshal.GetLastWin32Error()).Message);
             handle.Dispose();
             return null;
@@ -66,7 +66,7 @@ internal sealed class ProcessJob : IDisposable
         {
             if (!AssignProcessToJobObject(handle, process.Handle))
             {
-                logger.LogWarning("Could not add {Project} to the job object ({Error}): it will outlive LocalRun if LocalRun is killed",
+                logger.LogWarning(DiagnosticEvents.JobObjectFailed, "Could not add {Project} to the job object ({Error}): it will outlive LocalRun if LocalRun is killed",
                     name, new Win32Exception(Marshal.GetLastWin32Error()).Message);
             }
         }

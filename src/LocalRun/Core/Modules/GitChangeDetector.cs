@@ -43,7 +43,7 @@ public static class GitChangeDetector
 
         if (notInGit.Count != 0)
         {
-            logger.LogWarning("Not in a git repository, counted as changed: {Projects}",
+            logger.LogWarning(DiagnosticEvents.NotInGit, "Not in a git repository, counted as changed: {Projects}",
                 string.Join(", ", notInGit.Order(StringComparer.OrdinalIgnoreCase)));
             changed.UnionWith(notInGit);
         }
@@ -76,14 +76,14 @@ public static class GitChangeDetector
                 var (baseName, baseCommit) = FindDefaultBranch(repo);
                 if (baseCommit == null)
                 {
-                    logger.LogWarning("{Repo}: no origin/HEAD, origin/main or origin/master to compare with, whole repo counted as changed",
+                    logger.LogWarning(DiagnosticEvents.NoGitBase, "{Repo}: no origin/HEAD, origin/main or origin/master to compare with, whole repo counted as changed",
                         repoLabel);
                     return all;
                 }
                 var mergeBase = repo.ObjectDatabase.FindMergeBase(head, baseCommit);
                 if (mergeBase == null)
                 {
-                    logger.LogWarning("{Repo}: HEAD shares no history with {Base}, whole repo counted as changed", repoLabel, baseName);
+                    logger.LogWarning(DiagnosticEvents.NoCommonHistory, "{Repo}: HEAD shares no history with {Base}, whole repo counted as changed", repoLabel, baseName);
                     return all;
                 }
                 if (mergeBase.Sha != head.Sha)
@@ -116,7 +116,7 @@ public static class GitChangeDetector
         }
         catch (LibGit2SharpException ex)
         {
-            logger.LogWarning("{Repo}: could not read the repository ({Error}), whole repo counted as changed", repoLabel, ex.Message);
+            logger.LogWarning(DiagnosticEvents.RepoUnreadable, "{Repo}: could not read the repository ({Error}), whole repo counted as changed", repoLabel, ex.Message);
             return all;
         }
     }

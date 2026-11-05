@@ -55,30 +55,48 @@ internal sealed record CommandReport(
 /// <param name="Code">A short stable string to branch on (<see cref="ErrorCodes"/>); the message is for people.</param>
 internal sealed record ReportError(string Code, string Message);
 
+/// <summary>The error codes of the JSON output. Several codes share an exit code: the number is coarse, the name precise.</summary>
 internal static class ErrorCodes
 {
     /// <summary>Invalid command line (exit code 2).</summary>
     public const string Usage = "usage";
 
-    /// <summary>A config file to read is missing: run the command that writes it first.</summary>
+    /// <summary>A config file to read is missing: run the command that writes it first (exit code 3).</summary>
     public const string ConfigNotFound = "config-not-found";
 
-    /// <summary>The directory <c>build</c> was asked to scan doesn't exist.</summary>
+    /// <summary>A config file to read is empty or not valid JSON (exit code 3).</summary>
+    public const string ConfigInvalid = "config-invalid";
+
+    /// <summary>The directory <c>build</c> was asked to scan doesn't exist (exit code 3).</summary>
     public const string RootNotFound = "root-not-found";
 
-    /// <summary>Any other failure, until it gets a code of its own.</summary>
+    /// <summary>The settings file can't be read or holds an invalid value (exit code 3).</summary>
+    public const string SettingsInvalid = "settings-invalid";
+
+    /// <summary>A <c>dotnet</c> command failed (exit code 4).</summary>
+    public const string DotnetFailed = "dotnet-failed";
+
+    /// <summary><c>--strict</c>: the command completed, but its result left something out or may be wrong (exit code 5).</summary>
+    public const string Strict = "strict";
+
+    /// <summary>Any other failure (exit code 1).</summary>
     public const string CommandFailed = "command-failed";
 
-    public static string Of(Exception exception) => exception switch
+    public static (string Code, int ExitCode) Of(Exception exception) => exception switch
     {
-        UsageException => Usage,
-        ConfigNotFoundException => ConfigNotFound,
-        RootNotFoundException => RootNotFound,
-        _ => CommandFailed,
+        UsageException => (Usage, LocalRunCli.ExitUsage),
+        ConfigNotFoundException => (ConfigNotFound, LocalRunCli.ExitInput),
+        ConfigInvalidException => (ConfigInvalid, LocalRunCli.ExitInput),
+        RootNotFoundException => (RootNotFound, LocalRunCli.ExitInput),
+        SettingsInvalidException => (SettingsInvalid, LocalRunCli.ExitInput),
+        DotnetFailedException => (DotnetFailed, LocalRunCli.ExitDotnetFailed),
+        _ => (CommandFailed, LocalRunCli.ExitFailure),
     };
 }
 
 internal sealed class ConfigNotFoundException(string message) : FileNotFoundException(message);
+
+internal sealed class ConfigInvalidException(string message) : Exception(message);
 
 internal sealed class RootNotFoundException(string message) : DirectoryNotFoundException(message);
 

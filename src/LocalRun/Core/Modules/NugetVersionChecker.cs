@@ -64,7 +64,7 @@ public sealed class NugetVersionChecker : IDisposable
         catch (Exception ex)
         {
             if (failedSources.TryAdd(source.Source, true))
-                logger.LogWarning("Failed to query source '{Source}': {Error}", source.Source, ex.Message);
+                logger.LogWarning(DiagnosticEvents.SourceQueryFailed, "Failed to query source '{Source}': {Error}", source.Source, ex.Message);
             else
                 logger.LogDebug("Failed to query source '{Source}' for {PackageId}: {Error}", source.Source, packageId, ex.Message);
             return null;

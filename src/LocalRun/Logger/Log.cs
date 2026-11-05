@@ -7,13 +7,13 @@ using System;
 /// <summary>
 /// Logging entry point. The minimum level defaults to Information and can be overridden
 /// with the LOCALRUN_LOG_LEVEL environment variable (Trace, Debug, Information, Warning, Error, Critical, None).
-/// In JSON mode (<see cref="OutputMode"/>), every log goes to stderr, and warnings and errors are also collected.
+/// Warnings and errors are also collected (<see cref="Diagnostics"/>). In JSON mode (<see cref="OutputMode"/>), every log goes to stderr.
 /// </summary>
 public static class Log
 {
     private const string MinimumLevelVariable = "LOCALRUN_LOG_LEVEL";
 
-    private static DiagnosticsCollector? collector;
+    private static readonly DiagnosticsCollector collector = new();
 
     // Created on first use, not by the type initializer, so that Main has set the output mode by then
     private static readonly Lazy<ILoggerFactory> Factory = new(CreateFactory);
@@ -23,8 +23,8 @@ public static class Log
     /// <summary>For static classes, which cannot be used as type arguments.</summary>
     public static ILogger For(string categoryName) => Factory.Value.CreateLogger(categoryName);
 
-    /// <summary>The warnings and errors logged so far, in JSON mode; empty otherwise.</summary>
-    public static IReadOnlyList<Diagnostic> Diagnostics => collector?.Snapshot() ?? [];
+    /// <summary>The warnings and errors logged so far.</summary>
+    public static IReadOnlyList<Diagnostic> Diagnostics => collector.Snapshot();
 
     /// <summary>
     /// The console provider writes from a background queue: dispose the factory on exit to flush it.
@@ -47,11 +47,7 @@ public static class Log
                     options.LogToStandardErrorThreshold = LogLevel.Trace;
             })
             .AddConsoleFormatter<LocalRunConsoleFormatter, ConsoleFormatterOptions>();
-        if (OutputMode.Json)
-        {
-            collector = new DiagnosticsCollector();
-            builder.AddProvider(collector);
-        }
+        builder.AddProvider(collector);
     });
 
     private static LogLevel ReadMinimumLevel()

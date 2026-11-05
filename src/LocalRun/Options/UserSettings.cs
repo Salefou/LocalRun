@@ -4,6 +4,9 @@ using System;
 using System.IO;
 using System.Text.Json;
 
+/// <summary>The settings file can't be read or holds an invalid value; the CLI reports it as an input error.</summary>
+public sealed class SettingsInvalidException(string message) : Exception(message);
+
 /// <summary>
 /// What differs from one user (or machine) to the next, and rarely from one session to the next: defaults for options.
 /// Read from <see cref="DefaultPath"/> (<c>lrun settings</c> creates and opens it). A command-line option always wins.
@@ -64,7 +67,7 @@ public sealed record UserSettings(string? LocalNuget = null, string? Root = null
         }
         catch (JsonException ex)
         {
-            throw new InvalidDataException($"Cannot read the settings in '{path}': {ex.Message} Fix it with '{Cli.LocalRunCli.CommandName} settings'.");
+            throw new SettingsInvalidException($"Cannot read the settings in '{path}': {ex.Message} Fix it with '{Cli.LocalRunCli.CommandName} settings'.");
         }
 
         try
@@ -79,7 +82,7 @@ public sealed record UserSettings(string? LocalNuget = null, string? Root = null
         }
         catch (UsageException ex)
         {
-            throw new InvalidDataException($"Invalid settings in '{path}': {ex.Message} Fix it with '{Cli.LocalRunCli.CommandName} settings'.");
+            throw new SettingsInvalidException($"Invalid settings in '{path}': {ex.Message} Fix it with '{Cli.LocalRunCli.CommandName} settings'.");
         }
     }
 

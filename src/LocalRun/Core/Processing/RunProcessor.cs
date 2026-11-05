@@ -33,7 +33,7 @@ public class RunProcessor : IRunProcessor
         }
         if (executables.Count == 0)
         {
-            logger.LogWarning("No executable to run in this config.");
+            logger.LogWarning(DiagnosticEvents.EmptySelection, "No executable to run in this config.");
             return;
         }
 
@@ -90,7 +90,7 @@ public class RunProcessor : IRunProcessor
             var stragglers = running.Where(process => !process.Exited.IsCompleted).ToList();
             foreach (var process in stragglers)
             {
-                logger.LogWarning("{Project} did not stop, killing it", process.Name.Trim());
+                logger.LogWarning(DiagnosticEvents.ProcessKilled, "{Project} did not stop, killing it", process.Name.Trim());
                 process.Kill();
             }
             // Let the killed processes flush their last output lines
@@ -147,8 +147,8 @@ public class RunProcessor : IRunProcessor
         if (exitCode != 0)
         {
             foreach (var line in output)
-                logger.LogWarning("{Line}", line);
-            throw new InvalidOperationException($"Command `{fileName} {args}` failed with exit code {exitCode}");
+                logger.LogWarning(DiagnosticEvents.DotnetOutput, "{Line}", line);
+            throw new DotnetFailedException($"Command `{fileName} {args}` failed with exit code {exitCode}");
         }
     }
 
@@ -202,7 +202,7 @@ public class RunProcessor : IRunProcessor
                 if (e.Data == null) return;
                 if (capture != null) capture(e.Data);
                 else if (style != null && prefix != null) LogColored(e.Data);
-                else logger.LogWarning("{Tag}{Line}", tag, e.Data);
+                else logger.LogWarning(DiagnosticEvents.ServiceOutput, "{Tag}{Line}", tag, e.Data);
             };
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();

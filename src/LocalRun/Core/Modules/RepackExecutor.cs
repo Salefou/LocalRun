@@ -180,10 +180,10 @@ public class RepackExecutor
             {
                 case LogLevel.Error:
                     errors.Enqueue(line);
-                    logger.LogError("{Line}", line);
+                    logger.LogError(DiagnosticEvents.DotnetError, "{Line}", line);
                     break;
                 case LogLevel.Warning:
-                    logger.LogWarning("{Line}", line);
+                    logger.LogWarning(DiagnosticEvents.DotnetWarning, "{Line}", line);
                     break;
             }
         }
@@ -203,11 +203,11 @@ public class RepackExecutor
             if (errors.IsEmpty)
             {
                 foreach (var line in output)
-                    logger.LogWarning("{Line}", line);
+                    logger.LogWarning(DiagnosticEvents.DotnetOutput, "{Line}", line);
             }
             outcome.Status = PackStatus.Failed;
             outcome.Failure = new PackFailure(step, proc.ExitCode, [.. (errors.IsEmpty ? output : errors).TakeLast(FailureLines)]);
-            throw new InvalidOperationException($"dotnet {step} failed on {proj.Name} with exit code {proc.ExitCode} ({proj.PathToCsproj})");
+            throw new DotnetFailedException($"dotnet {step} failed on {proj.Name} with exit code {proc.ExitCode} ({proj.PathToCsproj})");
         }
     }
 }

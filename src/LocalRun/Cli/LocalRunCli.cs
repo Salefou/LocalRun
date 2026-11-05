@@ -19,8 +19,20 @@ using System.Text.Json;
 public static class LocalRunCli
 {
     public const int ExitSuccess = 0;
+    /// <summary>Any failure without a code of its own.</summary>
     public const int ExitFailure = 1;
     public const int ExitUsage = 2;
+    /// <summary>An input is missing or invalid: a config file, the root to scan, the settings.</summary>
+    public const int ExitInput = 3;
+    /// <summary>A <c>dotnet</c> command failed: fix the code or the project, retrying won't help.</summary>
+    public const int ExitDotnetFailed = 4;
+    /// <summary><c>--strict</c>: the command completed, but left something out or may have got a version wrong.</summary>
+    public const int ExitStrict = 5;
+
+    private const string StrictFlag = "--strict";
+
+    /// <summary>Options every command takes, accepted before the command name too.</summary>
+    private static readonly string[] GlobalFlags = [OutputMode.JsonFlag, StrictFlag];
 
     /// <summary>Name of the installed command, used in messages and help.</summary>
     public const string CommandName = "lrun";
@@ -47,16 +59,19 @@ public static class LocalRunCli
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".localnuget");
 
     /// <param name="args">
-    /// The command name followed by its options, e.g. <c>["plot", "--open"]</c>. <c>--json</c> may also come first; it
-    /// only switches to JSON output when <see cref="OutputMode.Json"/> is set (by <c>Main</c>, before anything logs).
+    /// The command name followed by its options, e.g. <c>["plot", "--open"]</c>. The global flags (<c>--json</c>,
+    /// <c>--strict</c>) may also come first. <c>--json</c> only switches to JSON output when <see cref="OutputMode.Json"/>
+    /// is set (by <c>Main</c>, before anything logs).
     /// </param>
     public static async Task<int> RunAsync(string[] args)
     {
         var stopwatch = Stopwatch.StartNew();
-        if (args.Length > 0 && args[0] == OutputMode.JsonFlag)
-            args = [.. args.Skip(1).Take(1), OutputMode.JsonFlag, .. args.Skip(2)];
+        // A caller running several commands in one process gets each one's own
+        int diagnosticsBefore = Log.Diagnostics.Count;
+        IReadOnlyList<Diagnostic> DiagnosticsOfThisRun() => [.. Log.Diagnostics.Skip(diagnosticsBefore)];
 
-        string? cmd = args.Length == 0 ? null : args[0].ToLowerInvariant();
+        int leadingFlags = args.TakeWhile(arg => GlobalFlags.Contains(arg, StringComparer.Ordinal)).Count();
+        string? cmd = leadingFlags < args.Length ? args[leadingFlags].ToLowerInvariant() : null;
         var output = new CommandOutput();
         int exitCode;
         ReportError? error = null;
@@ -72,40 +87,62 @@ public static class LocalRunCli
             }
             else
             {
-                await RunCommandAsync(cmd, new CommandLineArgs(args.Skip(1)), output);
-                exitCode = ExitSuccess;
+                var options = new CommandLineArgs(args.Take(leadingFlags).Concat(args.Skip(leadingFlags + 1)));
+                // Main has read --json already: consumed here so that a repeated or valued one is rejected like any option
+                options.Flag(OutputMode.JsonFlag);
+                bool strict = options.Flag(StrictFlag);
+                await RunCommandAsync(cmd, options, output);
+                (exitCode, error) = strict ? CheckStrict(DiagnosticsOfThisRun()) : (ExitSuccess, null);
+                if (error != null)
+                {
+                    diagnostics = DiagnosticsOfThisRun();
+                    logger.LogError(LogEvents.Failed, "{Error}", error.Message);
+                }
             }
-        }
-        catch (UsageException ex)
-        {
-            exitCode = ExitUsage;
-            error = new(ErrorCodes.Usage, ex.Message);
-            diagnostics = Log.Diagnostics;
-            logger.LogError("{Error} Run '{Command} help' for usage.", ex.Message, CommandName);
         }
         catch (Exception ex)
         {
-            exitCode = ExitFailure;
-            error = new(ErrorCodes.Of(ex), ex.Message);
-            diagnostics = Log.Diagnostics;
-            logger.LogError(LogEvents.Failed, "{Command} failed: {Error}", cmd, ex.Message);
-            logger.LogDebug(ex, "Command '{Command}' failure details", cmd);
+            (string code, exitCode) = ErrorCodes.Of(ex);
+            error = new(code, ex.Message);
+            diagnostics = DiagnosticsOfThisRun();
+            if (ex is UsageException)
+            {
+                logger.LogError("{Error} Run '{Command} help' for usage.", ex.Message, CommandName);
+            }
+            else
+            {
+                logger.LogError(LogEvents.Failed, "{Command} failed: {Error}", cmd, ex.Message);
+                logger.LogDebug(ex, "Command '{Command}' failure details", cmd);
+            }
         }
 
         if (OutputMode.Json)
         {
             var report = new CommandReport(CommandReport.CurrentSchemaVersion, cmd, exitCode == ExitSuccess ? "succeeded" : "failed",
-                exitCode, stopwatch.ElapsedMilliseconds, output.Result, diagnostics ?? Log.Diagnostics, output.Written, error);
+                exitCode, stopwatch.ElapsedMilliseconds, output.Result, diagnostics ?? DiagnosticsOfThisRun(), output.Written, error);
             Console.Out.WriteLine(report.ToJson());
             Console.Out.Flush();
         }
         return exitCode;
     }
 
+    /// <summary>
+    /// <c>--strict</c>: fails a completed command whose diagnostics say its result left something out or may be wrong
+    /// (<see cref="DiagnosticEvents.Strict"/>). The files are written all the same, to look at.
+    /// </summary>
+    internal static (int ExitCode, ReportError? Error) CheckStrict(IReadOnlyList<Diagnostic> diagnostics)
+    {
+        var codes = diagnostics.Where(diagnostic => DiagnosticEvents.Strict.Contains(diagnostic.Code))
+            .GroupBy(diagnostic => diagnostic.Code)
+            .Select(group => group.Count() == 1 ? group.Key : $"{group.Key} ({group.Count()})")
+            .ToList();
+        return codes.Count == 0
+            ? (ExitSuccess, null)
+            : (ExitStrict, new ReportError(ErrorCodes.Strict, $"--strict: the result is incomplete or may be wrong: {string.Join(", ", codes)}."));
+    }
+
     private static async Task RunCommandAsync(string cmd, CommandLineArgs options, CommandOutput output)
     {
-        // Main has read it already: consumed here so that a repeated or valued --json is rejected like any option
-        options.Flag(OutputMode.JsonFlag);
         switch (cmd)
         {
             case "build":
@@ -266,6 +303,9 @@ public static class LocalRunCli
         args.EnsureAllConsumed();
 
         RepackConfig repackConfig = await ReadFromFile<RepackConfig>(repackConfigPath, "--repack-config", "pack");
+        // pack says so when planning; a plan emptied by hand needs saying here
+        if (repackConfig.RepackTrees.All(tree => tree.Projects.Count == 0))
+            logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing to pack: the plan holds no project.");
         await ExecutePlanAsync(repackConfig, repackConfigPath, output);
     }
 
@@ -326,7 +366,7 @@ public static class LocalRunCli
         if (!OpenWithDefaultApp(path) && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             try { Process.Start("notepad.exe", $"\"{path}\""); }
-            catch (Exception ex) { logger.LogWarning("Could not open notepad: {Error}", ex.Message); }
+            catch (Exception ex) { logger.LogWarning(DiagnosticEvents.OpenFailed, "Could not open notepad: {Error}", ex.Message); }
         }
     }
 
@@ -343,8 +383,15 @@ public static class LocalRunCli
                 : "";
             throw new ConfigNotFoundException($"'{fullPath}' not found. Run '{CommandName} {producingCommand}' first.{hint}");
         }
-        return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(fullPath))
-            ?? throw new InvalidDataException($"'{fullPath}' is empty.");
+        try
+        {
+            return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(fullPath))
+                ?? throw new ConfigInvalidException($"'{fullPath}' is empty.");
+        }
+        catch (JsonException ex)
+        {
+            throw new ConfigInvalidException($"'{fullPath}' is not a valid {producingCommand} output: {ex.Message} Run '{CommandName} {producingCommand}' again, or fix it.");
+        }
     }
 
     private static async Task WriteToFile<T>(string fullPath, T content)
@@ -394,14 +441,14 @@ public static class LocalRunCli
             }
             else
             {
-                logger.LogWarning("Unsupported platform: cannot open {Path}", filePath);
+                logger.LogWarning(DiagnosticEvents.OpenFailed, "Unsupported platform: cannot open {Path}", filePath);
                 return false;
             }
             return true;
         }
         catch (Exception ex)
         {
-            logger.LogWarning("Could not open {Path}: {Error}", filePath, ex.Message);
+            logger.LogWarning(DiagnosticEvents.OpenFailed, "Could not open {Path}: {Error}", filePath, ex.Message);
             return false;
         }
     }
@@ -414,11 +461,15 @@ public static class LocalRunCli
         writer.WriteLine($"Usage: {CommandName} <command> [options]");
         writer.WriteLine();
         writer.WriteLine("Relative paths are resolved against the current directory.");
-        writer.WriteLine("Exit codes: 0 success, 1 command failed, 2 invalid command line.");
+        writer.WriteLine("Exit codes: 0 success (also when there was nothing to do), 1 command failed, 2 invalid command line,");
+        writer.WriteLine("3 input missing or invalid (config, root, settings), 4 a dotnet command failed, 5 refused by --strict.");
         writer.WriteLine();
         writer.WriteLine("Every command also takes:");
         writer.WriteLine("  --json                        Write one JSON document on stdout (result, warnings and errors, files");
         writer.WriteLine("                                written), even when it fails; the logs go to stderr, plain");
+        writer.WriteLine("  --strict                      Fail (exit code 5) when the result left something out or may have a wrong");
+        writer.WriteLine("                                version: name collisions, cycles, MSBuild or NuGet source failures...");
+        writer.WriteLine("                                The files are written all the same");
         writer.WriteLine();
         writer.WriteLine("Commands:");
         writer.WriteLine();

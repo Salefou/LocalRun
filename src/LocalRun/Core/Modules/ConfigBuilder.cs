@@ -48,11 +48,11 @@ public class ConfigBuilder
         }
         foreach (var collision in graph.Collisions)
         {
-            logger.LogError("Several projects are named {Name}, all left out of the config: {Paths}",
+            logger.LogError(DiagnosticEvents.NameCollision, "Several projects are named {Name}, all left out of the config: {Paths}",
                 collision.Name, string.Join(", ", collision.Paths));
             if (collision.Dependents.Count != 0)
             {
-                logger.LogWarning("  Kept without their dependency on it (packing or running them may fail): {Dependents}",
+                logger.LogWarning(DiagnosticEvents.KeptWithoutDependency, "  Kept without their dependency on it (packing or running them may fail): {Dependents}",
                     string.Join(", ", collision.Dependents));
             }
         }
@@ -69,9 +69,12 @@ public class ConfigBuilder
             logger.LogInformation("--with-services added: {Projects}",
                 addedForServices.Count == 0 ? "nothing (no other service uses the kept projects)" : Text.Abbreviate(addedForServices));
         }
+        // Said once, with the reason when there is a specific one
+        bool emptyExplained = gitChanges is { Count: 0 };
         if (usersOf is { Count: > 0 } && options.RetainIsDependencyOf != null && !options.Union && !graph.AllProjects.Any())
         {
-            logger.LogWarning("No project is both a user of {UsersOf} and needed by {DepsOf}: the latter doesn't depend on the former. Use --union, or one flag alone.",
+            emptyExplained = true;
+            logger.LogWarning(DiagnosticEvents.EmptySelection, "No project is both a user of {UsersOf} and needed by {DepsOf}: the latter doesn't depend on the former. Use --union, or one flag alone.",
                 string.Join(", ", usersOf), string.Join(", ", options.RetainIsDependencyOf));
         }
 
@@ -79,10 +82,10 @@ public class ConfigBuilder
         var cycles = graph.RemoveCycles();
         foreach (var cycle in cycles)
         {
-            logger.LogWarning("Dependency cycle left out of the config: {Projects}", string.Join(", ", cycle.Projects));
+            logger.LogWarning(DiagnosticEvents.CycleRemoved, "Dependency cycle left out of the config: {Projects}", string.Join(", ", cycle.Projects));
             if (cycle.Dependents.Count != 0)
             {
-                logger.LogWarning("  Kept without their dependency on it (packing or running them may fail): {Dependents}",
+                logger.LogWarning(DiagnosticEvents.KeptWithoutDependency, "  Kept without their dependency on it (packing or running them may fail): {Dependents}",
                     string.Join(", ", cycle.Dependents));
             }
         }
@@ -95,6 +98,13 @@ public class ConfigBuilder
         };
         if (Filters(options) is { } filters)
             logger.LogInformation("Kept {Kept} of {Scanned} ({Filters})", config.Projects.Count, scanned.Count, filters);
+        if (config.Projects.Count == 0 && !emptyExplained)
+        {
+            if (scanned.Count == 0)
+                logger.LogWarning(DiagnosticEvents.EmptySelection, "No project found under {RootPath}: the config holds none", rootPath);
+            else
+                logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing kept: the config holds no project");
+        }
         return (config, new BuildSummary(scanned.Count, LeftOut(graph, scanned, config, cycles), gitChanges));
     }
 
@@ -191,7 +201,7 @@ public class ConfigBuilder
             .ToList();
         // The changed projects of each repository are listed by GitChangeDetector
         if (changed.Count == 0)
-            logger.LogWarning("--git-changes: no pending changes under {RootPath}, nothing to keep", rootPath);
+            logger.LogWarning(DiagnosticEvents.EmptySelection, "--git-changes: no pending changes under {RootPath}, nothing to keep", rootPath);
         return changed;
     }
 

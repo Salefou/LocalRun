@@ -124,7 +124,7 @@ public class DependencyGraph
 
             if (!projectToSolution.TryGetValue(name, out var solutionPath))
             {
-                logger.LogWarning("Did not find any solution referencing project {Project}", csproj);
+                logger.LogWarning(DiagnosticEvents.NoSolution, "Did not find any solution referencing project {Project}", csproj);
             }
 
             scanned.Add((new ProjectNode
@@ -192,7 +192,7 @@ public class DependencyGraph
             if (answers[i] is { } answer)
                 results[needed[i]] = answer;
             else
-                logger.LogWarning("MSBuild could not evaluate {Project}, its csproj is read as is (version and package id may be wrong)", needed[i]);
+                logger.LogWarning(DiagnosticEvents.EvaluationFailed, "MSBuild could not evaluate {Project}, its csproj is read as is (version and package id may be wrong)", needed[i]);
         }
         logger.LogDebug("Evaluated {Count} projects in {ElapsedMs}ms", needed.Count, stopwatch.ElapsedMilliseconds);
         return results;
@@ -214,7 +214,7 @@ public class DependencyGraph
             return null;
         if (id.Contains("$("))
         {
-            logger.LogWarning("Package id {PackageId} of {Project} needs MSBuild to evaluate it, the project name is used instead", id, name);
+            logger.LogWarning(DiagnosticEvents.UnevaluatedPackageId, "Package id {PackageId} of {Project} needs MSBuild to evaluate it, the project name is used instead", id, name);
             return null;
         }
         return id;
@@ -254,7 +254,7 @@ public class DependencyGraph
             return ProjectVersion.Parse(null);
         if (version.Contains("$("))
         {
-            logger.LogWarning("Version {Version} of {Project} needs MSBuild to evaluate it, 1.0.0 used instead", version, csproj);
+            logger.LogWarning(DiagnosticEvents.UnevaluatedVersion, "Version {Version} of {Project} needs MSBuild to evaluate it, 1.0.0 used instead", version, csproj);
             return ProjectVersion.Parse(null);
         }
         return ProjectVersion.Parse(version);
