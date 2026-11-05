@@ -53,13 +53,14 @@ Ideas:
 Open questions: global flag or per command? NDJSON for every command or only the long ones? Do warnings stay human text
 in `--porcelain`?
 
-#### Plan for 1: `--json` (steps 1–4 done, branch `claude/json-output`)
+#### Plan for 1: `--json` (steps 1–5 done: branches `claude/json-output`, `claude/json-go`)
 
-**Status:** the envelope, captured diagnostics, and the `build` / `pack` / `plot` / `settings` / `version` / `help` results
-are in (README "Machine output"). Differences from the plan below: the field is `diagnostics` (it holds errors too), not
-`warnings`; `plot` and `settings` got their result with the envelope, so step 5 is `go` alone; the document is indented;
-error codes so far are `usage`, `config-not-found`, `root-not-found`, `command-failed`. Left: step 5 (`go`), step 6 (`up`),
-real diagnostic codes, and the `LOCALRUN_OUTPUT` variable (not started; decide whether it's still wanted).
+**Status:** the envelope, captured diagnostics, and the results of every command but `up` are in (README "Machine
+output"). Differences from the plan below: the field is `diagnostics` (it holds errors too), not `warnings`; `plot` and
+`settings` got their result with the envelope; the document is indented; error codes so far are `usage`,
+`config-not-found`, `root-not-found`, `command-failed`. `pack` and `go` share one result: each project's `status`
+(`planned`, `packed`, `failed`, `skipped`), `durationMs` and `failure` (step, exit code, error lines, at most 20). Left:
+step 6 (`up`), real diagnostic codes, and the `LOCALRUN_OUTPUT` variable (not started; decide whether it's still wanted).
 
 **Decisions proposed** (the open questions above, answered; change any of them before work starts):
 - `--json` only. `--porcelain` waits until a shell user asks. A global flag, accepted by every command, before or after it.

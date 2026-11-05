@@ -575,6 +575,7 @@ they are ignored.)
         {
           "PathToCsproj": "C:\\work\\repos\\pricing\\src\\Shared.Pricing\\Shared.Pricing.csproj",
           "Name": "Shared.Pricing",
+          "PackageId": "Acme.Shared.Pricing",       // only when it isn't the name; reported by --json
           "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // gives the dotnet commands $(SolutionDir)
           "Depth": 0,
           "FromVersion": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },
@@ -711,12 +712,12 @@ Results:
 | Command | `result` |
 |---|---|
 | `build` | `config`, `root`, `localNuget`, `filters` (as typed, or `null`), `scanned` (projects found, without tests and name collisions), `projects` (`total`, `libraries`, `executables`), `services`, `leftOut` (see below), `gitChanges` (the changed projects, with `--git-changes`), `plot` (with `--plot`). |
-| `pack` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages`: `project`, `packageId`, `depth`, `from`, `to`, in packing order. |
+| `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode` and `output`: the command's error lines, or its last lines when it printed none (at most 20). |
 | `plot` | `plot`: the page's path. |
 | `settings` | `path`, `created`. |
 | `version` | `version`. |
 | `help` | `help`: the help text. |
-| `go`, `up` | `null` for now. |
+| `up` | `null` for now. |
 
 `leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" |
 "name-collision" | "cycle", "projects": [...], "paths": [...], "dependents": [...] }`. `paths` (relative to the root) is

@@ -118,7 +118,7 @@ public static class LocalRunCli
                 await PackAsync(options, output);
                 break;
             case "go":
-                await GoAsync(options);
+                await GoAsync(options, output);
                 break;
             case "up":
                 await RunExecutablesAsync(options);
@@ -248,33 +248,41 @@ public static class LocalRunCli
         output.Written.Add(repackConfigPath);
         logger.LogInformation("Plan: {Path}", repackConfigPath);
 
-        var packageIds = config.Projects.ToDictionary(proj => proj.Name, proj => proj.PackageIdOrName, StringComparer.OrdinalIgnoreCase);
-        var packages = RepackExecutor.Depths(repackConfig).SelectMany(depth => depth)
-            .Select(proj => new PlannedPackage(proj.Name, packageIds.GetValueOrDefault(proj.Name, proj.Name), proj.Depth,
-                proj.FromVersion.AsVersionString(), proj.ToVersion.AsVersionString()))
-            .ToList();
-        var executor = new RepackExecutor();
         if (dryRun)
         {
-            executor.DescribePlan(repackConfig);
+            new RepackExecutor().DescribePlan(repackConfig);
+            output.Result = PackResult.Of(repackConfigPath, packed: false, repackConfig, outcomes: null);
             logger.LogInformation("Dry run, nothing packed. Next: {Command} go (after editing the plan, if needed)", CommandName);
         }
         else
         {
-            // Set first: if packing fails, the report still says what was planned
-            output.Result = new PackResult(repackConfigPath, Packed: false, packages);
-            await executor.RepackAndRebuildAsync(repackConfig);
+            await ExecutePlanAsync(repackConfig, repackConfigPath, output);
         }
-        output.Result = new PackResult(repackConfigPath, Packed: !dryRun, packages);
     }
 
-    private static async Task GoAsync(CommandLineArgs args)
+    private static async Task GoAsync(CommandLineArgs args, CommandOutput output)
     {
-        string repackConfigPath = args.Value("--repack-config") ?? DefaultRepackConfigPath;
+        string repackConfigPath = Path.GetFullPath(args.Value("--repack-config") ?? DefaultRepackConfigPath);
         args.EnsureAllConsumed();
 
         RepackConfig repackConfig = await ReadFromFile<RepackConfig>(repackConfigPath, "--repack-config", "pack");
-        await new RepackExecutor().RepackAndRebuildAsync(repackConfig);
+        await ExecutePlanAsync(repackConfig, repackConfigPath, output);
+    }
+
+    /// <summary>Packs a plan; the result says what became of each project, after a failure too.</summary>
+    private static async Task ExecutePlanAsync(RepackConfig repackConfig, string repackConfigPath, CommandOutput output)
+    {
+        var executor = new RepackExecutor();
+        bool packed = false;
+        try
+        {
+            await executor.RepackAndRebuildAsync(repackConfig);
+            packed = true;
+        }
+        finally
+        {
+            output.Result = PackResult.Of(repackConfigPath, packed, repackConfig, executor.Outcomes);
+        }
     }
 
     private static async Task RunExecutablesAsync(CommandLineArgs args)
