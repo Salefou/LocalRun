@@ -243,6 +243,8 @@ General form: `lrun <command> [options]`.
 - **Relative paths are resolved against the current directory** — not against the location of the
   tool or of the config file.
 - Values containing spaces must be quoted by your shell: `--root "C:\My Repos"`.
+- Every command also takes `--json`, before or after the command name: see
+  [Machine output](#machine-output---json).
 
 ### `build`
 
@@ -666,11 +668,65 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 |---|---|
 | Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `up` inherit the console.) |
 | Exit codes | `0` success · `1` the command failed (missing file, `dotnet` failure, dependency cycle, …) · `2` invalid command line. |
-| Output | Human-readable log lines on **stdout**. Redirected, they are plain: warnings and errors prefixed `[WRN] ` / `[ERR] `, steps marked `>` (starting), `+` (process started), `ok`, `FAILED`, `-` (stopped), no colours, no progress lines. Of `go`'s child `dotnet` processes, only warning and error lines are forwarded; `up` forwards its services' output. |
+| Output | With `--json`, one JSON document on **stdout** and the logs on stderr (see below). Otherwise, human-readable log lines on **stdout**. Redirected, they are plain: warnings and errors prefixed `[WRN] ` / `[ERR] `, steps marked `>` (starting), `+` (process started), `ok`, `FAILED`, `-` (stopped), no colours, no progress lines. Of `go`'s child `dotnet` processes, only warning and error lines are forwarded; `up` forwards its services' output. |
 | Results | The JSON / HTML files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
 | Side effects | `--open` launches a viewer; `go` writes packages to the feed; `up` starts processes. |
 
-Do not parse the log lines — they are for humans and may change. Read the JSON files instead.
+Do not parse the log lines — they are for humans and may change. Use `--json`, or read the JSON files.
+
+### Machine output (`--json`)
+
+With `--json`, a command writes **one JSON document on stdout, and nothing else**, whether it succeeds or fails
+(usage errors included), once it is done. The logs go to **stderr**, in their plain form (no colours, no glyphs,
+no progress lines) even on a terminal, and `build --plot` doesn't open the page. Output is UTF-8 without a BOM.
+
+```json
+{
+  "schemaVersion": 1,
+  "command": "build",
+  "status": "succeeded",
+  "exitCode": 0,
+  "durationMs": 165,
+  "result": { "config": "C:\\work\\.lrun\\localrun.config.json", "...": "..." },
+  "diagnostics": [
+    { "code": "unspecified", "level": "warning", "message": "Did not find any solution referencing project ..." }
+  ],
+  "written": [ "C:\\work\\.lrun\\localrun.config.json" ],
+  "error": null
+}
+```
+
+| Field | |
+|---|---|
+| `schemaVersion` | `1`. Renaming or removing a field bumps it; new fields can appear without a bump. |
+| `command` | The command as given, lowercased (`null` without one). |
+| `status`, `exitCode` | `succeeded` / `failed`, and the process exit code. |
+| `result` | The command's own result (below), or `null`. |
+| `diagnostics` | Every warning and error logged, in order: `code`, `level` (`warning` / `error`), `message`. The codes are all `unspecified` for now; specific ones will come where a caller would act on them. |
+| `written` | Full paths of the files written. |
+| `error` | `null`, or `code` and `message`. Codes: `usage` (exit `2`), `config-not-found` (run the command that writes it), `root-not-found`, `command-failed` (anything else, for now). Branch on the code, not on the message. |
+
+Results:
+
+| Command | `result` |
+|---|---|
+| `build` | `config`, `root`, `localNuget`, `filters` (as typed, or `null`), `scanned` (projects found, without tests and name collisions), `projects` (`total`, `libraries`, `executables`), `services`, `leftOut` (see below), `gitChanges` (the changed projects, with `--git-changes`), `plot` (with `--plot`). |
+| `pack` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages`: `project`, `packageId`, `depth`, `from`, `to`, in packing order. |
+| `plot` | `plot`: the page's path. |
+| `settings` | `path`, `created`. |
+| `version` | `version`. |
+| `help` | `help`: the help text. |
+| `go`, `up` | `null` for now. |
+
+`leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" |
+"name-collision" | "cycle", "projects": [...], "paths": [...], "dependents": [...] }`. `paths` (relative to the root) is
+set for a name collision; `dependents`, the projects kept without their dependency on these, for a collision or a cycle.
+
+```powershell
+$build = lrun build --deps-of OrderGateway --json | ConvertFrom-Json
+if ($build.status -ne 'succeeded') { throw "$($build.error.code): $($build.error.message)" }
+$build.result.services
+```
 
 ### From C#
 
