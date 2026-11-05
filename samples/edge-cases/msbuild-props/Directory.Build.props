@@ -1,0 +1,10 @@
+<Project>
+  <!-- Sets the version and package id prefix LrEdge.Props builds its own from: the csproj XML alone can't tell them,
+       so `lrun build` asks MSBuild (and warns when told not to, with its csproj flag). Imports the samples' shared
+       props too. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <PropertyGroup>
+    <LrEdgeVersion>2.1.0</LrEdgeVersion>
+    <LrEdgeIdPrefix>Acme.LrEdge</LrEdgeIdPrefix>
+  </PropertyGroup>
+</Project>

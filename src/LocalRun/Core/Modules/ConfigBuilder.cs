@@ -152,8 +152,9 @@ public class ConfigBuilder
         logger.LogInformation(LogEvents.Progress, "Querying your NuGet sources and {LocalNugetPath} for the latest versions ('--csproj' skips this)...", config.LocalNugetPath);
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         using var nugetVersionChecker = new NugetVersionChecker();
-        // go restores with the local feed as an additional source, whatever the NuGet.Config files say
-        string? localFeed = Directory.Exists(config.LocalNugetPath) ? config.LocalNugetPath : null;
+        // go restores with the local feed as an additional source, whatever the NuGet.Config files say; passed even when
+        // missing (nothing packed yet), so a NuGet.Config listing it doesn't warn about it
+        string? localFeed = string.IsNullOrEmpty(config.LocalNugetPath) ? null : config.LocalNugetPath;
         // Several projects at once (each querying its sources at once); logged afterwards, in config order
         var latestPerProject = new NuGetVersion?[config.Projects.Count];
         await Parallel.ForEachAsync(Enumerable.Range(0, config.Projects.Count), new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentLookups },

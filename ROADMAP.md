@@ -196,7 +196,8 @@ Ideas:
 What happens: `build` leaves a dependency cycle out of the config (`RemoveCycles`) but keeps the projects depending on
 it, without that edge, with a warning ("packing or running them may fail"). When such a project reaches the cycle
 through a `ProjectReference`, its `dotnet restore` still walks into the cycle and fails with `MSB4006 circular
-dependency`, so `pack` / `go` fail (exit 1). Same in 0.3.3. Reproduced by `samples/edge-cases/cycle` (`LrEdge.Top`), and
+dependency`, so `pack` / `go` fail (exit 1; exit 4 since 0.5.0). `build --strict` now stops there first (exit 5,
+`kept-without-dependency`). Same in 0.3.3. Reproduced by `samples/edge-cases/cycle` (`LrEdge.Top`), and
 so by `lrun build` then `lrun pack` from the repository root. Package users of the cycle restore fine (the published
 package), and so do name-collision dependents (their project reference names one path).
 

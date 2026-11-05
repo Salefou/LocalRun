@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <!-- On purpose: set after the version lrun plans, so `dotnet pack` would use this one instead -->
+    <PackageVersion>3.0.0</PackageVersion>
+  </PropertyGroup>
+</Project>

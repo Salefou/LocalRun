@@ -1,6 +1,7 @@
 ﻿namespace LocalRun.Tests.Modules;
 
 using LocalRun.Core.Modules;
+using LocalRun.Logger;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
@@ -44,6 +45,37 @@ public sealed class NugetVersionCheckerTests : IDisposable
         var latest = await new NugetVersionChecker().GetLatestVersionAcrossSourcesAsync("Lib", root, feed);
 
         Assert.Equal("1.5.0-alpha.10", latest?.ToNormalizedString());
+    }
+
+    private static List<Diagnostic> DiagnosticsAbout(string path) =>
+        [.. Log.Diagnostics.Where(diagnostic => diagnostic.Message.Contains(path, StringComparison.OrdinalIgnoreCase))];
+
+    [Fact]
+    public async Task AMissingLocalSource_Warns_Once()
+    {
+        string missing = Path.Combine(root, "no-such-feed");
+        File.WriteAllText(Path.Combine(root, "NuGet.Config"),
+            $"""<configuration><packageSources><clear /><add key="typo" value="{missing}" /></packageSources></configuration>""");
+        using var checker = new NugetVersionChecker();
+
+        Assert.Null(await checker.GetLatestVersionAcrossSourcesAsync("Lib", root));
+        Assert.Null(await checker.GetLatestVersionAcrossSourcesAsync("Other", root));
+
+        var diagnostic = Assert.Single(DiagnosticsAbout(missing));
+        Assert.Equal("source-query-failed", diagnostic.Code);
+        Assert.EndsWith("the folder doesn't exist.", diagnostic.Message);
+    }
+
+    [Fact]
+    public async Task AMissingLocalFeed_IsExpected_EvenListedInNuGetConfig()
+    {
+        string notPackedYet = Path.Combine(root, "localnuget");
+        File.WriteAllText(Path.Combine(root, "NuGet.Config"),
+            $"""<configuration><packageSources><clear /><add key="mine" value="{notPackedYet}" /></packageSources></configuration>""");
+
+        Assert.Null(await new NugetVersionChecker().GetLatestVersionAcrossSourcesAsync("Lib", root, notPackedYet));
+
+        Assert.Empty(DiagnosticsAbout(notPackedYet));
     }
 
     [Fact]

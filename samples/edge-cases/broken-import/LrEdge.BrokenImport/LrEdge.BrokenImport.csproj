@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- On purpose: this file doesn't exist, so MSBuild can't evaluate the project (nor build it) -->
+  <Import Project="missing.props" />
+  <PropertyGroup>
+    <Version>1.2.0</Version>
+  </PropertyGroup>
+</Project>

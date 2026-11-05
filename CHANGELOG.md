@@ -21,6 +21,9 @@ bumps the minor version, anything else the patch.
   packages folder). The command still writes its files. For pipelines, where these warnings would otherwise pass unseen.
 - Every warning and error has a code (`name-collision`, `empty-selection`, `no-git-base`, …), reported in the `--json`
   diagnostics. See README "Diagnostic codes".
+- `build` warns (`source-query-failed`) about a NuGet source pointing to a local folder that doesn't exist, which NuGet
+  reads as an empty feed: a mistyped path or an unmounted drive no longer goes unnoticed. The config's own local feed
+  is exempt until the first pack creates it.
 
 - `--json`, on every command: one JSON document on stdout (status, exit code, the command's result, the warnings and
   errors logged, the files written, and an error code on failure), the logs on stderr. `build`, `pack`, `go`, `plot`,

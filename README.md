@@ -740,7 +740,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `kept-without-dependency` | Projects kept without their dependency on a collision or a cycle (packing them may fail). | fails |
 | `evaluation-failed` | MSBuild could not evaluate a project: its version and package id may be wrong. | fails |
 | `unevaluated-package-id`, `unevaluated-version` | A package id or version set through MSBuild, read without it (`--csproj`, or it failed). | fails |
-| `source-query-failed` | A NuGet source could not be queried: some latest versions may be missing. | fails |
+| `source-query-failed` | A NuGet source could not be queried (unreachable, or a local folder that doesn't exist): some latest versions may be missing. | fails |
 | `package-version-override` | A csproj sets `PackageVersion`, which overrides the planned version. | fails |
 | `packages-folder-unknown` | A global packages folder is unknown: an iteration number may be reused. | fails |
 | `empty-selection` | Nothing to do: no project kept, nothing to pack, no executable to run. The command succeeds. | — |
