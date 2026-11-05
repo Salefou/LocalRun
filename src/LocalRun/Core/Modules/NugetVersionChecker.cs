@@ -27,11 +27,16 @@ public sealed class NugetVersionChecker : IDisposable
     private readonly ConcurrentDictionary<string, bool> failedSources = new(StringComparer.OrdinalIgnoreCase);
 
     /// <param name="root">Folder whose NuGet.Config files apply (as for a restore from there); null for the user/machine ones only.</param>
-    /// <param name="additionalSource">Queried too unless already a source, like <c>RestoreAdditionalProjectSources</c> (the local feed).</param>
+    /// <param name="additionalSource">
+    /// Queried too unless already a source, like <c>RestoreAdditionalProjectSources</c> (the local feed). Before the first
+    /// pack creates it, it is left out, wherever it is listed: a missing local feed is expected, not a failure.
+    /// </param>
     public async Task<NuGetVersion?> GetLatestVersionAcrossSourcesAsync(string packageId, string? root = null, string? additionalSource = null)
     {
         var sources = new List<PackageSource>(sourcesPerFolder.GetOrAdd(root ?? string.Empty, _ => EnabledSources(root)));
-        if (additionalSource != null && !sources.Any(s => IsSameFolder(s.Source, additionalSource)))
+        if (additionalSource != null && !Directory.Exists(additionalSource))
+            sources.RemoveAll(s => IsSameFolder(s.Source, additionalSource));
+        else if (additionalSource != null && !sources.Any(s => IsSameFolder(s.Source, additionalSource)))
             sources.Add(new PackageSource(additionalSource));
 
         var latestPerSource = await Task.WhenAll(sources.Select(source => GetLatestVersionAsync(source, packageId)));
@@ -73,6 +78,9 @@ public sealed class NugetVersionChecker : IDisposable
 
     private static async Task<PackageMetadataResource?> OpenAsync(PackageSource source)
     {
+        // NuGet reads a missing folder as an empty feed: a mistyped path or an unmounted drive would go unnoticed
+        if (source.IsLocal && !Directory.Exists(source.Source))
+            throw new DirectoryNotFoundException("the folder doesn't exist.");
         // The PackageSource, not its URL: it carries the credentials of NuGet.Config (packageSourceCredentials)
         var metadata = await Repository.Factory.GetCoreV3(source).GetResourceAsync<PackageMetadataResource>();
         if (metadata == null)

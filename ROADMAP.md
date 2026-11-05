@@ -206,14 +206,6 @@ through project references (needs the reference kind at scan time: `ProjectNode.
 config). The user has **another flow in mind**: ask what it is before designing anything; the reverted commit holds
 the reference-kind plumbing and tests, reusable whatever the flow.
 
-### 7. A missing local NuGet source goes unnoticed **(claude, 2026-11-05)**
-
-Found while adding `samples/edge-cases/unreachable-source`: a NuGet.config source pointing to a local folder that
-doesn't exist (a typo, an unmounted drive) is read by NuGet as an empty feed, so `build` records no latest version from
-it and says nothing; `--strict` can't catch it. An unreachable http source does warn (`source-query-failed`). Candidate:
-`NugetVersionChecker` warns `source-query-failed` for a local source whose folder is missing (except the config's own
-local feed before the first pack, which `go` creates). Not started: propose first.
-
 ---
 
 ## Suggested (agents on a big platform)
