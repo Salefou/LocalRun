@@ -1,5 +1,6 @@
 namespace LocalRun.Cli;
 
+using LocalRun.Core.Model;
 using LocalRun.Core.Modules;
 using LocalRun.Logger;
 using LocalRun.Options;
@@ -103,10 +104,24 @@ internal sealed record ProjectCounts(int Total, int Libraries, int Executables);
 
 internal sealed record PlotResult(string Plot);
 
-/// <param name="Packed">Whether the plan was packed (false with <c>--dry-run</c>).</param>
-/// <param name="Packages">The plan, in packing order: depth, then name.</param>
-internal sealed record PackResult(string Plan, bool Packed, IReadOnlyList<PlannedPackage> Packages);
+/// <summary>The result of <c>pack</c> and of <c>go</c>.</summary>
+/// <param name="Packed">Whether the whole plan was packed (false with <c>--dry-run</c>, or after a failure).</param>
+/// <param name="Packages">The plan, in packing order (depth, then name), with what became of each project.</param>
+internal sealed record PackResult(string Plan, bool Packed, IReadOnlyList<PackageReport> Packages)
+{
+    public static PackResult Of(string plan, bool packed, RepackConfig repackConfig, IReadOnlyDictionary<string, PackOutcome>? outcomes) =>
+        new(plan, packed, [.. RepackExecutor.Depths(repackConfig).SelectMany(depth => depth).Select(proj =>
+        {
+            var outcome = outcomes?.GetValueOrDefault(proj.Name) ?? new PackOutcome();
+            return new PackageReport(proj.Name, proj.PackageIdOrName, proj.Depth, proj.FromVersion.AsVersionString(),
+                proj.ToVersion.AsVersionString(), outcome.Status, outcome.DurationMs, outcome.Failure);
+        })]);
+}
 
-internal sealed record PlannedPackage(string Project, string PackageId, int Depth, string From, string To);
+/// <param name="Status"><see cref="PackStatus"/>: <c>planned</c>, <c>packed</c>, <c>failed</c> or <c>skipped</c>.</param>
+/// <param name="DurationMs">Time in its <c>dotnet</c> commands, or null when none ran.</param>
+/// <param name="Failure">For a failed project: the failing step, its exit code and its error lines.</param>
+internal sealed record PackageReport(string Project, string PackageId, int Depth, string From, string To,
+    string Status, long? DurationMs, PackFailure? Failure);
 
 internal sealed record SettingsResult(string Path, bool Created);

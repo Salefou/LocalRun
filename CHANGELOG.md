@@ -10,8 +10,10 @@ bumps the minor version, anything else the patch.
 ### Added
 
 - `--json`, on every command: one JSON document on stdout (status, exit code, the command's result, the warnings and
-  errors logged, the files written, and an error code on failure), the logs on stderr. `build`, `pack`, `plot`,
-  `settings`, `version` and `help` report a result; `go` and `up` only the envelope for now. See README "Machine output".
+  errors logged, the files written, and an error code on failure), the logs on stderr. `build`, `pack`, `go`, `plot`,
+  `settings`, `version` and `help` report a result; `up` only the envelope for now. `pack` and `go` say what became of
+  each project (packed, failed with the step and its error lines, or skipped). See README "Machine output".
+- `repack.config.json` records each project's `PackageId` when it differs from the name. Plans written before still load.
 
 ## [0.4.0] - 2026-11-05
 

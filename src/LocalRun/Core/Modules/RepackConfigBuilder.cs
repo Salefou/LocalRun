@@ -78,6 +78,7 @@ internal class RepackConfigBuilder
                 projectRepacks.Add(new()
                 {
                     Name = proj.Name,
+                    PackageId = proj.PackageId,
                     PathToCsproj = pathToCsproj,
                     SolutionPath = proj.SolutionPath,
                     FromVersion = version,

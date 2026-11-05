@@ -186,7 +186,56 @@ public sealed class JsonOutputTests : IDisposable
         var lib = plan.GetProperty("packages")[0];
         Assert.Equal("1.0.0", lib.GetProperty("from").GetString());
         Assert.Equal("1.0.1-local.1", lib.GetProperty("to").GetString());
+        Assert.Equal("planned", lib.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, lib.GetProperty("durationMs").ValueKind);
         Assert.Equal(Path.Combine(workDir, ".lrun", "repack.config.json"), plan.GetProperty("plan").GetString());
+    }
+
+    [Fact]
+    public async Task Go_SaysWhatBecameOfEachProject_AfterAFailureToo()
+    {
+        string root = Path.Combine(workDir, "repos");
+        WriteCsproj(root, "Lib", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net8.0</TargetFramework><PackageId>Acme.Lib</PackageId></PropertyGroup>
+            </Project>
+            """);
+        // No target framework: its restore fails
+        WriteCsproj(root, "Mid", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><ProjectReference Include="..\Lib\Lib.csproj" /></ItemGroup>
+            </Project>
+            """);
+        WriteCsproj(root, "Top", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+              <ItemGroup><ProjectReference Include="..\Mid\Mid.csproj" /></ItemGroup>
+            </Project>
+            """);
+        string feed = Path.Combine(workDir, "feed");
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", root, "--local-nuget", feed, "--include-external", "--csproj", "--json")).ExitCode);
+        Assert.Equal(LocalRunCli.ExitSuccess, (await LrunAsync("pack", "--dry-run", "--json")).ExitCode);
+
+        var go = await LrunAsync("go", "--json");
+
+        Assert.Equal(LocalRunCli.ExitFailure, go.ExitCode);
+        AssertPlain(go);
+        Assert.Equal("command-failed", go.Json.GetProperty("error").GetProperty("code").GetString());
+        var result = go.Json.GetProperty("result");
+        Assert.False(result.GetProperty("packed").GetBoolean());
+        var packages = result.GetProperty("packages").EnumerateArray().ToDictionary(package => package.GetProperty("project").GetString()!);
+        Assert.Equal("packed", packages["Lib"].GetProperty("status").GetString());
+        Assert.Equal("Acme.Lib", packages["Lib"].GetProperty("packageId").GetString());
+        Assert.True(packages["Lib"].GetProperty("durationMs").GetInt64() > 0);
+        Assert.True(File.Exists(Path.Combine(feed, "Acme.Lib.1.0.0-local.1.nupkg")));
+        Assert.Equal("failed", packages["Mid"].GetProperty("status").GetString());
+        var failure = packages["Mid"].GetProperty("failure");
+        Assert.Equal("restore", failure.GetProperty("step").GetString());
+        Assert.NotEqual(0, failure.GetProperty("exitCode").GetInt32());
+        Assert.NotEqual(0, failure.GetProperty("output").GetArrayLength());
+        Assert.Equal("skipped", packages["Top"].GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, packages["Top"].GetProperty("durationMs").ValueKind);
     }
 
     private static void WriteCsproj(string root, string name, string content)
