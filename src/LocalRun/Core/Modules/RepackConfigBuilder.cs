@@ -35,7 +35,7 @@ internal class RepackConfigBuilder
         var ahead = config.Projects.Where(proj => BaseVersion(proj).CsprojAhead).Select(proj => proj.Name).ToList();
         if (ahead.Count != 0)
         {
-            logger.LogWarning("The csproj version is higher than the latest on your sources for {Count} project(s): pack starts from the csproj version and ignores the bump flag for them, only the suffix applies. {Projects}",
+            logger.LogWarning(DiagnosticEvents.CsprojAheadOfLatest, "The csproj version is higher than the latest on your sources for {Count} project(s): pack starts from the csproj version and ignores the bump flag for them, only the suffix applies. {Projects}",
                 ahead.Count, Text.Abbreviate(ahead, shown: 5));
         }
 
@@ -71,7 +71,7 @@ internal class RepackConfigBuilder
                 string pathToCsproj = Path.Combine(config.RootPath, proj.Path);
                 if (OverridesPackageVersion(pathToCsproj))
                 {
-                    logger.LogWarning("{Project} sets <PackageVersion> in its csproj, which overrides the planned version: go will pack it under the csproj's",
+                    logger.LogWarning(DiagnosticEvents.PackageVersionOverride, "{Project} sets <PackageVersion> in its csproj, which overrides the planned version: go will pack it under the csproj's",
                         proj.Name);
                 }
                 int depth = nameToDepth[proj.Name];
@@ -107,7 +107,7 @@ internal class RepackConfigBuilder
     {
         if (plan.Count == 0)
         {
-            logger.LogWarning("Nothing to pack: the config holds no project.");
+            logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing to pack: the config holds no project.");
             return;
         }
         var (common, commonCount, others) = VersionChanges.Summarize(plan, Terminal.Arrow);
@@ -174,7 +174,7 @@ internal class RepackConfigBuilder
             }
             catch (Exception ex)
             {
-                logger.LogWarning("Could not find the NuGet global packages folder for {Folder}, earlier iterations cached there are not counted: {Error}", projectFolder, ex.Message);
+                logger.LogWarning(DiagnosticEvents.PackagesFolderUnknown, "Could not find the NuGet global packages folder for {Folder}, earlier iterations cached there are not counted: {Error}", projectFolder, ex.Message);
             }
         }
         return [.. folders.Distinct(StringComparer.OrdinalIgnoreCase)];

@@ -14,12 +14,12 @@ public class DiagnosticsCollectorTests
         logger.LogInformation("Config: a.json");
         logger.LogDebug("details");
         logger.LogWarning("  Kept without their dependency on it: {Dependents}", "App");
-        logger.LogError("Several projects are named {Name}", "Dup");
+        logger.LogError(DiagnosticEvents.NameCollision, "Several projects are named {Name}", "Dup");
 
         Assert.Equal(
             [
                 new Diagnostic("unspecified", "warning", "Kept without their dependency on it: App"),
-                new Diagnostic("unspecified", "error", "Several projects are named Dup"),
+                new Diagnostic("name-collision", "error", "Several projects are named Dup"),
             ],
             collector.Snapshot());
     }

@@ -7,7 +7,20 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** finer exit codes. Failures that exited `1` now exit `3` when an input is missing or invalid (a config
+  file not found, empty or not JSON; the root to scan not found; invalid settings), and `4` when a `dotnet` command
+  failed (`go`, `pack`, and the builds of `up`). Other failures still exit `1`; `0` and `2` are unchanged. An empty
+  selection (no project kept, nothing to pack, no executable to run) still exits `0`.
+
 ### Added
+
+- `--strict`, on every command: exit code `5` when the result left something out or may have a wrong version (name
+  collisions, cycles, MSBuild evaluation or NuGet source failures, a csproj overriding `PackageVersion`, an unknown
+  packages folder). The command still writes its files. For pipelines, where these warnings would otherwise pass unseen.
+- Every warning and error has a code (`name-collision`, `empty-selection`, `no-git-base`, …), reported in the `--json`
+  diagnostics. See README "Diagnostic codes".
 
 - `--json`, on every command: one JSON document on stdout (status, exit code, the command's result, the warnings and
   errors logged, the files written, and an error code on failure), the logs on stderr. `build`, `pack`, `go`, `plot`,

@@ -209,7 +209,7 @@ Variations worth trying:
   `lrun pack`. Depth 1 prints the `warning CS0168` line once (`[WRN] …`, yellow on a terminal) and the pack succeeds.
   Add `TmpErr.cs` holding `namespace X; public class E { public void M() { int x = "s"; } }` and run `lrun go`: the
   warning, the `error CS0029` line, then `FAILED go failed: dotnet pack failed on LrSample.Primitives with exit code 1
-  (…)`, exit code 1. Delete both files afterwards.
+  (…)`, exit code 4 (a `dotnet` command failed). Delete both files afterwards.
 - After a reset, `lrun pack --patch --suffix dev --clean` runs `dotnet clean` first (nothing more is printed).
 - **A service failing at startup**: occupy RiskService's port from another PowerShell window first:
 
@@ -276,8 +276,8 @@ lrun build --root edge-cases/non-planar --config edge.json --plot
 
 | Case | What happens |
 |---|---|
-| `cycle/`: A → B → C → A, with A → Base and Top → A | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `LrEdge.Top` kept without its dependency on it. The config holds Base and Top |
-| `name-collision/`: two `LrEdge.Shared` | Succeeds (exit 0) with `[ERR] Several projects are named LrEdge.Shared, all left out of the config: repo-one\…, repo-two\…` and a warning that `LrEdge.Consumer` is kept without its dependency on it. The config holds Consumer only. Adding `--users-of LrEdge.Shared` fails with `Ambiguous project(s)`, exit code 2 |
+| `cycle/`: A → B → C → A, with A → Base and Top → A | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `LrEdge.Top` kept without its dependency on it. The config holds Base and Top. With `--strict`: the same, then `FAILED --strict: the result is incomplete or may be wrong: cycle-removed, kept-without-dependency.`, exit code 5 |
+| `name-collision/`: two `LrEdge.Shared` | Succeeds (exit 0) with `[ERR] Several projects are named LrEdge.Shared, all left out of the config: repo-one\…, repo-two\…` and a warning that `LrEdge.Consumer` is kept without its dependency on it. The config holds Consumer only. Adding `--users-of LrEdge.Shared` fails with `Ambiguous project(s)`, exit code 2. With `--strict`: the config is written, then `FAILED --strict: … name-collision, kept-without-dependency.`, exit code 5 |
 | `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Succeeds with no warning: `.slnx` solutions (the .NET 10 SDK default) are read like `.sln` ones. A `Did not find any solution referencing …LrEdge.Modern` warning means `.slnx` support regressed |
 | `non-planar/`: the two smallest graphs that can't be drawn without crossings, as dependency graphs. `k33/`: K₃,₃, every `LrEdge.Desk.*` (X, Y, Z, in `Desks.slnx`) uses every `LrEdge.Feed.*` (A, B, C, in `Feeds.slnx`). `k5/`: K₅, each `LrEdge.K<i>` uses every `K<j>` with j < i, odd ones in `Odd.slnx` and even ones in `Even.slnx` (project references within a solution, package references across) | Succeeds with no warning, 11 projects. The page reads `11 projects · 4 solutions · ⚠ 1 group cycle`: no project cycle, but Odd and Even use each other (K1 → K2 → K3), so their frames and the edges between them are red. Hovering K3 lights K4, K5 in orange and K1, K2 in blue. *Collapse all* leaves Feeds → Desks (`×9`) and Odd ⇄ Even (3 edges each way). With the default bands, Odd and Even are adjacent bands and the K edges zigzag between them, all pointing right; collapsed, Odd → Even points right and Even → Odd loops back on the left. With *Layout: free*, the layout has to route around the cycle and some K edges loop back around the frames; `lrun build --root edge-cases --plot` then shows the K₅ part on its own, the other edge cases packed beside it, never inside its loops |
 

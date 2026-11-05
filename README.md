@@ -243,8 +243,8 @@ General form: `lrun <command> [options]`.
 - **Relative paths are resolved against the current directory** — not against the location of the
   tool or of the config file.
 - Values containing spaces must be quoted by your shell: `--root "C:\My Repos"`.
-- Every command also takes `--json`, before or after the command name: see
-  [Machine output](#machine-output---json).
+- Every command also takes `--json` and `--strict`, before or after the command name: see
+  [Machine output](#machine-output---json) and [Diagnostic codes](#diagnostic-codes).
 
 ### `build`
 
@@ -668,7 +668,7 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 | | |
 |---|---|
 | Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `up` inherit the console.) |
-| Exit codes | `0` success · `1` the command failed (missing file, `dotnet` failure, dependency cycle, …) · `2` invalid command line. |
+| Exit codes | `0` success, also when there was nothing to do · `1` the command failed (anything below doesn't cover) · `2` invalid command line · `3` an input is missing or invalid (a config file, the root to scan, the settings) · `4` a `dotnet` command failed (fix the code; retrying won't help) · `5` refused by `--strict` (below). |
 | Output | With `--json`, one JSON document on **stdout** and the logs on stderr (see below). Otherwise, human-readable log lines on **stdout**. Redirected, they are plain: warnings and errors prefixed `[WRN] ` / `[ERR] `, steps marked `>` (starting), `+` (process started), `ok`, `FAILED`, `-` (stopped), no colours, no progress lines. Of `go`'s child `dotnet` processes, only warning and error lines are forwarded; `up` forwards its services' output. |
 | Results | The JSON / HTML files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
 | Side effects | `--open` launches a viewer; `go` writes packages to the feed; `up` starts processes. |
@@ -703,9 +703,9 @@ no progress lines) even on a terminal, and `build --plot` doesn't open the page.
 | `command` | The command as given, lowercased (`null` without one). |
 | `status`, `exitCode` | `succeeded` / `failed`, and the process exit code. |
 | `result` | The command's own result (below), or `null`. |
-| `diagnostics` | Every warning and error logged, in order: `code`, `level` (`warning` / `error`), `message`. The codes are all `unspecified` for now; specific ones will come where a caller would act on them. |
+| `diagnostics` | Every warning and error logged, in order: `code` (see [Diagnostic codes](#diagnostic-codes)), `level` (`warning` / `error`), `message`. |
 | `written` | Full paths of the files written. |
-| `error` | `null`, or `code` and `message`. Codes: `usage` (exit `2`), `config-not-found` (run the command that writes it), `root-not-found`, `command-failed` (anything else, for now). Branch on the code, not on the message. |
+| `error` | `null`, or `code` and `message`. Codes, with their exit code: `usage` (`2`); `config-not-found` (run the command that writes it), `config-invalid`, `root-not-found`, `settings-invalid` (`3`); `dotnet-failed` (`4`); `strict` (`5`); `command-failed` (`1`, anything else). Branch on the code, not on the message. |
 
 Results:
 
@@ -728,6 +728,34 @@ $build = lrun build --deps-of OrderGateway --json | ConvertFrom-Json
 if ($build.status -ne 'succeeded') { throw "$($build.error.code): $($build.error.message)" }
 $build.result.services
 ```
+
+### Diagnostic codes
+
+Each warning and error has a code, reported in the JSON `diagnostics`. Branch on the code; the messages may change.
+
+| Code | Meaning | `--strict` |
+|---|---|---|
+| `name-collision` | Several projects share a name: all left out of the config. | fails |
+| `cycle-removed` | A dependency cycle left out of the config. | fails |
+| `kept-without-dependency` | Projects kept without their dependency on a collision or a cycle (packing them may fail). | fails |
+| `evaluation-failed` | MSBuild could not evaluate a project: its version and package id may be wrong. | fails |
+| `unevaluated-package-id`, `unevaluated-version` | A package id or version set through MSBuild, read without it (`--csproj`, or it failed). | fails |
+| `source-query-failed` | A NuGet source could not be queried: some latest versions may be missing. | fails |
+| `package-version-override` | A csproj sets `PackageVersion`, which overrides the planned version. | fails |
+| `packages-folder-unknown` | A global packages folder is unknown: an iteration number may be reused. | fails |
+| `empty-selection` | Nothing to do: no project kept, nothing to pack, no executable to run. The command succeeds. | — |
+| `no-solution` | A project no solution references: its commands get no `$(SolutionDir)`. | — |
+| `csproj-ahead-of-latest` | The csproj version is ahead of the latest on the sources: `pack` starts from it. | — |
+| `not-in-git`, `no-git-base`, `no-common-history`, `repo-unreadable` | `--git-changes` could not tell what changed, so it kept more (`no-git-base`: run `git fetch`). | — |
+| `dotnet-warning`, `dotnet-error`, `dotnet-output` | A line of a `dotnet` command, verbatim (`dotnet-output`: a failed command that printed no error line). | — |
+| `open-failed` | A file or page could not be opened. | — |
+| `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
+| `unspecified` | A warning without a code yet. | — |
+
+**`--strict`**, on any command, fails it with exit code `5` (error code `strict`) when a diagnostic marked *fails* was
+logged. The command still runs to the end and writes its files, so they can be inspected. Without it, these are warnings
+and the command succeeds, which suits someone at a terminal; a pipeline usually wants `--strict`. An empty selection
+never fails, even with `--strict`: "nothing changed, nothing to do" is a normal outcome.
 
 ### From C#
 
@@ -777,9 +805,12 @@ $plan.RepackTrees.Projects | Format-Table Name, Depth
 ```sh
 set -e                                   # any non-zero exit code stops the job
 export LOCALRUN_LOG_LEVEL=Debug          # full stack traces on failure
-lrun build --root "$WORKSPACE/repos" --config "$WORKSPACE/out/localrun.config.json"
+lrun build --strict --root "$WORKSPACE/repos" --config "$WORKSPACE/out/localrun.config.json"
 lrun plot --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/out/dependencies"
 ```
+
+Without `set -e`, branch on the exit code: `3` means a missing input (the step before didn't run), `4` a build error in
+the code, `5` an incomplete result.
 
 ---
 

@@ -7,13 +7,13 @@ using System.Collections.Generic;
 using System.Linq;
 
 /// <summary>A warning or an error logged during a command, as the JSON output reports it.</summary>
-/// <param name="Code">What it is about, for a caller to branch on; <c>unspecified</c> until the call site names it.</param>
+/// <param name="Code">What it is about, for a caller to branch on (<see cref="DiagnosticEvents"/>); <c>unspecified</c> without one.</param>
 /// <param name="Level"><c>warning</c> or <c>error</c>.</param>
 public sealed record Diagnostic(string Code, string Level, string Message);
 
 /// <summary>
-/// Keeps every warning and error logged, in order, so the JSON output carries them as data besides the logs on stderr.
-/// Added to the logger factory in JSON mode only.
+/// Keeps every warning and error logged, in order: the JSON output carries them as data besides the logs on stderr, and
+/// <c>--strict</c> checks their codes.
 /// </summary>
 internal sealed class DiagnosticsCollector : ILoggerProvider
 {
@@ -41,7 +41,7 @@ internal sealed class DiagnosticsCollector : ILoggerProvider
             // Continuation lines are indented under the line they belong to: as data, they stand alone
             string message = formatter(state, exception).Trim();
             if (message.Length == 0) return;
-            collector.diagnostics.Enqueue(new(UnspecifiedCode, logLevel == LogLevel.Warning ? "warning" : "error", message));
+            collector.diagnostics.Enqueue(new(DiagnosticEvents.CodeOf(eventId), logLevel == LogLevel.Warning ? "warning" : "error", message));
         }
     }
 }
