@@ -12,7 +12,7 @@ parse, failures it can classify, queries that don't write anything, and services
 
 ## Suggested order
 
-1. **Machine output** (1) and **error codes** (2): everything else reports through them.
+1. **Machine output** (1) and **error codes** (2): everything else reports through them. Done (0.5.0).
 2. **`status`** (3) and **`build --verify`** (5): read-only questions, with a shared "what does this config hold" model.
 3. **`--since`** (4): extends `GitChangeDetector`, independent of the rest.
 4. The agent-oriented additions (A1–A8) once 1–2 exist; A1 (queries) and A4 (service logs on disk) first, they are cheap.
@@ -21,109 +21,16 @@ parse, failures it can classify, queries that don't write anything, and services
 
 ## Requested
 
-### 1. `--json` / `--porcelain` machine-friendly output **(user)**
+### 1. `--json` machine-friendly output **(user)**: shipped (0.5.0)
 
-Goal: every command can be driven by an agent or a script: no emoji, no decoration, a summary on stdout that can be
-parsed or at least read at a glance.
+Every command takes `--json`: one document on stdout (envelope, result, diagnostics, files written, error), logs on
+stderr; `up` streams one event per line, then the document on one line. See the CHANGELOG and README "Machine output".
+Decisions (user feedback, 2026-11-05, taking the proposed plan): `--json` only, `--porcelain` waits for a shell user to
+ask; the field is `diagnostics` (it holds errors too); the document is indented, except for `up`; the services' output
+never goes to stdout but to `.lrun/logs/<name>.log` (A4), the `started` event carrying the path.
 
-What exists (since the output redesign, 0.4.0): each command prints its result, diagnostics and, on a terminal only,
-progress. Marks are the event ids of the log calls (`LogEvents`: start, done, failed, stopped, progress), rendered by
-`LocalRunConsoleFormatter` as glyphs on a terminal or ASCII words when redirected (`Terminal.IsAttached`); messages carry
-no mark of their own. Paths are printed as `Config:` / `Plan:` / `Plot:` lines, no links. `up` colors its tags on a terminal only.
-
-Left over from the redesign (user, 2026-11-04): an environment variable for a wrapper that always wants machine output
-(`LOCALRUN_OUTPUT=json|plain`, name not decided) sets it once instead of on every call; it never switches to JSON because
-of a pipe. The glyphs `×` vs `✗` and `›` vs `▸` were to be picked on sight (`×` and `›` shipped).
-
-Ideas:
-- Two layers, as git does: `--porcelain` = stable, emoji-free text (one fact per line, `key=value` or tab separated);
-  `--json` = one JSON document on stdout at the end of the command. Pick one name first; I'd start with `--json` only
-  and add `--porcelain` if a shell user asks.
-- stdout carries the result only; logs go to stderr in this mode. **To check:** where the console logger writes today
-  (stdout or stderr), since the contract changes if it is stdout.
-- Result shape per command, with a `schemaVersion`: `build` → config path, counts by type, filtered/left-out projects
-  (collisions, cycles, with reasons), warnings; `pack` → the plan (project, from, to, reason); `go` → per project
-  outcome, package id, version, duration; `up` → see A3; `plot` → page path.
-- Warnings as data (`{ "code": "name-collision", "projects": [...] }`), not only as text: an agent decides on codes.
-- Long commands (`go`, `up`, `build` against many sources): NDJSON events on stdout (`{"event":"project-packed",…}`)
-  rather than one final document, so an agent sees progress and a timeout loses nothing. Final line = the summary.
-- Colors, hyperlinks and emoji off, whatever the terminal. `CommandLineArgs` must consume the flag (strict parsing), probably
-  as a global option before or after the command.
-
-Open questions: global flag or per command? NDJSON for every command or only the long ones? Do warnings stay human text
-in `--porcelain`?
-
-#### Plan for 1: `--json` (steps 1–5 done: branches `claude/json-output`, `claude/json-go`)
-
-**Status:** the envelope, captured diagnostics, and the results of every command but `up` are in (README "Machine
-output"). Differences from the plan below: the field is `diagnostics` (it holds errors too), not `warnings`; `plot` and
-`settings` got their result with the envelope; the document is indented; error and diagnostic codes came with item 2.
-`pack` and `go` share one result: each project's `status` (`planned`, `packed`, `failed`, `skipped`), `durationMs` and
-`failure` (step, exit code, error lines, at most 20). Left: step 6 (`up`), and the `LOCALRUN_OUTPUT` variable (not
-started; decide whether it's still wanted).
-
-**Decisions proposed** (the open questions above, answered; change any of them before work starts):
-- `--json` only. `--porcelain` waits until a shell user asks. A global flag, accepted by every command, before or after it.
-- One JSON document on stdout for every command, **including failures and usage errors**: an agent always has exactly one
-  thing to parse. Logs go to stderr in this mode, without emoji, colors or hyperlinks.
-- NDJSON events only for `up` (3 below); every other command is short enough for one final document.
-- Warnings stay text at first, but are captured into the document (see step 3), so nothing is lost while codes are added.
-
-**What I found in the code** (drives the order below):
-- `Log` builds its `ILoggerFactory` in a **static initializer**, and `LocalRunCli` holds a static `logger`, so the factory
-  exists before `RunAsync` parses anything. The mode therefore has to be known earlier than argument parsing: `Program.Main`
-  looks for `--json` in `args` and records it in a small separate static (`OutputMode`, not in `Log`, whose members
-  would trigger the initializer), then `RunAsync` removes the flag and consumes it like any other. Tests of `RunAsync`
-  must set `OutputMode` themselves.
-- `AddConsole(...)` has no `LogToStandardErrorThreshold` set, so **all logs go to stdout today**: in JSON mode the factory
-  must be created with the threshold at `Trace`. Direct `Console.WriteLine` calls (`help`, `version`, `settings --path`) also
-  write to stdout and need a JSON form.
-- Marks are event ids (`LogEvents`), not text: in this mode the logs can use the plain rendering as is, and events can be
-  serialised by name.
-- The files a command wrote are logged (`Config:`, `Plan:`, `Plot:`), no longer collected (`PrintWritten` went with the
-  redesign): the `written` field needs them collected again, at the same call sites.
-- `RunProcessor` and the formatter have the colors off in a redirected output (`Terminal.ColorsEnabled`); JSON mode must
-  switch them off too.
-
-**Steps** (each is a commit; 1–4 are one PR, 5 and 6 are their own):
-1. **Mode plumbing.** `OutputMode` (Human, Json), set in `Main`; `Log` reads it when it builds the factory (stderr threshold,
-   the plain rendering: no colors, ASCII marks). Human mode is untouched: same bytes as today. Test: the formatter
-   output with and without the mode.
-2. **Envelope.** `RunAsync` builds `{ schemaVersion, command, status, exitCode, durationMs, result, warnings, written,
-   error }` and writes it as the last thing on stdout (UTF-8, no BOM, one line or indented: to decide, indented reads better
-   in a terminal and parses the same). `error = { code, message }`, with `code` a short stable string (`usage`,
-   `config-not-found`, `command-failed`, …) that item 2 will refine. `UsageException` and any other exception go through
-   it as well. `version`, `help` and `settings --path` get their `result`.
-3. **Captured warnings.** A logger provider, added in this mode only, copies every Warning and Error log into the
-   envelope as `{ code: "unspecified", message, level }`. No call site changes yet; real codes follow where an agent would
-   branch on them (`name-collision`, `cycle-removed`, `no-git-base`, `csproj-ahead-of-latest`, `not-in-git`).
-4. **`build` and `pack` results.** `build`: config path, counts by type, projects left out with the reason (collision,
-   cycle, filter), the git-changes reasons when `--git-changes` was used. `pack`: the plan as a list of
-   `{ project, from, to }`. **To read first:** what `ConfigBuilder` and `RepackConfigBuilder` already keep of this
-   (`DependencyGraph.Collisions` exists), so they expose data rather than recompute it.
-5. **`go`, `plot`, `settings`.** `go`: a per-project outcome (package id, version, duration, failed or not) which means
-   `RepackExecutor` collects results instead of only logging them; the first failure still fails the command, and the
-   envelope carries the last output lines of the failing `dotnet` command (A2 will parse them).
-6. **`up` events.** NDJSON on stdout, one object per line: `starting`, `started`, `exited` (code), `stopping`, then the
-   final envelope. Service output lines are **not** in stdout by default (volume, and a real agent wants them filtered):
-   they are written to `.lrun/logs/<service>.log` (A4), and the `started` event carries that path. If lines are wanted
-   inline, an explicit `--lines` is a later decision.
-
-**Tests** (the contract is the point):
-- Per command, run `RunAsync` with `Console.Out` / `Console.Error` redirected: stdout parses as exactly one JSON document
-  (or NDJSON for `up`), stderr holds the logs, and neither contains an emoji, an ESC character, or an OSC link.
-- Failure and usage paths: stdout still parses, `status` is `failed`, `exitCode` matches the process code.
-- A snapshot of each command's JSON shape (property names only) so renaming a field is a visible, deliberate change.
-- Human mode unchanged: the existing formatter and CLI tests must keep passing as they are.
-
-**Docs and release:** a README "Machine output" section (envelope, `schemaVersion`, the stdout/stderr rule, one example
-per command), `PrintHelp`, a CHANGELOG line. A new flag that changes nothing without it is a patch while 0.x. Changing
-a field later bumps `schemaVersion`, never silently.
-
-**Risks:** the static-initializer ordering above is the one that bites (a logger created too early stays in human mode);
-Windows console encodings can add a BOM or mangle UTF-8 when stdout is a pipe, hence a test through a real redirected
-process, not only `Console.SetOut`; `go` and `up` run long-lived children whose output must never leak into stdout in this
-mode (they are captured, as `RunToCompletionAsync` already does for builds).
+Left, not started: an environment variable for a wrapper that always wants machine output (`LOCALRUN_OUTPUT=json`,
+name not decided; it never switches to JSON because of a pipe). Decide whether it's still wanted.
 
 ### 2. Finer exit codes **(user)**: shipped (branch `claude/exit-codes`, 0.5.0)
 
@@ -228,10 +135,10 @@ Today `up` runs in the foreground until Ctrl+C. An agent can't hold that. Candid
 2026-10-24): if wanted, make it opt-in (`--wait <service>=<url>` or a log pattern), never the default.
 Also `up --only <names>`; today there is only `--exclude`.
 
-### A4. Service logs on disk, with levels **(claude)**
-`up` already strips ANSI and detects each line's level. Writing every service's lines to `.lrun/logs/<service>.log`
-(plain text, or NDJSON with service, level and time) costs little, doesn't change what the terminal shows, and lets an
-agent read what a service said after the fact, filter by level, or diff two runs.
+### A4. Service logs on disk, with levels **(claude)**: plain logs shipped (0.5.0)
+`up` writes each service's lines to `.lrun/logs/<service>.log` (`--logs`), plain text without colors, rewritten on each
+run, so an agent can read what a service said after the fact. Left: the level of each line (`up` already detects it),
+e.g. as NDJSON with service, level and time, to filter by level or diff two runs; `lrun logs` belongs to A3.
 
 ### A5. Test selection **(claude)**
 `--tests` keeps test projects but nothing runs them. `lrun test` (or `affected --tests`) running the tests of the

@@ -363,6 +363,78 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal("settings-invalid", run.Json.GetProperty("error").GetProperty("code").GetString());
     }
 
+    private static void WriteApp(string root, string name, string main)
+    {
+        WriteCsproj(root, name, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(root, name, "Program.cs"), main);
+    }
+
+    [Fact]
+    public async Task Up_StreamsOneEventPerLine_ThenTheResult_AndLogsEachService()
+    {
+        string root = Path.Combine(workDir, "repos");
+        WriteApp(root, "Hello", """
+            System.Console.WriteLine("hello");
+            System.Console.WriteLine("\u001b[31mred\u001b[0m");
+            System.Console.Error.WriteLine("oops");
+            """);
+        WriteApp(root, "Broken", "return 3;");
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", root, "--include-external", "--csproj", "--json")).ExitCode);
+
+        var up = await LrunAsync("up", "--json");
+
+        // Broken failed on its own
+        Assert.Equal(LocalRunCli.ExitFailure, up.ExitCode);
+        string stdout = Encoding.UTF8.GetString(up.Stdout);
+        Assert.DoesNotContain('\x1B', stdout);
+        Assert.DoesNotContain("hello", stdout);
+        var lines = stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => JsonDocument.Parse(line).RootElement).ToArray();
+        var events = lines[..^1].Select(line => (line.GetProperty("event").GetString(), line.TryGetProperty("project", out var p) ? p.GetString() : null)).ToArray();
+        Assert.Equal([("building", "Broken"), ("building", "Hello"), ("started", "Broken"), ("started", "Hello"), ("running", null)], events[..5]);
+        Assert.Equal([("exited", "Broken"), ("exited", "Hello")], events[5..].Order());
+        var started = lines.First(line => line.GetProperty("event").GetString() == "started");
+        Assert.True(started.GetProperty("pid").GetInt32() > 0);
+        Assert.True(started.TryGetProperty("time", out _));
+
+        var report = lines[^1];
+        Assert.Equal("up", report.GetProperty("command").GetString());
+        Assert.Equal("command-failed", report.GetProperty("error").GetProperty("code").GetString());
+        string logs = Path.Combine(workDir, ".lrun", "logs");
+        var result = report.GetProperty("result");
+        Assert.Equal(logs, result.GetProperty("logs").GetString());
+        var services = result.GetProperty("services").EnumerateArray().ToDictionary(service => service.GetProperty("project").GetString()!);
+        Assert.Equal("failed", services["Broken"].GetProperty("status").GetString());
+        Assert.Equal(3, services["Broken"].GetProperty("exitCode").GetInt32());
+        Assert.Equal("exited", services["Hello"].GetProperty("status").GetString());
+        Assert.Equal(0, services["Hello"].GetProperty("exitCode").GetInt32());
+        Assert.Equal(2, report.GetProperty("written").GetArrayLength());
+
+        string helloLog = Path.Combine(logs, "Hello.log");
+        Assert.Equal(helloLog, services["Hello"].GetProperty("log").GetString());
+        // stdout and stderr lines interleave in no set order; the colors are gone
+        Assert.Equal(["hello", "oops", "red"], File.ReadAllLines(helloLog).Order());
+    }
+
+    [Fact]
+    public async Task Up_WithNothingToRun_IsOneLineToo()
+    {
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", Directory.CreateDirectory(Path.Combine(workDir, "empty")).FullName, "--csproj", "--json")).ExitCode);
+
+        var up = await LrunAsync("up", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, up.ExitCode);
+        string line = Assert.Single(Encoding.UTF8.GetString(up.Stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        var report = JsonDocument.Parse(line).RootElement;
+        Assert.Equal(["empty-selection"], Codes(new Run(0, Encoding.UTF8.GetBytes(line), "")));
+        Assert.Equal(0, report.GetProperty("result").GetProperty("services").GetArrayLength());
+    }
+
     private static void WriteCsproj(string root, string name, string content)
     {
         Directory.CreateDirectory(Path.Combine(root, name));

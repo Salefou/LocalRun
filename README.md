@@ -458,10 +458,12 @@ the services, as `docker compose up` does for containers:
    prefix has one color per service (hues spread evenly in alphabetical order), and the message is
    colored by the level read from the line: as printed for information, orange for warnings, red for
    errors, grey for debug. The colors a service prints itself are removed. Redirected output, or
-   `NO_COLOR` set, stays plain.
+   `NO_COLOR` set, stays plain. Each service's output also goes to `<logs>/<name>.log` (default
+   `.lrun/logs/`), without colors and without the prefix, rewritten on each `up`: read it while it runs,
+   or after, to see what one service said.
 3. **Wait** until they have all exited. One-shot jobs simply finish; services run until you press
    **Ctrl+C**. They all receive it (they share the console). Whatever is still running 10 seconds later
-   is killed, with its child processes.
+   is killed, with its child processes. Ctrl+C during the builds stops `up` before anything starts.
 
 A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
@@ -489,10 +491,31 @@ starting the next: by design, each service is expected to wait for (or retry) th
 |---|---|---|
 | `--config <file>` | `.lrun/localrun.config.json` | Config file to read. |
 | `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `up` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). |
+| `--logs <dir>` | `.lrun/logs` | Folder of the services' log files. |
 
 ```sh
 lrun up --exclude OrderGateway     # everything but OrderGateway, which you start under the debugger
 ```
+
+With `--json`, `up` writes one line of JSON per event on stdout as it happens, then the result on one last line
+(see [Machine output](#machine-output---json)); the services' output is never on stdout:
+
+```
+{"event":"building","time":"…","project":"Ticker"}
+{"event":"started","time":"…","project":"Ticker","pid":11408,"log":"C:\\work\\.lrun\\logs\\Ticker.log"}
+{"event":"running","time":"…","count":2}
+{"event":"stopping","time":"…"}
+{"event":"exited","time":"…","project":"Ticker","exitCode":-1073741510,"status":"stopped"}
+{"schemaVersion":1,"command":"up","status":"succeeded","exitCode":0,…}
+```
+
+| Event | When | Fields besides `event`, `time` (UTC) |
+|---|---|---|
+| `building` | An executable is about to be built | `project` |
+| `started` | An executable was started | `project`, `pid` (of `dotnet run`), `log` |
+| `running` | All were started: `up` now waits | `count` |
+| `stopping` | Ctrl+C | — |
+| `exited` | A process exited | `project`, `exitCode`, `status` (as in the result) |
 
 ### `settings`
 
@@ -680,6 +703,8 @@ Do not parse the log lines — they are for humans and may change. Use `--json`,
 With `--json`, a command writes **one JSON document on stdout, and nothing else**, whether it succeeds or fails
 (usage errors included), once it is done. The logs go to **stderr**, in their plain form (no colours, no glyphs,
 no progress lines) even on a terminal, and `build --plot` doesn't open the page. Output is UTF-8 without a BOM.
+`up` is the exception that keeps the rule line by line: it streams one event per line as it happens (see
+[`up`](#up)), then writes the document **on one line**, always the last, so every line of its stdout parses.
 
 ```json
 {
@@ -717,7 +742,7 @@ Results:
 | `settings` | `path`, `created`. |
 | `version` | `version`. |
 | `help` | `help`: the help text. |
-| `up` | `null` for now. |
+| `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C, `killed` after the grace period), `exitCode`, `log`. |
 
 `leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" |
 "name-collision" | "cycle", "projects": [...], "paths": [...], "dependents": [...] }`. `paths` (relative to the root) is

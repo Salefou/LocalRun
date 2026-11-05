@@ -27,7 +27,7 @@ public class DiagnosticEventsTests
     public void StrictCodes_AreCodes()
     {
         Assert.Subset(All.Select(code => code.Name!).ToHashSet(), DiagnosticEvents.Strict.ToHashSet());
-        Assert.DoesNotContain(DiagnosticEvents.EmptySelection.Name, DiagnosticEvents.Strict);
+        Assert.DoesNotContain(DiagnosticEvents.EmptySelection.Name!, DiagnosticEvents.Strict);
     }
 
     [Fact]

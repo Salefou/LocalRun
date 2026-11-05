@@ -2,6 +2,7 @@ namespace LocalRun.Cli;
 
 using LocalRun.Core.Model;
 using LocalRun.Core.Modules;
+using LocalRun.Core.Processing;
 using LocalRun.Logger;
 using LocalRun.Options;
 using System;
@@ -49,7 +50,42 @@ internal sealed record CommandReport(
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+    /// <param name="indented">False for a command that streams events first (<c>up</c>): every line of its stdout is a document.</param>
+    public string ToJson(bool indented = true) =>
+        JsonSerializer.Serialize(this, indented ? JsonOptions : new JsonSerializerOptions(JsonOptions) { WriteIndented = false });
+}
+
+/// <summary>
+/// Writes events on stdout as they happen, one JSON object per line (NDJSON), before the command's final document. Safe
+/// from any thread; once closed, late events are dropped, so the document stays the last line.
+/// </summary>
+internal sealed class EventStream(TextWriter writer)
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    private bool closed;
+
+    public void Write<T>(T @event)
+    {
+        string line = JsonSerializer.Serialize(@event, JsonOptions);
+        lock (writer)
+        {
+            if (closed) return;
+            writer.WriteLine(line);
+            writer.Flush();
+        }
+    }
+
+    public void Close()
+    {
+        lock (writer)
+            closed = true;
+    }
 }
 
 /// <param name="Code">A short stable string to branch on (<see cref="ErrorCodes"/>); the message is for people.</param>
@@ -143,3 +179,11 @@ internal sealed record PackageReport(string Project, string PackageId, int Depth
     string Status, long? DurationMs, PackFailure? Failure);
 
 internal sealed record SettingsResult(string Path, bool Created);
+
+/// <param name="Logs">The folder of the services' log files.</param>
+/// <param name="Services">The executables of the config, dependencies first, without the excluded ones.</param>
+internal sealed record UpResult(string Logs, IReadOnlyList<ServiceReport> Services);
+
+/// <param name="Status"><see cref="ServiceStatus"/>: <c>not-started</c>, <c>exited</c>, <c>failed</c>, <c>stopped</c> or <c>killed</c>.</param>
+/// <param name="ExitCode">Null when it never started, or was killed and didn't exit in time.</param>
+internal sealed record ServiceReport(string Project, string Status, int? ExitCode, string? Log);
