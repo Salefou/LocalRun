@@ -43,10 +43,11 @@ What each part is there to exercise:
 `edge-cases/` holds graphs that are *meant* to misbehave, or to be hard to draw. It sits outside
 `workspace/` so it never breaks a normal run.
 
-`lrun build` run from the repository root scans `samples/` too. Its only expected warnings are the
-intended ones: `LrSample.Orphan` in no solution, the `LrEdge.Shared` name collision (an error, with
-`LrEdge.Consumer` kept without it), and the `LrEdge.A, LrEdge.B, LrEdge.C` cycle with `LrEdge.Top` kept
-without it. Any other warning is a regression.
+`lrun build` run from the repository root scans `samples/` too (about 7 s). Its only expected warnings are
+the intended ones: MSBuild failing on `LrEdge.BrokenImport`, `LrSample.Orphan` in no solution, the
+`LrEdge.Shared` name collision (an error, with `LrEdge.Consumer` kept without it), the `LrEdge.A, LrEdge.B,
+LrEdge.C` cycle with `LrEdge.Top` kept without it, and the unreachable `lrun-samples.invalid` source. Any
+other warning is a regression.
 
 ## Setup
 
@@ -274,11 +275,30 @@ lrun build --root edge-cases/slnx-only --config edge.json
 lrun build --root edge-cases/non-planar --config edge.json --plot
 ```
 
+The cases below show one diagnostic code each (README "Diagnostic codes" at the repository root), and what `--strict`
+does with it. Give them `--local-nuget .feed` when they pack, and delete `edge.json` and `edge-plan.json` afterwards:
+
+```powershell
+lrun build --root edge-cases/msbuild-props --config edge.json [--csproj] --strict
+lrun build --root edge-cases/broken-import --config edge.json --local-nuget .feed --strict
+lrun pack --config edge.json --repack-config edge-plan.json              # after building broken-import
+lrun build --root edge-cases/package-version --config edge.json --strict
+lrun pack --config edge.json --repack-config edge-plan.json --dry-run --strict
+lrun build --root edge-cases/unreachable-source --config edge.json --strict
+lrun build --root edge-cases/empty --config edge.json --local-nuget .feed --strict
+lrun pack --config edge.json --repack-config edge-plan.json --strict     # after building empty
+```
+
 | Case | What happens |
 |---|---|
 | `cycle/`: A → B → C → A, with A → Base and Top → A | Succeeds with two warnings: `Dependency cycle left out of the config: LrEdge.A, LrEdge.B, LrEdge.C`, then `LrEdge.Top` kept without its dependency on it. The config holds Base and Top. With `--strict`: the same, then `FAILED --strict: the result is incomplete or may be wrong: cycle-removed, kept-without-dependency.`, exit code 5 |
 | `name-collision/`: two `LrEdge.Shared` | Succeeds (exit 0) with `[ERR] Several projects are named LrEdge.Shared, all left out of the config: repo-one\…, repo-two\…` and a warning that `LrEdge.Consumer` is kept without its dependency on it. The config holds Consumer only. Adding `--users-of LrEdge.Shared` fails with `Ambiguous project(s)`, exit code 2. With `--strict`: the config is written, then `FAILED --strict: … name-collision, kept-without-dependency.`, exit code 5 |
 | `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Succeeds with no warning: `.slnx` solutions (the .NET 10 SDK default) are read like `.sln` ones. A `Did not find any solution referencing …LrEdge.Modern` warning means `.slnx` support regressed |
+| `msbuild-props/`: `LrEdge.Props`, whose `Version` and `PackageId` are `$(…)` set by the folder's `Directory.Build.props` | Succeeds with no warning, even with `--strict`: `build` asks MSBuild, and the config holds `Acme.LrEdge.Props` 2.1.0. With `--csproj`, two warnings (`unevaluated-version`: `Version $(LrEdgeVersion) of …LrEdge.Props.csproj needs MSBuild to evaluate it, 1.0.0 used instead`, and `unevaluated-package-id`: the project name is used), and `--strict` ends with `FAILED --strict: the result is incomplete or may be wrong: unevaluated-version, unevaluated-package-id.`, exit code 5 |
+| `broken-import/`: `LrEdge.BrokenImport` imports a file that doesn't exist | `evaluation-failed`: `MSBuild could not evaluate …LrEdge.BrokenImport.csproj, its csproj is read as is (version and package id may be wrong)`; with `--strict`, exit code 5. The config holds it at 1.2.0, read from the XML. `pack` then fails at its depth with the `error MSB4019: The imported project "…missing.props" was not found` line and `FAILED pack failed: dotnet pack failed on LrEdge.BrokenImport …`, exit code 4 (a `dotnet` command failed) |
+| `package-version/`: `LrEdge.Pinned` sets `<PackageVersion>3.0.0</PackageVersion>` | `build` succeeds with no warning. `pack --dry-run` plans `1.0.0 -> 1.0.0-local.1` but warns `package-version-override`: `LrEdge.Pinned sets <PackageVersion> in its csproj, which overrides the planned version: go will pack it under the csproj's`; with `--strict`, the plan is written, then exit code 5 |
+| `unreachable-source/`: its `NuGet.config` adds a source on a `.invalid` host | `source-query-failed` after about 6 s of NuGet retries: `Failed to query source 'http://lrun-samples.invalid/v3/index.json': Unable to load the service index …`; with `--strict`, exit code 5. `--csproj` skips the query, and so the warning |
+| `empty/`: no project | `build` warns `empty-selection`: `No project found under …\empty: the config holds none`. `pack` warns `Nothing to pack: the config holds no project.` and prints `ok Packed 0 projects`. Both exit 0, with `--strict` too: nothing to do is a valid outcome |
 | `non-planar/`: the two smallest graphs that can't be drawn without crossings, as dependency graphs. `k33/`: K₃,₃, every `LrEdge.Desk.*` (X, Y, Z, in `Desks.slnx`) uses every `LrEdge.Feed.*` (A, B, C, in `Feeds.slnx`). `k5/`: K₅, each `LrEdge.K<i>` uses every `K<j>` with j < i, odd ones in `Odd.slnx` and even ones in `Even.slnx` (project references within a solution, package references across) | Succeeds with no warning, 11 projects. The page reads `11 projects · 4 solutions · ⚠ 1 group cycle`: no project cycle, but Odd and Even use each other (K1 → K2 → K3), so their frames and the edges between them are red. Hovering K3 lights K4, K5 in orange and K1, K2 in blue. *Collapse all* leaves Feeds → Desks (`×9`) and Odd ⇄ Even (3 edges each way). With the default bands, Odd and Even are adjacent bands and the K edges zigzag between them, all pointing right; collapsed, Odd → Even points right and Even → Odd loops back on the left. With *Layout: free*, the layout has to route around the cycle and some K edges loop back around the frames; `lrun build --root edge-cases --plot` then shows the K₅ part on its own, the other edge cases packed beside it, never inside its loops |
 
 ## Changing the samples

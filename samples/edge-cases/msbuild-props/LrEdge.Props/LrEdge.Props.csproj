@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Version>$(LrEdgeVersion)</Version>
+    <PackageId>$(LrEdgeIdPrefix).Props</PackageId>
+  </PropertyGroup>
+</Project>

@@ -196,7 +196,8 @@ Ideas:
 What happens: `build` leaves a dependency cycle out of the config (`RemoveCycles`) but keeps the projects depending on
 it, without that edge, with a warning ("packing or running them may fail"). When such a project reaches the cycle
 through a `ProjectReference`, its `dotnet restore` still walks into the cycle and fails with `MSB4006 circular
-dependency`, so `pack` / `go` fail (exit 1). Same in 0.3.3. Reproduced by `samples/edge-cases/cycle` (`LrEdge.Top`), and
+dependency`, so `pack` / `go` fail (exit 1; exit 4 since 0.5.0). `build --strict` now stops there first (exit 5,
+`kept-without-dependency`). Same in 0.3.3. Reproduced by `samples/edge-cases/cycle` (`LrEdge.Top`), and
 so by `lrun build` then `lrun pack` from the repository root. Package users of the cycle restore fine (the published
 package), and so do name-collision dependents (their project reference names one path).
 
@@ -204,6 +205,14 @@ Tried and reverted (PR #23, commits 29d91c0 / 157b5a5): `build` leaving out, wit
 through project references (needs the reference kind at scan time: `ProjectNode.ProjectReferences`, not written to the
 config). The user has **another flow in mind**: ask what it is before designing anything; the reverted commit holds
 the reference-kind plumbing and tests, reusable whatever the flow.
+
+### 7. A missing local NuGet source goes unnoticed **(claude, 2026-11-05)**
+
+Found while adding `samples/edge-cases/unreachable-source`: a NuGet.config source pointing to a local folder that
+doesn't exist (a typo, an unmounted drive) is read by NuGet as an empty feed, so `build` records no latest version from
+it and says nothing; `--strict` can't catch it. An unreachable http source does warn (`source-query-failed`). Candidate:
+`NugetVersionChecker` warns `source-query-failed` for a local source whose folder is missing (except the config's own
+local feed before the first pack, which `go` creates). Not started: propose first.
 
 ---
 
