@@ -7,6 +7,11 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-06
+
+Machine output, for scripts, pipelines and agents: `--json` on every command, finer exit codes, a code on every
+warning, and `--strict`.
+
 ### Changed
 
 - **Breaking:** finer exit codes. Failures that exited `1` now exit `3` when an input is missing or invalid (a config
@@ -16,26 +21,30 @@ bumps the minor version, anything else the patch.
 
 ### Added
 
+- `--json`, on every command: one JSON document on stdout (status, exit code, the command's result, the warnings and
+  errors logged, the files written, and an error code on failure), the logs on stderr. Each command reports its result:
+  `build` what it kept and left out and why, `pack` and `go` what became of each project (packed, failed with the step
+  and its error lines, or skipped), `plot`, `settings`, `version` and `help` theirs. See README "Machine output".
 - `up --json` streams one JSON event per line on stdout as it happens (`building`, `started` with the pid and log file,
   `running`, `stopping`, `exited` with the exit code and a status), then the result on one last line: each service's
   status (`not-started`, `exited`, `failed`, `stopped`, `killed`), exit code and log file.
 - `up` writes each service's output to `.lrun/logs/<name>.log` (`--logs` to change the folder), without colors,
   rewritten on each run. The terminal shows the same as before, plus a `Logs:` line.
-- Ctrl+C while `up` builds the executables stops it before anything starts, instead of killing `lrun` on the spot.
+- Every warning and error has a code (`name-collision`, `empty-selection`, `no-git-base`, …), reported in the `--json`
+  diagnostics. See README "Diagnostic codes".
 - `--strict`, on every command: exit code `5` when the result left something out or may have a wrong version (name
   collisions, cycles, MSBuild evaluation or NuGet source failures, a csproj overriding `PackageVersion`, an unknown
   packages folder). The command still writes its files. For pipelines, where these warnings would otherwise pass unseen.
-- Every warning and error has a code (`name-collision`, `empty-selection`, `no-git-base`, …), reported in the `--json`
-  diagnostics. See README "Diagnostic codes".
+- `repack.config.json` records each project's `PackageId` when it differs from the name. Plans written before still load.
+- Sample edge cases for the new codes (`samples/edge-cases/`: `msbuild-props`, `broken-import`, `package-version`,
+  `unreachable-source`, `empty`).
+
+### Fixed
+
 - `build` warns (`source-query-failed`) about a NuGet source pointing to a local folder that doesn't exist, which NuGet
   reads as an empty feed: a mistyped path or an unmounted drive no longer goes unnoticed. The config's own local feed
   is exempt until the first pack creates it.
-
-- `--json`, on every command: one JSON document on stdout (status, exit code, the command's result, the warnings and
-  errors logged, the files written, and an error code on failure), the logs on stderr. `build`, `pack`, `go`, `plot`,
-  `settings`, `version` and `help` report a result; `up` only the envelope for now. `pack` and `go` say what became of
-  each project (packed, failed with the step and its error lines, or skipped). See README "Machine output".
-- `repack.config.json` records each project's `PackageId` when it differs from the name. Plans written before still load.
+- Ctrl+C while `up` builds the executables stops it before anything starts, instead of killing `lrun` on the spot.
 
 ## [0.4.0] - 2026-11-05
 
@@ -202,7 +211,8 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Salefou/LocalRun/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Salefou/LocalRun/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/Salefou/LocalRun/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Salefou/LocalRun/compare/v0.3.0...v0.3.1
