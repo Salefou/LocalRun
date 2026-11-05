@@ -98,6 +98,11 @@ shell escaping.
   built-in default. Paths are absolute or `~`-prefixed (relative would depend on the cwd: keep rejecting them), unknown
   keys fail. Tests and hand testing set `LOCALRUN_SETTINGS`; never touch the real file. Not read by `plot`/`go`/`up`:
   they only use the configs. A new setting = a property there + the template + README `settings` + a test.
+- **`--json`** (ROADMAP item 1, 2026-11-05): stdout holds exactly one document (`CommandReport`, `schemaVersion` 1) for
+  every run, failures and usage errors included; logs go to stderr, plain. `Main` sets `OutputMode.Json` before anything
+  logs (`Log` creates its factory lazily and reads it once; `Terminal.IsAttached` is false in this mode). A command
+  reports through `CommandOutput` (`Result`, `Written`); nothing else may write to stdout in this mode. Renaming or
+  removing a field bumps `schemaVersion`; `JsonOutputTests` pins the envelope and runs a real process.
 - **Exit codes** (`LocalRunCli`): `0` success, `1` command failed, `2` invalid command line
   (`UsageException`). External code relies on them.
 - **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values`, then call

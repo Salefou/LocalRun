@@ -46,65 +46,116 @@ public static class LocalRunCli
     private static string DefaultLocalNugetPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".localnuget");
 
-    /// <param name="args">The command name followed by its options, e.g. <c>["plot", "--open"]</c>.</param>
+    /// <param name="args">
+    /// The command name followed by its options, e.g. <c>["plot", "--open"]</c>. <c>--json</c> may also come first; it
+    /// only switches to JSON output when <see cref="OutputMode.Json"/> is set (by <c>Main</c>, before anything logs).
+    /// </param>
     public static async Task<int> RunAsync(string[] args)
     {
-        if (args.Length == 0)
-        {
-            PrintHelp();
-            return ExitUsage;
-        }
+        var stopwatch = Stopwatch.StartNew();
+        if (args.Length > 0 && args[0] == OutputMode.JsonFlag)
+            args = [.. args.Skip(1).Take(1), OutputMode.JsonFlag, .. args.Skip(2)];
 
-        string cmd = args[0].ToLowerInvariant();
+        string? cmd = args.Length == 0 ? null : args[0].ToLowerInvariant();
+        var output = new CommandOutput();
+        int exitCode;
+        ReportError? error = null;
+        // Taken before the failure is logged, so the report doesn't carry it twice
+        IReadOnlyList<Diagnostic>? diagnostics = null;
         try
         {
-            var options = new CommandLineArgs(args.Skip(1));
-            switch (cmd)
+            if (cmd == null)
             {
-                case "build":
-                    await BuildAsync(options);
-                    break;
-                case "plot":
-                    await PlotAsync(options);
-                    break;
-                case "pack":
-                    await PackAsync(options);
-                    break;
-                case "go":
-                    await GoAsync(options);
-                    break;
-                case "up":
-                    await RunExecutablesAsync(options);
-                    break;
-                case "settings":
-                    Settings(options);
-                    break;
-                case "help" or "--help" or "-h":
-                    PrintHelp();
-                    break;
-                case "version" or "--version":
-                    options.EnsureAllConsumed();
-                    Console.WriteLine($"{CommandName} {Version}");
-                    break;
-                default:
-                    throw new UsageException($"Unknown command '{cmd}'.");
+                ShowHelp(output);
+                exitCode = ExitUsage;
+                error = new(ErrorCodes.Usage, "No command given.");
             }
-            return ExitSuccess;
+            else
+            {
+                await RunCommandAsync(cmd, new CommandLineArgs(args.Skip(1)), output);
+                exitCode = ExitSuccess;
+            }
         }
         catch (UsageException ex)
         {
+            exitCode = ExitUsage;
+            error = new(ErrorCodes.Usage, ex.Message);
+            diagnostics = Log.Diagnostics;
             logger.LogError("{Error} Run '{Command} help' for usage.", ex.Message, CommandName);
-            return ExitUsage;
         }
         catch (Exception ex)
         {
+            exitCode = ExitFailure;
+            error = new(ErrorCodes.Of(ex), ex.Message);
+            diagnostics = Log.Diagnostics;
             logger.LogError(LogEvents.Failed, "{Command} failed: {Error}", cmd, ex.Message);
             logger.LogDebug(ex, "Command '{Command}' failure details", cmd);
-            return ExitFailure;
+        }
+
+        if (OutputMode.Json)
+        {
+            var report = new CommandReport(CommandReport.CurrentSchemaVersion, cmd, exitCode == ExitSuccess ? "succeeded" : "failed",
+                exitCode, stopwatch.ElapsedMilliseconds, output.Result, diagnostics ?? Log.Diagnostics, output.Written, error);
+            Console.Out.WriteLine(report.ToJson());
+            Console.Out.Flush();
+        }
+        return exitCode;
+    }
+
+    private static async Task RunCommandAsync(string cmd, CommandLineArgs options, CommandOutput output)
+    {
+        // Main has read it already: consumed here so that a repeated or valued --json is rejected like any option
+        options.Flag(OutputMode.JsonFlag);
+        switch (cmd)
+        {
+            case "build":
+                await BuildAsync(options, output);
+                break;
+            case "plot":
+                await PlotAsync(options, output);
+                break;
+            case "pack":
+                await PackAsync(options, output);
+                break;
+            case "go":
+                await GoAsync(options);
+                break;
+            case "up":
+                await RunExecutablesAsync(options);
+                break;
+            case "settings":
+                Settings(options, output);
+                break;
+            case "help" or "--help" or "-h":
+                ShowHelp(output);
+                break;
+            case "version" or "--version":
+                options.EnsureAllConsumed();
+                if (OutputMode.Json)
+                    output.Result = new VersionResult(Version);
+                else
+                    Console.WriteLine($"{CommandName} {Version}");
+                break;
+            default:
+                throw new UsageException($"Unknown command '{cmd}'.");
         }
     }
 
-    private static async Task BuildAsync(CommandLineArgs args)
+    private static void ShowHelp(CommandOutput output)
+    {
+        if (OutputMode.Json)
+        {
+            using var help = new StringWriter();
+            WriteHelp(help);
+            output.Result = new HelpResult(help.ToString());
+        }
+        else
+        {
+            WriteHelp(Console.Out);
+        }
+    }
+
+    private static async Task BuildAsync(CommandLineArgs args, CommandOutput output)
     {
         string? root = args.Value("--root");
         string? localNuget = args.Value("--local-nuget");
@@ -118,26 +169,32 @@ public static class LocalRunCli
         string localNugetPath = Path.GetFullPath(localNuget ?? settings.LocalNuget ?? DefaultLocalNugetPath);
 
         if (!Directory.Exists(rootPath))
-            throw new DirectoryNotFoundException($"Root directory not found: {rootPath}");
+            throw new RootNotFoundException($"Root directory not found: {rootPath}");
 
         var configBuilder = new ConfigBuilder();
-        LocalRunConfig localRunConfig = configBuilder.BuildConfig(rootPath, configOptions, localNugetPath);
+        var (localRunConfig, summary) = configBuilder.BuildConfig(rootPath, configOptions, localNugetPath);
         if (!configOptions.CsprojVersionsOnly)
             await configBuilder.FetchLatestVersionsAsync(localRunConfig);
         await WriteToFile(configPath, localRunConfig);
+        output.Written.Add(configPath);
 
         var services = localRunConfig.Projects.Where(proj => proj.Type == "executable").Select(proj => proj.Name).ToList();
         logger.LogInformation("Services: {Services}", services.Count == 0 ? "none" : Text.Abbreviate(services));
         logger.LogInformation("Config: {Path}", configPath);
         // As 'plot' with its defaults, from the config just written. Opened for someone at a terminal only: an agent or a
         // CI job can't use a browser window popping up on its machine
+        string? plotPath = null;
         if (plot)
-            await PlotGraphAsync(localRunConfig, UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now), open: Terminal.IsAttached);
+            plotPath = await PlotGraphAsync(localRunConfig, UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now), open: Terminal.IsAttached, output);
         else
             logger.LogInformation("Next: {Command} pack", CommandName);
+
+        output.Result = new BuildResult(configPath, rootPath, localNugetPath, ConfigBuilder.Filters(configOptions), summary.Scanned,
+            new ProjectCounts(localRunConfig.Projects.Count, localRunConfig.Projects.Count - services.Count, services.Count),
+            services, summary.LeftOut, summary.GitChanges, plotPath);
     }
 
-    private static async Task PlotAsync(CommandLineArgs args)
+    private static async Task PlotAsync(CommandLineArgs args, CommandOutput output)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         string outputPath = args.Value("--output") ?? UniqueVisualsPath(DefaultVisualsFolder, DateTime.Now);
@@ -145,16 +202,19 @@ public static class LocalRunCli
         args.EnsureAllConsumed();
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
-        await PlotGraphAsync(config, outputPath, open);
+        output.Result = new PlotResult(await PlotGraphAsync(config, outputPath, open, output));
     }
 
-    private static async Task PlotGraphAsync(LocalRunConfig config, string outputPath, bool open)
+    /// <returns>The full path of the page.</returns>
+    private static async Task<string> PlotGraphAsync(LocalRunConfig config, string outputPath, bool open, CommandOutput output)
     {
         PrepareFolderOf(Path.GetFullPath(outputPath));
-        string htmlPath = await GraphPage.GenerateAsync(config, outputPath);
+        string htmlPath = Path.GetFullPath(await GraphPage.GenerateAsync(config, outputPath));
+        output.Written.Add(htmlPath);
         logger.LogInformation("Plot: {Path}", htmlPath);
         if (open)
             OpenWithDefaultApp(htmlPath);
+        return htmlPath;
     }
 
     /// <summary>
@@ -170,7 +230,7 @@ public static class LocalRunCli
         return path;
     }
 
-    private static async Task PackAsync(CommandLineArgs args)
+    private static async Task PackAsync(CommandLineArgs args, CommandOutput output)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         string repackConfigPath = Path.GetFullPath(args.Value("--repack-config") ?? DefaultRepackConfigPath);
@@ -185,8 +245,14 @@ public static class LocalRunCli
         RepackConfig repackConfig = await new RepackConfigBuilder().BuildRepackConfig(config, repackOptions);
         // Written before anything runs, dry run or not, so a failed or surprising repack can be inspected afterwards
         await WriteToFile(repackConfigPath, repackConfig);
+        output.Written.Add(repackConfigPath);
         logger.LogInformation("Plan: {Path}", repackConfigPath);
 
+        var packageIds = config.Projects.ToDictionary(proj => proj.Name, proj => proj.PackageIdOrName, StringComparer.OrdinalIgnoreCase);
+        var packages = RepackExecutor.Depths(repackConfig).SelectMany(depth => depth)
+            .Select(proj => new PlannedPackage(proj.Name, packageIds.GetValueOrDefault(proj.Name, proj.Name), proj.Depth,
+                proj.FromVersion.AsVersionString(), proj.ToVersion.AsVersionString()))
+            .ToList();
         var executor = new RepackExecutor();
         if (dryRun)
         {
@@ -195,8 +261,11 @@ public static class LocalRunCli
         }
         else
         {
+            // Set first: if packing fails, the report still says what was planned
+            output.Result = new PackResult(repackConfigPath, Packed: false, packages);
             await executor.RepackAndRebuildAsync(repackConfig);
         }
+        output.Result = new PackResult(repackConfigPath, Packed: !dryRun, packages);
     }
 
     private static async Task GoAsync(CommandLineArgs args)
@@ -218,7 +287,7 @@ public static class LocalRunCli
         await new RunProcessor().RunAsync(config, exclude);
     }
 
-    private static void Settings(CommandLineArgs args)
+    private static void Settings(CommandLineArgs args, CommandOutput output)
     {
         bool pathOnly = args.Flag("--path");
         args.EnsureAllConsumed();
@@ -226,14 +295,24 @@ public static class LocalRunCli
         string path = UserSettings.DefaultPath;
         if (pathOnly)
         {
-            Console.WriteLine(path);
+            if (OutputMode.Json)
+                output.Result = new SettingsResult(path, Created: false);
+            else
+                Console.WriteLine(path);
             return;
         }
 
-        if (UserSettings.CreateIfMissing(path))
+        bool created = UserSettings.CreateIfMissing(path);
+        output.Result = new SettingsResult(path, created);
+        if (created)
+        {
+            output.Written.Add(path);
             logger.LogInformation(LogEvents.Done, "Created {Path}", path);
+        }
         else
+        {
             logger.LogInformation("Settings: {Path}", path);
+        }
 
         // A machine can have no app for .json: notepad is always there on Windows
         if (!OpenWithDefaultApp(path) && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -254,7 +333,7 @@ public static class LocalRunCli
             string hint = Path.GetDirectoryName(fullPath) == Path.GetFullPath(WorkFolder) && File.Exists(legacy)
                 ? $" Found '{legacy}', written by an older {CommandName}: move it into '{WorkFolder}', or point at it with {option}."
                 : "";
-            throw new FileNotFoundException($"'{fullPath}' not found. Run '{CommandName} {producingCommand}' first.{hint}");
+            throw new ConfigNotFoundException($"'{fullPath}' not found. Run '{CommandName} {producingCommand}' first.{hint}");
         }
         return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(fullPath))
             ?? throw new InvalidDataException($"'{fullPath}' is empty.");
@@ -319,104 +398,108 @@ public static class LocalRunCli
         }
     }
 
-    public static void PrintHelp()
+    internal static void WriteHelp(TextWriter writer)
     {
-        Console.WriteLine("LocalRun — rebuild and run only what matters locally: scan repositories,");
-        Console.WriteLine("track dependency graphs and repack components to a local NuGet source.");
-        Console.WriteLine();
-        Console.WriteLine($"Usage: {CommandName} <command> [options]");
-        Console.WriteLine();
-        Console.WriteLine("Relative paths are resolved against the current directory.");
-        Console.WriteLine("Exit codes: 0 success, 1 command failed, 2 invalid command line.");
-        Console.WriteLine();
-        Console.WriteLine("Commands:");
-        Console.WriteLine();
+        writer.WriteLine("LocalRun — rebuild and run only what matters locally: scan repositories,");
+        writer.WriteLine("track dependency graphs and repack components to a local NuGet source.");
+        writer.WriteLine();
+        writer.WriteLine($"Usage: {CommandName} <command> [options]");
+        writer.WriteLine();
+        writer.WriteLine("Relative paths are resolved against the current directory.");
+        writer.WriteLine("Exit codes: 0 success, 1 command failed, 2 invalid command line.");
+        writer.WriteLine();
+        writer.WriteLine("Every command also takes:");
+        writer.WriteLine("  --json                        Write one JSON document on stdout (result, warnings and errors, files");
+        writer.WriteLine("                                written), even when it fails; the logs go to stderr, plain");
+        writer.WriteLine();
+        writer.WriteLine("Commands:");
+        writer.WriteLine();
 
-        Console.WriteLine("  build [options]");
-        Console.WriteLine("      Scan a directory tree for projects and write their dependency graph to a config file.");
-        Console.WriteLine("      Options:");
-        Console.WriteLine("        --root <dir>            Directory to scan (default: your settings, else current directory)");
-        Console.WriteLine("        --local-nuget <dir>     Local NuGet feed to repack into (default: your settings, else ~/.localnuget)");
-        Console.WriteLine($"        --config <file>         Config file to write (default: {DefaultConfigPath})");
-        Console.WriteLine("        --users-of <names>      Keep the given projects and all that depend on them, transitively");
-        Console.WriteLine("        --deps-of <names>       Keep the given projects and all they depend on, transitively");
-        Console.WriteLine("                                With both: only the projects between them (AND)");
-        Console.WriteLine("        --git-changes           Add the projects with uncommitted changes or commits not on origin's");
-        Console.WriteLine("                                default branch to --users-of (compares with your last fetch)");
-        Console.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
-        Console.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
-        Console.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
-        Console.WriteLine("        --tests                 Keep the test projects (left out by default)");
-        Console.WriteLine("        --csproj                Read the csproj files as they are: don't ask MSBuild for versions and package ids");
-        Console.WriteLine("                                set elsewhere (props files, $(...)), and don't query your NuGet sources and local");
-        Console.WriteLine("                                feed for the latest versions (pack then starts from the csproj versions)");
-        Console.WriteLine("        --plot                  Then plot the graph, as 'plot' does with its defaults, and open it");
-        Console.WriteLine("                                (only on a terminal: with output redirected, the page is just written)");
-        Console.WriteLine();
+        writer.WriteLine("  build [options]");
+        writer.WriteLine("      Scan a directory tree for projects and write their dependency graph to a config file.");
+        writer.WriteLine("      Options:");
+        writer.WriteLine("        --root <dir>            Directory to scan (default: your settings, else current directory)");
+        writer.WriteLine("        --local-nuget <dir>     Local NuGet feed to repack into (default: your settings, else ~/.localnuget)");
+        writer.WriteLine($"        --config <file>         Config file to write (default: {DefaultConfigPath})");
+        writer.WriteLine("        --users-of <names>      Keep the given projects and all that depend on them, transitively");
+        writer.WriteLine("        --deps-of <names>       Keep the given projects and all they depend on, transitively");
+        writer.WriteLine("                                With both: only the projects between them (AND)");
+        writer.WriteLine("        --git-changes           Add the projects with uncommitted changes or commits not on origin's");
+        writer.WriteLine("                                default branch to --users-of (compares with your last fetch)");
+        writer.WriteLine("        --union                 With both: users of --users-of OR deps of --deps-of");
+        writer.WriteLine("        --with-services         Also keep the executables using any kept project, with the libraries in between");
+        writer.WriteLine("        --include-external      Keep dependencies on projects that no solution references");
+        writer.WriteLine("        --tests                 Keep the test projects (left out by default)");
+        writer.WriteLine("        --csproj                Read the csproj files as they are: don't ask MSBuild for versions and package ids");
+        writer.WriteLine("                                set elsewhere (props files, $(...)), and don't query your NuGet sources and local");
+        writer.WriteLine("                                feed for the latest versions (pack then starts from the csproj versions)");
+        writer.WriteLine("        --plot                  Then plot the graph, as 'plot' does with its defaults, and open it");
+        writer.WriteLine("                                (only on a terminal: with output redirected, the page is just written)");
+        writer.WriteLine();
 
-        Console.WriteLine("  plot [options]");
-        Console.WriteLine("      Render the dependency graph of a config file as an interactive HTML page: projects framed");
-        Console.WriteLine("      by solution, collapsible into the solution graph, hover or click for users-of / deps-of.");
-        Console.WriteLine("      Options:");
-        Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
-        Console.WriteLine($"        --output <path>         Output path without extension (default: {DefaultVisualsFolder}/dependencies-<date-time>)");
-        Console.WriteLine("        --open                  Open the page with the default browser");
-        Console.WriteLine();
+        writer.WriteLine("  plot [options]");
+        writer.WriteLine("      Render the dependency graph of a config file as an interactive HTML page: projects framed");
+        writer.WriteLine("      by solution, collapsible into the solution graph, hover or click for users-of / deps-of.");
+        writer.WriteLine("      Options:");
+        writer.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
+        writer.WriteLine($"        --output <path>         Output path without extension (default: {DefaultVisualsFolder}/dependencies-<date-time>)");
+        writer.WriteLine("        --open                  Open the page with the default browser");
+        writer.WriteLine();
 
-        Console.WriteLine("  pack [options]");
-        Console.WriteLine("      Plan what will be repacked and to which versions, write the plan to a repack config, then pack");
-        Console.WriteLine("      in dependency order into the local NuGet feed, as 'go' does.");
-        Console.WriteLine("      Options:");
-        Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
-        Console.WriteLine($"        --repack-config <file>  Repack config file to write (default: {DefaultRepackConfigPath})");
-        Console.WriteLine("        --major                 Increment major version (resets minor/patch)");
-        Console.WriteLine("        --minor                 Increment minor version (resets patch)");
-        Console.WriteLine("        --patch                 Increment patch version");
-        Console.WriteLine("        --next                  Continue a prerelease (1.5.0-alpha.9 -> 1.5.0-alpha.10), or patch a release");
-        Console.WriteLine("        --alpha                 Shorthand for --next --suffix alpha");
-        Console.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (default: your settings, else local; e.g., 'dev', 'beta.2')");
-        Console.WriteLine("                                An iteration number follows it: 1.4.3-dev.1, then .2 when packed again");
-        Console.WriteLine("        --clean                 Clean projects before restoring them");
-        Console.WriteLine("        --dry-run               Only write the plan and print what would run; 'go' runs it later");
-        Console.WriteLine();
+        writer.WriteLine("  pack [options]");
+        writer.WriteLine("      Plan what will be repacked and to which versions, write the plan to a repack config, then pack");
+        writer.WriteLine("      in dependency order into the local NuGet feed, as 'go' does.");
+        writer.WriteLine("      Options:");
+        writer.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
+        writer.WriteLine($"        --repack-config <file>  Repack config file to write (default: {DefaultRepackConfigPath})");
+        writer.WriteLine("        --major                 Increment major version (resets minor/patch)");
+        writer.WriteLine("        --minor                 Increment minor version (resets patch)");
+        writer.WriteLine("        --patch                 Increment patch version");
+        writer.WriteLine("        --next                  Continue a prerelease (1.5.0-alpha.9 -> 1.5.0-alpha.10), or patch a release");
+        writer.WriteLine("        --alpha                 Shorthand for --next --suffix alpha");
+        writer.WriteLine("        --suffix <text>         Set the prerelease label, without the dash (default: your settings, else local; e.g., 'dev', 'beta.2')");
+        writer.WriteLine("                                An iteration number follows it: 1.4.3-dev.1, then .2 when packed again");
+        writer.WriteLine("        --clean                 Clean projects before restoring them");
+        writer.WriteLine("        --dry-run               Only write the plan and print what would run; 'go' runs it later");
+        writer.WriteLine();
 
-        Console.WriteLine("  go [options]");
-        Console.WriteLine("      Pack projects in dependency order into the local NuGet feed, following a repack config");
-        Console.WriteLine("      (from 'pack --dry-run', possibly edited by hand).");
-        Console.WriteLine("      Options:");
-        Console.WriteLine($"        --repack-config <file>  Repack config file to read (default: {DefaultRepackConfigPath})");
-        Console.WriteLine();
+        writer.WriteLine("  go [options]");
+        writer.WriteLine("      Pack projects in dependency order into the local NuGet feed, following a repack config");
+        writer.WriteLine("      (from 'pack --dry-run', possibly edited by hand).");
+        writer.WriteLine("      Options:");
+        writer.WriteLine($"        --repack-config <file>  Repack config file to read (default: {DefaultRepackConfigPath})");
+        writer.WriteLine();
 
-        Console.WriteLine("  up [options]");
-        Console.WriteLine("      Build the executables of a config file, then run them side by side; Ctrl+C stops them all.");
-        Console.WriteLine("      Options:");
-        Console.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
-        Console.WriteLine("        --exclude <names>       Executables not to run, e.g. the one you debug from your IDE");
-        Console.WriteLine();
+        writer.WriteLine("  up [options]");
+        writer.WriteLine("      Build the executables of a config file, then run them side by side; Ctrl+C stops them all.");
+        writer.WriteLine("      Options:");
+        writer.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
+        writer.WriteLine("        --exclude <names>       Executables not to run, e.g. the one you debug from your IDE");
+        writer.WriteLine();
 
-        Console.WriteLine("  settings [options]");
-        Console.WriteLine("      Create your settings file if missing (all commented out), then open it. It holds what differs");
-        Console.WriteLine("      from one user to the next: the local NuGet feed, the root to scan, the default suffix.");
-        Console.WriteLine("      An option given on the command line always wins over it.");
-        Console.WriteLine("      Options:");
-        Console.WriteLine($"        --path                  Only print where the file is (default: ~/.lrun/settings.json, or ${UserSettings.PathVariable})");
-        Console.WriteLine();
+        writer.WriteLine("  settings [options]");
+        writer.WriteLine("      Create your settings file if missing (all commented out), then open it. It holds what differs");
+        writer.WriteLine("      from one user to the next: the local NuGet feed, the root to scan, the default suffix.");
+        writer.WriteLine("      An option given on the command line always wins over it.");
+        writer.WriteLine("      Options:");
+        writer.WriteLine($"        --path                  Only print where the file is (default: ~/.lrun/settings.json, or ${UserSettings.PathVariable})");
+        writer.WriteLine();
 
-        Console.WriteLine("  help");
-        Console.WriteLine("      Show this help message.");
-        Console.WriteLine();
+        writer.WriteLine("  help");
+        writer.WriteLine("      Show this help message.");
+        writer.WriteLine();
 
-        Console.WriteLine("  version");
-        Console.WriteLine("      Show the installed version (also --version). Please include it when reporting an issue.");
-        Console.WriteLine();
+        writer.WriteLine("  version");
+        writer.WriteLine("      Show the installed version (also --version). Please include it when reporting an issue.");
+        writer.WriteLine();
 
-        Console.WriteLine("Example:");
-        Console.WriteLine($"  {CommandName} settings                            (once per machine: your local feed, your repos folder...)");
-        Console.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp --plot");
-        Console.WriteLine($"  {CommandName} plot --open                         (the same graph, opened again)");
-        Console.WriteLine($"  {CommandName} pack --patch --suffix dev");
-        Console.WriteLine($"  {CommandName} pack --patch --suffix dev --dry-run (review .lrun/repack.config.json, then:)");
-        Console.WriteLine($"  {CommandName} go");
-        Console.WriteLine($"  {CommandName} up");
+        writer.WriteLine("Example:");
+        writer.WriteLine($"  {CommandName} settings                            (once per machine: your local feed, your repos folder...)");
+        writer.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp --plot");
+        writer.WriteLine($"  {CommandName} plot --open                         (the same graph, opened again)");
+        writer.WriteLine($"  {CommandName} pack --patch --suffix dev");
+        writer.WriteLine($"  {CommandName} pack --patch --suffix dev --dry-run (review .lrun/repack.config.json, then:)");
+        writer.WriteLine($"  {CommandName} go");
+        writer.WriteLine($"  {CommandName} up");
     }
 }

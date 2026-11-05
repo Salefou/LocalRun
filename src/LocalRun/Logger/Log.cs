@@ -7,25 +7,52 @@ using System;
 /// <summary>
 /// Logging entry point. The minimum level defaults to Information and can be overridden
 /// with the LOCALRUN_LOG_LEVEL environment variable (Trace, Debug, Information, Warning, Error, Critical, None).
+/// In JSON mode (<see cref="OutputMode"/>), every log goes to stderr, and warnings and errors are also collected.
 /// </summary>
 public static class Log
 {
     private const string MinimumLevelVariable = "LOCALRUN_LOG_LEVEL";
 
-    private static readonly ILoggerFactory Factory = LoggerFactory.Create(builder => builder
-        .SetMinimumLevel(ReadMinimumLevel())
-        .AddConsole(options => options.FormatterName = LocalRunConsoleFormatter.FormatterName)
-        .AddConsoleFormatter<LocalRunConsoleFormatter, ConsoleFormatterOptions>());
+    private static DiagnosticsCollector? collector;
 
-    public static ILogger<T> For<T>() => Factory.CreateLogger<T>();
+    // Created on first use, not by the type initializer, so that Main has set the output mode by then
+    private static readonly Lazy<ILoggerFactory> Factory = new(CreateFactory);
+
+    public static ILogger<T> For<T>() => Factory.Value.CreateLogger<T>();
 
     /// <summary>For static classes, which cannot be used as type arguments.</summary>
-    public static ILogger For(string categoryName) => Factory.CreateLogger(categoryName);
+    public static ILogger For(string categoryName) => Factory.Value.CreateLogger(categoryName);
+
+    /// <summary>The warnings and errors logged so far, in JSON mode; empty otherwise.</summary>
+    public static IReadOnlyList<Diagnostic> Diagnostics => collector?.Snapshot() ?? [];
 
     /// <summary>
     /// The console provider writes from a background queue: dispose the factory on exit to flush it.
     /// </summary>
-    public static void Shutdown() => Factory.Dispose();
+    public static void Shutdown()
+    {
+        if (Factory.IsValueCreated)
+            Factory.Value.Dispose();
+    }
+
+    private static ILoggerFactory CreateFactory() => LoggerFactory.Create(builder =>
+    {
+        builder
+            .SetMinimumLevel(ReadMinimumLevel())
+            .AddConsole(options =>
+            {
+                options.FormatterName = LocalRunConsoleFormatter.FormatterName;
+                // stdout holds the JSON document alone
+                if (OutputMode.Json)
+                    options.LogToStandardErrorThreshold = LogLevel.Trace;
+            })
+            .AddConsoleFormatter<LocalRunConsoleFormatter, ConsoleFormatterOptions>();
+        if (OutputMode.Json)
+        {
+            collector = new DiagnosticsCollector();
+            builder.AddProvider(collector);
+        }
+    });
 
     private static LogLevel ReadMinimumLevel()
     {

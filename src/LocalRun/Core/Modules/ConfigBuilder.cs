@@ -8,11 +8,27 @@ using Microsoft.Extensions.Logging;
 using NuGet.Versioning;
 using System;
 
+/// <summary>Projects <c>build</c> left out of the config, for one reason.</summary>
+/// <param name="Reason"><c>test</c>, <c>name-collision</c>, <c>filter</c> or <c>cycle</c>.</param>
+public sealed record LeftOutProjects(string Reason, IReadOnlyList<string> Projects)
+{
+    /// <summary>For a name collision: the paths of the projects sharing the name, relative to the root.</summary>
+    public IReadOnlyList<string>? Paths { get; init; }
+
+    /// <summary>For a name collision or a cycle: the projects kept in the config without their dependency on these.</summary>
+    public IReadOnlyList<string>? Dependents { get; init; }
+}
+
+/// <summary>What <c>build</c> found besides the config: how many projects it scanned, what it left out and why.</summary>
+/// <param name="Scanned">Projects found, test projects and name collisions excluded.</param>
+/// <param name="GitChanges">With <c>--git-changes</c>, the projects found changed.</param>
+public sealed record BuildSummary(int Scanned, IReadOnlyList<LeftOutProjects> LeftOut, IReadOnlyList<string>? GitChanges);
+
 public class ConfigBuilder
 {
     private static readonly ILogger<ConfigBuilder> logger = Log.For<ConfigBuilder>();
 
-    public LocalRunConfig BuildConfig(string rootPath, BuildConfigOptions options, string localNugetRepoPath)
+    public (LocalRunConfig Config, BuildSummary Summary) BuildConfig(string rootPath, BuildConfigOptions options, string localNugetRepoPath)
     {
         logger.LogInformation(LogEvents.Progress, "Scanning {RootPath}...", rootPath);
 
@@ -42,8 +58,9 @@ public class ConfigBuilder
         }
 
         ValidateFilterNames(graph, options);
-        List<string>? usersOf = options.RetainGitChanges
-            ? [.. (options.RetainDependsOn ?? []).Union(FindGitChanges(rootPath, csprojs, graph), StringComparer.OrdinalIgnoreCase)]
+        List<string>? gitChanges = options.RetainGitChanges ? FindGitChanges(rootPath, csprojs, graph) : null;
+        List<string>? usersOf = gitChanges != null
+            ? [.. (options.RetainDependsOn ?? []).Union(gitChanges, StringComparer.OrdinalIgnoreCase)]
             : options.RetainDependsOn;
 
         var addedForServices = graph.Retain(usersOf, options.RetainIsDependencyOf, options.Union, options.WithServices);
@@ -59,7 +76,8 @@ public class ConfigBuilder
         }
 
         // After the filters, so they still see the real graph; a cycle cannot be ordered, so it is left out
-        foreach (var cycle in graph.RemoveCycles())
+        var cycles = graph.RemoveCycles();
+        foreach (var cycle in cycles)
         {
             logger.LogWarning("Dependency cycle left out of the config: {Projects}", string.Join(", ", cycle.Projects));
             if (cycle.Dependents.Count != 0)
@@ -77,7 +95,29 @@ public class ConfigBuilder
         };
         if (Filters(options) is { } filters)
             logger.LogInformation("Kept {Kept} of {Scanned} ({Filters})", config.Projects.Count, scanned.Count, filters);
-        return config;
+        return (config, new BuildSummary(scanned.Count, LeftOut(graph, scanned, config, cycles), gitChanges));
+    }
+
+    private static List<LeftOutProjects> LeftOut(DependencyGraph graph, List<ProjectNode> scanned, LocalRunConfig config,
+        List<DependencyGraph.DependencyCycle> cycles)
+    {
+        List<LeftOutProjects> leftOut = [];
+        if (graph.LeftOutTests.Count != 0)
+            leftOut.Add(new("test", graph.LeftOutTests));
+        leftOut.AddRange(graph.Collisions.Select(collision =>
+            new LeftOutProjects("name-collision", [collision.Name]) { Paths = collision.Paths, Dependents = collision.Dependents }));
+
+        var kept = config.Projects.Select(proj => proj.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var inCycles = cycles.SelectMany(cycle => cycle.Projects).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var filtered = scanned.Select(proj => proj.Name)
+            .Where(name => !kept.Contains(name) && !inCycles.Contains(name))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (filtered.Count != 0)
+            leftOut.Add(new("filter", filtered));
+
+        leftOut.AddRange(cycles.Select(cycle => new LeftOutProjects("cycle", cycle.Projects) { Dependents = cycle.Dependents }));
+        return leftOut;
     }
 
     /// <summary>The filters given to <c>build</c>, as typed (<c>--deps-of WebApp, --with-services</c>), or null without any.</summary>

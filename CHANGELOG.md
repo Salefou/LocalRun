@@ -7,6 +7,12 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Added
+
+- `--json`, on every command: one JSON document on stdout (status, exit code, the command's result, the warnings and
+  errors logged, the files written, and an error code on failure), the logs on stderr. `build`, `pack`, `plot`,
+  `settings`, `version` and `help` report a result; `go` and `up` only the envelope for now. See README "Machine output".
+
 ## [0.4.0] - 2026-11-05
 
 ### Changed
