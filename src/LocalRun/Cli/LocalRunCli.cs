@@ -46,6 +46,7 @@ public static class LocalRunCli
     private static readonly string DefaultConfigPath = Path.Combine(WorkFolder, "localrun.config.json");
     private static readonly string DefaultRepackConfigPath = Path.Combine(WorkFolder, "repack.config.json");
     private static readonly string DefaultVisualsFolder = Path.Combine(WorkFolder, "plots");
+    private static readonly string DefaultLogsFolder = Path.Combine(WorkFolder, "logs");
 
     private static readonly ILogger logger = Log.For(typeof(LocalRunCli).FullName!);
 
@@ -120,7 +121,8 @@ public static class LocalRunCli
         {
             var report = new CommandReport(CommandReport.CurrentSchemaVersion, cmd, exitCode == ExitSuccess ? "succeeded" : "failed",
                 exitCode, stopwatch.ElapsedMilliseconds, output.Result, diagnostics ?? DiagnosticsOfThisRun(), output.Written, error);
-            Console.Out.WriteLine(report.ToJson());
+            // up streams events first, a line each: its document is a line too, whether it got to stream or not
+            Console.Out.WriteLine(report.ToJson(indented: cmd != "up"));
             Console.Out.Flush();
         }
         return exitCode;
@@ -158,7 +160,7 @@ public static class LocalRunCli
                 await GoAsync(options, output);
                 break;
             case "up":
-                await RunExecutablesAsync(options);
+                await RunExecutablesAsync(options, output);
                 break;
             case "settings":
                 Settings(options, output);
@@ -325,14 +327,31 @@ public static class LocalRunCli
         }
     }
 
-    private static async Task RunExecutablesAsync(CommandLineArgs args)
+    private static async Task RunExecutablesAsync(CommandLineArgs args, CommandOutput output)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         List<string>? exclude = args.Values("--exclude");
+        string logsFolder = Path.GetFullPath(args.Value("--logs") ?? DefaultLogsFolder);
         args.EnsureAllConsumed();
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
-        await new RunProcessor().RunAsync(config, exclude);
+        // Creates the folder, and the work folder's .gitignore when the logs are in it
+        PrepareFolderOf(Path.Combine(logsFolder, "_"));
+        // With --json, events stream on stdout as they happen: an agent sees the services start without waiting for the end
+        var events = OutputMode.Json ? new EventStream(Console.Out) : null;
+        var processor = new RunProcessor(logsFolder, events == null ? null : events.Write);
+        try
+        {
+            await processor.RunAsync(config, exclude);
+        }
+        finally
+        {
+            events?.Close();
+            var services = processor.Services.Select(entry => new ServiceReport(entry.Key, entry.Value.Status, entry.Value.ExitCode,
+                entry.Value.Status == ServiceStatus.NotStarted ? null : entry.Value.Log)).ToList();
+            output.Result = new UpResult(logsFolder, services);
+            output.Written.AddRange(services.Select(service => service.Log).OfType<string>());
+        }
     }
 
     private static void Settings(CommandLineArgs args, CommandOutput output)
@@ -531,9 +550,12 @@ public static class LocalRunCli
 
         writer.WriteLine("  up [options]");
         writer.WriteLine("      Build the executables of a config file, then run them side by side; Ctrl+C stops them all.");
+        writer.WriteLine("      Each one's output also goes to <logs>/<name>.log. With --json, stdout gets one line per event");
+        writer.WriteLine("      (building, started, running, stopping, exited), then the result on one line.");
         writer.WriteLine("      Options:");
         writer.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
         writer.WriteLine("        --exclude <names>       Executables not to run, e.g. the one you debug from your IDE");
+        writer.WriteLine($"        --logs <dir>            Folder of the services' log files, overwritten each run (default: {DefaultLogsFolder})");
         writer.WriteLine();
 
         writer.WriteLine("  settings [options]");
