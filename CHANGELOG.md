@@ -16,6 +16,12 @@ bumps the minor version, anything else the patch.
 
 ### Added
 
+- `up --json` streams one JSON event per line on stdout as it happens (`building`, `started` with the pid and log file,
+  `running`, `stopping`, `exited` with the exit code and a status), then the result on one last line: each service's
+  status (`not-started`, `exited`, `failed`, `stopped`, `killed`), exit code and log file.
+- `up` writes each service's output to `.lrun/logs/<name>.log` (`--logs` to change the folder), without colors,
+  rewritten on each run. The terminal shows the same as before, plus a `Logs:` line.
+- Ctrl+C while `up` builds the executables stops it before anything starts, instead of killing `lrun` on the spot.
 - `--strict`, on every command: exit code `5` when the result left something out or may have a wrong version (name
   collisions, cycles, MSBuild evaluation or NuGet source failures, a csproj overriding `PackageVersion`, an unknown
   packages folder). The command still writes its files. For pipelines, where these warnings would otherwise pass unseen.

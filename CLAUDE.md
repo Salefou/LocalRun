@@ -89,7 +89,11 @@ shell escaping.
   expected to wait for/retry their dependencies. Exit code 1 only for processes that failed before a stop was requested. To test
   Ctrl+C from automation, start `lrun up` in its own console and send a real `CTRL_C_EVENT`
   (AttachConsole + GenerateConsoleCtrlEvent from a separate process); a `cmd` wrapper reporting the exit
-  code needs `/v:on` and `!ERRORLEVEL!`.
+  code needs `/v:on` and `!ERRORLEVEL!`. Poll its redirected output with `FileShare.ReadWrite` (`Get-Content` can't
+  read it while `cmd` writes), or just send after a delay. The Ctrl+C handler is registered before the builds, so a
+  stop during them still ends with the result (services `not-started`, exit 0). Each service's output also goes to
+  `--logs` (`.lrun/logs/<name>.log`); with `--json`, `UpEvent`s stream through `EventStream`, closed before the
+  one-line document so a late `exited` can't follow it.
 - **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
   rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
 - **User settings** (`UserSettings`, user feedback, 2026-10-28): `~/.lrun/settings.json` (or `LOCALRUN_SETTINGS`) holds
