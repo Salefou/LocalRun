@@ -103,8 +103,15 @@ shell escaping.
   logs (`Log` creates its factory lazily and reads it once; `Terminal.IsAttached` is false in this mode). A command
   reports through `CommandOutput` (`Result`, `Written`); nothing else may write to stdout in this mode. Renaming or
   removing a field bumps `schemaVersion`; `JsonOutputTests` pins the envelope and runs a real process.
-- **Exit codes** (`LocalRunCli`): `0` success, `1` command failed, `2` invalid command line
-  (`UsageException`). External code relies on them.
+- **Diagnostic codes** (ROADMAP item 2, 2026-11-05): every warning/error log call passes a `DiagnosticEvents` event id
+  (id ≥ 100, kebab-case name = the JSON `code`). A new warning gets a code, and goes into `DiagnosticEvents.Strict` when
+  it means the result left something out or may have a wrong version ("incomplete"), not when it keeps more ("when
+  unsure, keep more" fallbacks) or reports something expected. `empty-selection` is never strict: exit `0` with that
+  marker was chosen on purpose (user feedback: empty runs for testing or cleanup). Codes are a contract: never rename.
+- **Exit codes** (`LocalRunCli`, `ErrorCodes.Of`): `0` success, `1` command failed, `2` invalid command line,
+  `3` input missing/invalid, `4` a `dotnet` command failed (`DotnetFailedException`), `5` refused by `--strict`. Few
+  numbers, many names: a new failure kind gets an `ErrorCodes` name, a new number only if a script would act differently.
+  `2` is `UsageException`. External code relies on them: moving a case to another number is a breaking change.
 - **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values`, then call
   `EnsureAllConsumed()` before doing work. Unknown/repeated/malformed options must fail, not be ignored.
 - **No machine-specific paths**: every path is an option, defaulting to a file in the current

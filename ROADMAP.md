@@ -57,10 +57,10 @@ in `--porcelain`?
 
 **Status:** the envelope, captured diagnostics, and the results of every command but `up` are in (README "Machine
 output"). Differences from the plan below: the field is `diagnostics` (it holds errors too), not `warnings`; `plot` and
-`settings` got their result with the envelope; the document is indented; error codes so far are `usage`,
-`config-not-found`, `root-not-found`, `command-failed`. `pack` and `go` share one result: each project's `status`
-(`planned`, `packed`, `failed`, `skipped`), `durationMs` and `failure` (step, exit code, error lines, at most 20). Left:
-step 6 (`up`), real diagnostic codes, and the `LOCALRUN_OUTPUT` variable (not started; decide whether it's still wanted).
+`settings` got their result with the envelope; the document is indented; error and diagnostic codes came with item 2.
+`pack` and `go` share one result: each project's `status` (`planned`, `packed`, `failed`, `skipped`), `durationMs` and
+`failure` (step, exit code, error lines, at most 20). Left: step 6 (`up`), and the `LOCALRUN_OUTPUT` variable (not
+started; decide whether it's still wanted).
 
 **Decisions proposed** (the open questions above, answered; change any of them before work starts):
 - `--json` only. `--porcelain` waits until a shell user asks. A global flag, accepted by every command, before or after it.
@@ -125,24 +125,16 @@ Windows console encodings can add a BOM or mangle UTF-8 when stdout is a pipe, h
 process, not only `Console.SetOut`; `go` and `up` run long-lived children whose output must never leak into stdout in this
 mode (they are captured, as `RunToCompletionAsync` already does for builds).
 
-### 2. Finer exit codes **(user)**
+### 2. Finer exit codes **(user)**: shipped (branch `claude/exit-codes`, 0.5.0)
 
-What exists: `0` success, `1` command failed, `2` invalid command line; "external code relies on them" (`CLAUDE.md`).
-
-Ideas:
-- Keep `0`, `1`, `2` meaning what they mean; split `1` into categories an agent can act on differently. Candidates:
-  `3` input missing or unreadable (config not found, bad JSON), `4` a build/pack step failed (the code is the retry
-  signal: fix the code), `5` nothing to do / empty selection (today a warning with exit `0`), `6` verification failed
-  (5 below), `7` a service failed in `up`, `8` environment (no `dotnet`, feed unwritable).
-- A non-zero code alone isn't enough: with `--json`, add a stable string `error.code` (`config-not-found`,
-  `project-build-failed`, `ambiguous-name`, …) plus the failing project and the first compiler errors. The string is the
-  real contract; the number is a coarse shortcut. Number few things, name many.
-- `--strict`: turn the warnings that mean "I left things out" (name collisions, cycles removed, unreadable repo) into a
-  non-zero exit. Today they exit `0` on purpose (user feedback, 2026-10-24); strictness must be opt-in.
-- Any code that was `1` and moves is a visible change: while 0.x, bump the minor and list it in the CHANGELOG. Document
-  the table in `--help` and the README.
-
-Open questions: which categories are worth a number? Is `5` (empty selection) a failure or a valid result?
+Exit codes `3` input, `4` a `dotnet` command failed, `5` `--strict`; diagnostic codes on every warning; see the CHANGELOG
+and README "Diagnostic codes". Decisions (user feedback, 2026-11-05: "you know best" for the numbers and `--strict`):
+- An empty selection is a success: exit `0` with an `empty-selection` diagnostic as the marker (empty runs for testing or
+  cleanup), never failed by `--strict`.
+- No number for "environment" (no `dotnet`, feed unwritable) nor for a service failing in `up`: still `1` with
+  `command-failed`, until a script needs to tell them apart. A verification failure (5 below) will get `6` if it ships.
+- `--strict` fails on "left out or possibly wrong" (collisions, cycles, MSBuild/NuGet fallbacks, PackageVersion override,
+  unknown packages folder), not on the git fallbacks, which keep more.
 
 ### 3. `lrun status` **(user)**
 
