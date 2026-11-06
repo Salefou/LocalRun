@@ -150,6 +150,9 @@ public static class LocalRunCli
             case "build":
                 await BuildAsync(options, output);
                 break;
+            case "list":
+                List(options, output);
+                break;
             case "plot":
                 await PlotAsync(options, output);
                 break;
@@ -204,11 +207,8 @@ public static class LocalRunCli
         args.EnsureAllConsumed();
 
         UserSettings settings = UserSettings.Load();
-        string rootPath = Path.GetFullPath(root ?? settings.Root ?? Directory.GetCurrentDirectory());
+        string rootPath = RootPath(root, settings);
         string localNugetPath = Path.GetFullPath(localNuget ?? settings.LocalNuget ?? DefaultLocalNugetPath);
-
-        if (!Directory.Exists(rootPath))
-            throw new RootNotFoundException($"Root directory not found: {rootPath}");
 
         var configBuilder = new ConfigBuilder();
         var (localRunConfig, summary) = configBuilder.BuildConfig(rootPath, configOptions, localNugetPath);
@@ -231,6 +231,43 @@ public static class LocalRunCli
         output.Result = new BuildResult(configPath, rootPath, localNugetPath, ConfigBuilder.Filters(configOptions), summary.Scanned,
             new ProjectCounts(localRunConfig.Projects.Count, localRunConfig.Projects.Count - services.Count, services.Count),
             services, summary.LeftOut, summary.GitChanges, plotPath);
+    }
+
+    /// <summary>The directory to scan: the option, else the settings, else the current directory; it must exist.</summary>
+    private static string RootPath(string? root, UserSettings settings)
+    {
+        string rootPath = Path.GetFullPath(root ?? settings.Root ?? Directory.GetCurrentDirectory());
+        if (!Directory.Exists(rootPath))
+            throw new RootNotFoundException($"Root directory not found: {rootPath}");
+        return rootPath;
+    }
+
+    /// <summary>
+    /// What <c>build</c> would keep with the same filters, printed instead of written: a question about the graph
+    /// ("what uses X?") that leaves the config alone. No NuGet source is queried.
+    /// </summary>
+    private static void List(CommandLineArgs args, CommandOutput output)
+    {
+        string? root = args.Value("--root");
+        BuildConfigOptions options = BuildConfigOptionsParser.Parse(args);
+        args.EnsureAllConsumed();
+
+        string rootPath = RootPath(root, UserSettings.Load());
+        var selection = new ConfigBuilder().SelectProjects(rootPath, options);
+
+        // The list is the result: printed in full, one line per project under its depth
+        var depths = selection.Projects.GroupBy(proj => selection.Depths[proj.Name]).ToList();
+        int nameWidth = selection.Projects.Select(proj => proj.Name.Length).DefaultIfEmpty().Max();
+        for (int i = 0; i < depths.Count; i++)
+        {
+            logger.LogInformation("Depth {Depth}/{Depths}:", i + 1, depths.Count);
+            foreach (var proj in depths[i])
+            {
+                logger.LogInformation("  {Project}  {Type,-10}  {Version,-14}  {Solution}", proj.Name.PadRight(nameWidth), proj.Type,
+                    proj.Version.AsVersionString(), proj.SolutionPath == null ? "(no solution)" : Path.GetFileName(proj.SolutionPath));
+            }
+        }
+        output.Result = ListResult.Of(rootPath, ConfigBuilder.Filters(options), selection);
     }
 
     private static async Task PlotAsync(CommandLineArgs args, CommandOutput output)
@@ -515,6 +552,13 @@ public static class LocalRunCli
         writer.WriteLine("                                (only on a terminal: with output redirected, the page is just written)");
         writer.WriteLine();
 
+        writer.WriteLine("  list [options]");
+        writer.WriteLine("      Print the projects 'build' would keep, with their depth, type, version and solution, without");
+        writer.WriteLine("      writing anything: 'list --users-of X' answers \"what uses X?\". Doesn't query your NuGet sources.");
+        writer.WriteLine("      Options: --root, --users-of, --deps-of, --git-changes, --union, --with-services,");
+        writer.WriteLine("      --include-external, --tests and --csproj, as for 'build'.");
+        writer.WriteLine();
+
         writer.WriteLine("  plot [options]");
         writer.WriteLine("      Render the dependency graph of a config file as an interactive HTML page: projects framed");
         writer.WriteLine("      by solution, collapsible into the solution graph, hover or click for users-of / deps-of.");
@@ -576,6 +620,7 @@ public static class LocalRunCli
 
         writer.WriteLine("Example:");
         writer.WriteLine($"  {CommandName} settings                            (once per machine: your local feed, your repos folder...)");
+        writer.WriteLine($"  {CommandName} list --root ./repos --users-of Shared.Pricing --with-services (what would a change touch?)");
         writer.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp --plot");
         writer.WriteLine($"  {CommandName} plot --open                         (the same graph, opened again)");
         writer.WriteLine($"  {CommandName} pack --patch --suffix dev");
