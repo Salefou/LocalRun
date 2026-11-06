@@ -116,6 +116,27 @@ Rebuild the config with each line and check the `Name`s in `localrun.config.json
 | `… --users-of Nope` | rejected, exit code 2: `Unknown project(s) for '--users-of': Nope` |
 | `… --retain-depends-on LrSample.Logging` | rejected, exit code 2 (old flag name) |
 
+`lrun list` takes the same filters and prints what `build` would keep, writing nothing (`.lrun/` stays as it was):
+
+```
+> lrun list --root workspace --users-of LrSample.Pricing.Models
+[WRN] Did not find any solution referencing project …\LrSample.Orphan.csproj
+Scanned …\samples\workspace: 11 projects in 5 solutions, 7 libraries and 4 executables
+Kept 6 of 11 (--users-of LrSample.Pricing.Models)
+Depth 1/3:
+  LrSample.Pricing.Models  library     1.4.2.7         Pricing.sln
+Depth 2/3:
+  LrSample.Pricing         library     1.4.0           Pricing.sln
+  LrSample.Reports         library     1.1.0           Reporting.sln
+  LrSample.RiskService     executable  0.9.0-rc.1      Trading.sln
+Depth 3/3:
+  LrSample.OrderGateway    executable  3.0.0           Trading.sln
+  LrSample.ReportCli       executable  1.1.0           Reporting.sln
+```
+
+Every line of the table gives the same projects with `list` in place of `build` (without `--local-nuget`, which `list`
+rejects), and the same exit codes.
+
 `lrun plot` after the first line: the six kept projects are filled (RiskService, OrderGateway and
 ReportCli green, the libraries blue), and Primitives and Logging, which they use but the filter left
 out, have a grey dashed outline with dashed edges and no version.

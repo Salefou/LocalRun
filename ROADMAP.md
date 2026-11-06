@@ -14,8 +14,9 @@ parse, failures it can classify, queries that don't write anything, and services
 
 1. **Machine output** (1) and **error codes** (2): everything else reports through them. Done (0.5.0).
 2. **`status`** (3) and **`build --verify`** (5): read-only questions, with a shared "what does this config hold" model.
-3. **`--since`** (4): extends `GitChangeDetector`, independent of the rest.
+3. **`--since`** (4): extends `GitChangeDetector`, independent of the rest. Postponed (see 4).
 4. The agent-oriented additions (A1–A8) once 1–2 exist; A1 (queries) and A4 (service logs on disk) first, they are cheap.
+   A1 shipped as `lrun list`, A4's plain logs in 0.5.0.
 
 ---
 
@@ -57,7 +58,11 @@ Ideas:
 - `--json` (1) makes it the main read-only entry point for agents. Without a config: exit `3` with the `build` hint.
 - Candidate flags: `--only executables|libraries`, `--solution <name>`, `--drift` (see 5).
 
-### 4. `build --since <rev>` **(user)**
+### 4. `build --since <rev>` **(user)**: postponed
+
+Postponed (user feedback, 2026-11-06): a commit hash exists in one repository only, so what the other repositories of a
+config should compare with has no obvious answer (their default base? the whole repo? nothing?). Revisit with a real
+multi-repo use case; the per-repo map and `--since-last-build` below are the leads.
 
 Goal: `--git-changes` is coarse (uncommitted files + commits not on origin's default branch, per project). `--since`
 lets the caller say what "changed" means, e.g. "since the last release" or "since I last packed".
@@ -110,18 +115,21 @@ package), and so do name-collision dependents (their project reference names one
 
 Tried and reverted (PR #23, commits 29d91c0 / 157b5a5): `build` leaving out, with the cycle, every project reaching it
 through project references (needs the reference kind at scan time: `ProjectNode.ProjectReferences`, not written to the
-config). The user has **another flow in mind**: ask what it is before designing anything; the reverted commit holds
-the reference-kind plumbing and tests, reusable whatever the flow.
+config). The reverted commit holds the reference-kind plumbing and tests.
+
+Not fixed (user feedback, 2026-11-06): the filters are meant to restrict the config to a part that builds, so a run
+keeping a project that reaches a cycle is a selection to narrow, which the warning (and `--strict`) already say.
 
 ---
 
 ## Suggested (agents on a big platform)
 
-### A1. Read-only graph queries **(claude)**
-`lrun impact <project>` / `lrun deps <project>` (or `list --users-of X --deps-of Y`): what depends on this, what does it
-need, which services are affected, without writing a config. The filter semantics of `build` (`Retain`) already exist;
-this exposes them as a question. With `--json` it answers "what breaks if I change this library?" in one call.
-`lrun affected --since <rev>` (4) is the same query driven by git.
+### A1. Read-only graph queries **(claude)**: shipped as `lrun list` (unreleased)
+`lrun list` takes `build`'s filters and prints what `build` would keep, writing nothing; `--json` gives each project with
+its depth and dependencies. Decisions (user feedback, 2026-11-06): one command with `build`'s flags rather than
+`impact` / `deps` commands or `build --dry-run`; it scans the tree (always current, unfiltered) rather than reading a
+config, which is usually filtered and may be stale. Left: reading an existing config (`--config`) as a fast path, if a
+large platform makes the scan slow.
 
 ### A2. Parsed build and pack failures **(claude)**
 When `go` / `build` fails, an agent needs the compiler errors, not the log. Parse MSBuild's
