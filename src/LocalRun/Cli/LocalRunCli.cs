@@ -28,6 +28,8 @@ public static class LocalRunCli
     public const int ExitDotnetFailed = 4;
     /// <summary><c>--strict</c>: the command completed, but left something out or may have got a version wrong.</summary>
     public const int ExitStrict = 5;
+    /// <summary><c>verify</c>: a library's package is missing from the local feed, or older than its csproj or its files.</summary>
+    public const int ExitVerifyFailed = 6;
 
     private const string StrictFlag = "--strict";
 
@@ -153,6 +155,9 @@ public static class LocalRunCli
             case "list":
                 List(options, output);
                 break;
+            case "verify":
+                await VerifyAsync(options, output);
+                break;
             case "plot":
                 await PlotAsync(options, output);
                 break;
@@ -204,6 +209,7 @@ public static class LocalRunCli
         string configPath = Path.GetFullPath(args.Value("--config") ?? DefaultConfigPath);
         BuildConfigOptions configOptions = BuildConfigOptionsParser.Parse(args);
         bool plot = args.Flag("--plot");
+        bool verify = args.Flag("--verify");
         args.EnsureAllConsumed();
 
         UserSettings settings = UserSettings.Load();
@@ -228,9 +234,23 @@ public static class LocalRunCli
         else
             logger.LogInformation("Next: {Command} pack", CommandName);
 
+        var verifyResult = verify ? VerifyResult.Of(configPath, localNugetPath, FeedVerifier.Verify(localRunConfig)) : null;
         output.Result = new BuildResult(configPath, rootPath, localNugetPath, ConfigBuilder.Filters(configOptions), summary.Scanned,
             new ProjectCounts(localRunConfig.Projects.Count, localRunConfig.Projects.Count - services.Count, services.Count),
-            services, summary.LeftOut, summary.GitChanges, plotPath);
+            services, summary.LeftOut, summary.GitChanges, plotPath, verifyResult);
+        verifyResult?.ThrowIfFailed();
+    }
+
+    /// <summary>Whether the local feed holds an up-to-date package of every library of the config (exit code 6 if not).</summary>
+    private static async Task VerifyAsync(CommandLineArgs args, CommandOutput output)
+    {
+        string configPath = Path.GetFullPath(args.Value("--config") ?? DefaultConfigPath);
+        args.EnsureAllConsumed();
+
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
+        var result = VerifyResult.Of(configPath, config.LocalNugetPath, FeedVerifier.Verify(config));
+        output.Result = result;
+        result.ThrowIfFailed();
     }
 
     /// <summary>The directory to scan: the option, else the settings, else the current directory; it must exist.</summary>
@@ -518,7 +538,8 @@ public static class LocalRunCli
         writer.WriteLine();
         writer.WriteLine("Relative paths are resolved against the current directory.");
         writer.WriteLine("Exit codes: 0 success (also when there was nothing to do), 1 command failed, 2 invalid command line,");
-        writer.WriteLine("3 input missing or invalid (config, root, settings), 4 a dotnet command failed, 5 refused by --strict.");
+        writer.WriteLine("3 input missing or invalid (config, root, settings), 4 a dotnet command failed, 5 refused by --strict,");
+        writer.WriteLine("6 verify found a package missing or stale.");
         writer.WriteLine();
         writer.WriteLine("Every command also takes:");
         writer.WriteLine("  --json                        Write one JSON document on stdout (result, warnings and errors, files");
@@ -550,6 +571,7 @@ public static class LocalRunCli
         writer.WriteLine("                                feed for the latest versions (pack then starts from the csproj versions)");
         writer.WriteLine("        --plot                  Then plot the graph, as 'plot' does with its defaults, and open it");
         writer.WriteLine("                                (only on a terminal: with output redirected, the page is just written)");
+        writer.WriteLine("        --verify                Then check the local feed against the config just written, as 'verify' does");
         writer.WriteLine();
 
         writer.WriteLine("  list [options]");
@@ -557,6 +579,13 @@ public static class LocalRunCli
         writer.WriteLine("      writing anything: 'list --users-of X' answers \"what uses X?\". Doesn't query your NuGet sources.");
         writer.WriteLine("      Options: --root, --users-of, --deps-of, --git-changes, --union, --with-services,");
         writer.WriteLine("      --include-external, --tests and --csproj, as for 'build'.");
+        writer.WriteLine();
+
+        writer.WriteLine("  verify [options]");
+        writer.WriteLine("      Check that the local feed holds an up-to-date package of every library of a config: none is");
+        writer.WriteLine("      missing, none older than its csproj version or than a file of its folder. Exit code 6 if not.");
+        writer.WriteLine("      Options:");
+        writer.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
         writer.WriteLine();
 
         writer.WriteLine("  plot [options]");
@@ -626,6 +655,7 @@ public static class LocalRunCli
         writer.WriteLine($"  {CommandName} pack --patch --suffix dev");
         writer.WriteLine($"  {CommandName} pack --patch --suffix dev --dry-run (review .lrun/repack.config.json, then:)");
         writer.WriteLine($"  {CommandName} go");
+        writer.WriteLine($"  {CommandName} verify                              (exit code 6: something to pack before 'up')");
         writer.WriteLine($"  {CommandName} up");
     }
 }

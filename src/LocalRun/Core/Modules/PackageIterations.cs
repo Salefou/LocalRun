@@ -25,7 +25,7 @@ internal static class PackageIterations
                 highest = Math.Max(highest, baseIteration);
             foreach (var folder in existingFolders)
             {
-                foreach (var packed in PackedVersions(folder, packageId))
+                foreach (var (packed, _) in Packages(folder, packageId))
                 {
                     if (IterationOf(packed, targetVersion) is int iteration)
                         highest = Math.Max(highest, iteration);
@@ -37,9 +37,10 @@ internal static class PackageIterations
 
     /// <summary>
     /// The versions of a package in a folder, laid out as a flat feed (<c>id.version.nupkg</c>, what <c>dotnet pack -o</c>
-    /// writes) or as the global packages folder (<c>id/version/</c>).
+    /// writes) or as the global packages folder (<c>id/version/</c>), each with its <c>.nupkg</c> (or its version folder
+    /// when it holds none).
     /// </summary>
-    private static IEnumerable<NuGetVersion> PackedVersions(string folder, string packageId)
+    internal static IEnumerable<(NuGetVersion Version, string Path)> Packages(string folder, string packageId)
     {
         string prefix = packageId + ".";
         foreach (var file in Directory.EnumerateFiles(folder, "*.nupkg"))
@@ -47,7 +48,7 @@ internal static class PackageIterations
             // Another package sharing the prefix (Foo.Bar.1.0.0 for Foo) leaves no parsable version
             string name = Path.GetFileNameWithoutExtension(file);
             if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && NuGetVersion.TryParse(name[prefix.Length..], out var version))
-                yield return version;
+                yield return (version, file);
         }
         string packageFolder = Path.Combine(folder, packageId.ToLowerInvariant());
         if (!Directory.Exists(packageFolder))
@@ -55,7 +56,7 @@ internal static class PackageIterations
         foreach (var versionFolder in Directory.EnumerateDirectories(packageFolder))
         {
             if (NuGetVersion.TryParse(Path.GetFileName(versionFolder), out var version))
-                yield return version;
+                yield return (version, Directory.EnumerateFiles(versionFolder, "*.nupkg").FirstOrDefault() ?? versionFolder);
         }
     }
 

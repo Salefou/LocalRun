@@ -302,6 +302,49 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Contains("Nope", list.Json.GetProperty("error").GetProperty("message").GetString());
     }
 
+    [Fact]
+    public async Task Verify_FailsWithItsOwnCode_WhenAPackageIsMissing()
+    {
+        string root = WriteLibAndApp();
+        string feed = Path.Combine(workDir, "feed");
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", root, "--local-nuget", feed, "--include-external", "--csproj", "--json")).ExitCode);
+
+        var verify = await LrunAsync("verify", "--json");
+
+        Assert.Equal(LocalRunCli.ExitVerifyFailed, verify.ExitCode);
+        AssertPlain(verify);
+        Assert.Equal("verify-failed", verify.Json.GetProperty("error").GetProperty("code").GetString());
+        Assert.Contains("package-missing", Codes(verify));
+        var result = verify.Json.GetProperty("result");
+        Assert.Equal(feed, result.GetProperty("feed").GetString());
+        Assert.Equal(1, result.GetProperty("missing").GetInt32());
+        var lib = Assert.Single(result.GetProperty("packages").EnumerateArray());
+        Assert.Equal(("Lib", "missing"), (lib.GetProperty("project").GetString(), lib.GetProperty("status").GetString()));
+
+        // Packed afterwards: up to date
+        Directory.CreateDirectory(feed);
+        File.WriteAllText(Path.Combine(feed, "Lib.1.0.1-local.1.nupkg"), "");
+        var again = await LrunAsync("verify", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, again.ExitCode);
+        Assert.Equal(1, again.Json.GetProperty("result").GetProperty("ok").GetInt32());
+    }
+
+    [Fact]
+    public async Task BuildVerify_WritesTheConfig_ThenFailsLikeVerify()
+    {
+        string root = WriteLibAndApp();
+
+        var build = await LrunAsync("build", "--root", root, "--local-nuget", Path.Combine(workDir, "feed"), "--include-external", "--csproj",
+            "--verify", "--json");
+
+        Assert.Equal(LocalRunCli.ExitVerifyFailed, build.ExitCode);
+        Assert.True(File.Exists(Path.Combine(workDir, ".lrun", "localrun.config.json")));
+        var verify = build.Json.GetProperty("result").GetProperty("verify");
+        Assert.Equal(1, verify.GetProperty("missing").GetInt32());
+    }
+
     private static IEnumerable<string?> Codes(Run run) =>
         run.Json.GetProperty("diagnostics").EnumerateArray().Select(diagnostic => diagnostic.GetProperty("code").GetString());
 
