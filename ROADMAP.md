@@ -19,6 +19,40 @@ parse, failures it can classify, queries that don't write anything, and services
 4. The agent-oriented additions (A1–A8) once 1–2 exist; A1 (queries) and A4 (service logs on disk) first, they are cheap.
    A1 shipped as `lrun list`, A4's plain logs in 0.5.0.
 
+## Breaking for 1.0?
+
+1.0.0 promises that a breaking change costs a major version. The public API is the commands and options (and filter
+semantics), `localrun.config.json` / `repack.config.json`, the `--json` document, exit and diagnostic codes, the settings
+file and the default paths. Breaking = a script or a hand-edited config that works today behaves differently or fails.
+
+Classified 2026-11-07. Every item below has an additive form; it only breaks if it changes a default or tightens what
+is accepted. Decide these before 1.0, or commit to their additive form:
+
+- **4, default ignore list** (`*.md`, `docs/`, `.github/`; a test-only change marking only the test project): changes
+  what `--git-changes` selects, against "when unsure, keep more". Additive behind `--ignore` or a flag.
+- **5, staleness seen outside the folder** (`Directory.Build.props`, referenced libraries): the same inputs would exit
+  `6` where they exit `0`. Gray: a stricter check, a fix or a change depending on how the contract is worded.
+- **6, cycles**: decided not fixed; revisiting it ("leave out what reaches a cycle") shrinks `build`'s selection.
+- **A4, levels as NDJSON**: `.lrun/logs/<name>.log` is documented and the `started` event points to it. Additive as a
+  second file or a flag, breaking if it replaces the plain file.
+- **A6, validating configs on read**: configs that load today (unknown fields, old `SkipRepack`) would be rejected.
+  Additive if it warns with a diagnostic code instead.
+
+Not on this roadmap yet, and breaking whichever way they are decided, so they are the real 1.0 blockers:
+
+- **Project identity**: projects are keyed by file name (collisions left out, see `CLAUDE.md`). Keying by path or
+  `PackageId` changes filter names, config keys and collision behaviour.
+- **Config file versioning**: the `--json` document has `schemaVersion`, the two config files don't; they load by
+  ignoring unknown fields, so a changed shape can't be detected or migrated. Adding the field is additive (absent = 1),
+  but only before the first change that needs it.
+- **Solution filters**: additive as a new flag (`--solution`), breaking if `--users-of` / `--deps-of` start accepting
+  solution names (a project and a solution can share a name).
+
+Everything else is additive: 1's `LOCALRUN_OUTPUT`, 3 (`status`, and the config recording its build flags, time and
+HEADs as optional fields), 4's flags, 5's `--fix` and source commit, A1's `--config`, A2 (new `--json` fields, no
+`schemaVersion` bump), A3 (as long as `up` stays in the foreground by default), A5, A6's `help --json` / `schema`,
+A7, A8, the MCP server.
+
 ---
 
 ## Requested
