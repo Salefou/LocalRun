@@ -220,7 +220,7 @@ lrun plot --open
 lrun pack --patch --suffix dev
 #    (to review .lrun/repack.config.json first: lrun pack --patch --suffix dev --dry-run, then lrun go)
 
-# 4. Start the executables
+# 4. Start the executables (lrun verify first, if unsure the feed is up to date: exit code 6 means pack again)
 lrun up
 ```
 
@@ -279,6 +279,7 @@ Next: lrun pack
 | `--tests` | off | Keep the test projects. By default `build` leaves them out (and lists them): projects referencing `Microsoft.NET.Test.Sdk`, setting `<IsTestProject>true</IsTestProject>`, or using the `MSTest.Sdk` project SDK. |
 | `--csproj` | off | Read the csproj files as they are: skip the MSBuild evaluation of versions and package ids (below), and don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` reads each csproj's version and package id from its XML, and asks MSBuild (`dotnet msbuild -getProperty`, about a second per project, 8 at a time) only for the projects whose XML can't tell: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above it that sets `Version`, `VersionPrefix`, `VersionSuffix`, `PackageId` or `AssemblyName` or imports other files. If MSBuild fails on a project, its csproj is read as is, with a warning. `build` also records each project's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. When a csproj version is higher than that latest (a `11.0.0-preview` in development while `10.7.0` is released), `pack` starts from the csproj version and warns once. That csproj already is the version in development, so a bump flag is ignored for it and only the suffix applies (`11.0.0-local.1`, with or without `--patch`). Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
 | `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `.lrun/plots/dependencies-<date-time>.html`), and open it in the browser. Only on a terminal: with output redirected, the page is written and its path printed. |
+| `--verify` | off | Then check the local feed against the config just written, as [`verify`](#verify) does: exit code `6` when a package is missing or stale (the config is written all the same). |
 
 **Combining the filters**: names within one flag are OR'ed (`--users-of A B` = users of A or of B).
 The two flags are AND'ed: with `--users-of X --deps-of Y` you get **the projects between X and Y**,
@@ -473,6 +474,39 @@ A line per depth says what is about to run (a long list ends with `and N more`).
 the warnings and errors are printed, verbatim and all of them: a project targeting several frameworks prints a
 warning once per framework. The first failing `dotnet` command fails the whole command (exit code `1`); if it
 printed no error line, its whole output is printed before the failure.
+
+### `verify`
+
+Check that the local feed holds an up-to-date package of every library of a config, so the services `up` starts get
+the code on disk. Executables are left out: `up` builds them from source. Each library is:
+
+- `ok`: its newest package in the feed was written after every file of its folder changed, and its version is not
+  behind the csproj's;
+- `missing`: no package of its id (`PackageId`, else the project name) in the feed: never packed there;
+- `stale`, `csproj-ahead`: the csproj version is higher than the newest package's, by the number alone (a version bump
+  pulled since the last pack; `1.5.0` is not ahead of `1.5.0-alpha.9`, the same rule as `pack`'s);
+- `stale`, `edited`: a file of the project's folder changed after that package was written (edited, or updated by a
+  pull or a branch switch). `bin/`, `obj/`, dot-folders (`.vs`) and the folders of nested projects don't count.
+
+```
+> lrun verify
+[WRN] LrSample.Reports: no package in the local feed
+[WRN] LrSample.Logging: stale, the csproj version 2.3.1-beta is ahead of 2.1.1-local.1 in the feed
+[WRN] LrSample.Pricing: stale, Pricer.cs changed at 2026-11-07 10:02:31, after 1.4.1-local.2 was packed at 2026-11-07 09:40:12
+4 of 7 libraries up to date in C:\Users\you\.localnuget
+FAILED verify failed: 3 of 7 libraries missing or stale in the local feed: LrSample.Reports, LrSample.Logging, LrSample.Pricing. Run 'lrun pack' to repack the config.
+```
+
+It exits `0` when every library is up to date, `6` otherwise (error code `verify-failed`; each library not up to date is
+a `package-missing` or `package-stale` diagnostic). `build --verify` runs the same check on the config it just wrote.
+
+Only the project's own folder is looked at: a change to a `Directory.Build.props` above it, or to a library it
+references, doesn't make it stale (the library has its own line). Times are the files' modification times, so a tool
+touching files without changing them makes a library look stale: repacking is the safe answer.
+
+| Option | Default | Description |
+|---|---|---|
+| `--config <file>` | `.lrun/localrun.config.json` | Config file to read; the feed checked is its `LocalNugetPath`. |
 
 ### `up`
 
@@ -724,7 +758,7 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 | | |
 |---|---|
 | Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `up` inherit the console.) |
-| Exit codes | `0` success, also when there was nothing to do · `1` the command failed (anything below doesn't cover) · `2` invalid command line · `3` an input is missing or invalid (a config file, the root to scan, the settings) · `4` a `dotnet` command failed (fix the code; retrying won't help) · `5` refused by `--strict` (below). |
+| Exit codes | `0` success, also when there was nothing to do · `1` the command failed (anything below doesn't cover) · `2` invalid command line · `3` an input is missing or invalid (a config file, the root to scan, the settings) · `4` a `dotnet` command failed (fix the code; retrying won't help) · `5` refused by `--strict` (below) · `6` [`verify`](#verify) found a package missing or stale. |
 | Output | With `--json`, one JSON document on **stdout** and the logs on stderr (see below). Otherwise, human-readable log lines on **stdout**. Redirected, they are plain: warnings and errors prefixed `[WRN] ` / `[ERR] `, steps marked `>` (starting), `+` (process started), `ok`, `FAILED`, `-` (stopped), no colours, no progress lines. Of `go`'s child `dotnet` processes, only warning and error lines are forwarded; `up` forwards its services' output. |
 | Results | The JSON / HTML files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
 | Side effects | `--open` launches a viewer; `go` writes packages to the feed; `up` starts processes. |
@@ -763,7 +797,7 @@ no progress lines) even on a terminal, and `build --plot` doesn't open the page.
 | `result` | The command's own result (below), or `null`. |
 | `diagnostics` | Every warning and error logged, in order: `code` (see [Diagnostic codes](#diagnostic-codes)), `level` (`warning` / `error`), `message`. |
 | `written` | Full paths of the files written. |
-| `error` | `null`, or `code` and `message`. Codes, with their exit code: `usage` (`2`); `config-not-found` (run the command that writes it), `config-invalid`, `root-not-found`, `settings-invalid` (`3`); `dotnet-failed` (`4`); `strict` (`5`); `command-failed` (`1`, anything else). Branch on the code, not on the message. |
+| `error` | `null`, or `code` and `message`. Codes, with their exit code: `usage` (`2`); `config-not-found` (run the command that writes it), `config-invalid`, `root-not-found`, `settings-invalid` (`3`); `dotnet-failed` (`4`); `strict` (`5`); `verify-failed` (`6`); `command-failed` (`1`, anything else). Branch on the code, not on the message. |
 
 Results:
 
@@ -771,6 +805,7 @@ Results:
 |---|---|
 | `build` | `config`, `root`, `localNuget`, `filters` (as typed, or `null`), `scanned` (projects found, without tests and name collisions), `projects` (`total`, `libraries`, `executables`), `services`, `leftOut` (see below), `gitChanges` (the changed projects, with `--git-changes`), `plot` (with `--plot`). |
 | `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
+| `verify` | `config`, `feed`, `libraries`, `ok`, `missing`, `stale` (counts), `packages` in config order: `project`, `packageId`, `status` (`ok`, `missing`, `stale`), `reason` (for `stale`: `csproj-ahead` or `edited`), `csprojVersion`, `feedVersion` (the newest in the feed), `packedAt`, `editedFile` (relative to the project's folder) and `editedAt` (times in UTC). `build --verify` puts the same object under `verify` in its result. |
 | `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode` and `output`: the command's error lines, or its last lines when it printed none (at most 20). |
 | `plot` | `plot`: the page's path. |
 | `settings` | `path`, `created`. |
@@ -808,6 +843,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `not-in-git`, `no-git-base`, `no-common-history`, `repo-unreadable` | `--git-changes` could not tell what changed, so it kept more (`no-git-base`: run `git fetch`). | — |
 | `dotnet-warning`, `dotnet-error`, `dotnet-output` | A line of a `dotnet` command, verbatim (`dotnet-output`: a failed command that printed no error line). | — |
 | `open-failed` | A file or page could not be opened. | — |
+| `package-missing`, `package-stale` | `verify`: a library with no package in the local feed, or an outdated one. `verify` fails on them itself (exit code `6`). | — |
 | `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
 | `unspecified` | A warning without a code yet. | — |
 
@@ -869,7 +905,7 @@ lrun plot --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/ou
 ```
 
 Without `set -e`, branch on the exit code: `3` means a missing input (the step before didn't run), `4` a build error in
-the code, `5` an incomplete result.
+the code, `5` an incomplete result, `6` a local feed to repack (`lrun verify`) before starting the services.
 
 ---
 

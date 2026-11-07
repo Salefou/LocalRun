@@ -191,6 +191,11 @@ lrun up
 - `pack` prints the versions and the plan's path as in step 3, then a line per depth before packing it, and
   `ok Packed 11 projects in 13 s` (`✓` on a terminal). Nothing else: the samples build without warnings. 11 packages
   are in `.feed/`.
+- `lrun verify` then prints `ok 7 of 7 libraries up to date in …\samples\.feed` and exits 0 (before `pack`, or with
+  `build … --verify`: a `no package in the local feed` warning per library, `0 of 7`, then `FAILED`, exit code 6; the
+  config is written all the same). Save a file of `workspace/pricing/LrSample.Pricing` (or
+  `(Get-Item workspace\pricing\LrSample.Pricing\Pricer.cs).LastWriteTime = Get-Date`) and `verify` again:
+  `[WRN] LrSample.Pricing: stale, Pricer.cs changed at …, after 1.4.1-dev.1 was packed at …`, `6 of 7`, exit code 6.
 - Each package declares the *planned* version of what it references, e.g.
   `LrSample.Pricing.1.4.1-dev.1` depends on `Pricing.Models 1.4.3-dev.1` and `Logging 2.3.2-dev.1`.
 - `up` builds the 4 executables one by one, then starts them side by side. Island.App and ReportCli

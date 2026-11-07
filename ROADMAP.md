@@ -14,6 +14,7 @@ parse, failures it can classify, queries that don't write anything, and services
 
 1. **Machine output** (1) and **error codes** (2): everything else reports through them. Done (0.5.0).
 2. **`status`** (3) and **`build --verify`** (5): read-only questions, with a shared "what does this config hold" model.
+   `verify` shipped (unreleased); `status` waits for its goal to be confirmed.
 3. **`--since`** (4): extends `GitChangeDetector`, independent of the rest. Postponed (see 4).
 4. The agent-oriented additions (A1–A8) once 1–2 exist; A1 (queries) and A4 (service logs on disk) first, they are cheap.
    A1 shipped as `lrun list`, A4's plain logs in 0.5.0.
@@ -83,25 +84,21 @@ Ideas:
   affecting just the test project.
 - Explain, don't only select: `--explain` prints why each project is in (which file, which commit), also as `--json`.
 
-### 5. `build --verify` **(user)**
+### 5. `build --verify` **(user)**: shipped as `lrun verify` and `build --verify` (unreleased)
 
-Goal: check that the packages in the local feed are at least as new as what the csproj files say, i.e. the feed is not
-stale before `up`.
+Each library of the config is `ok`, `missing` or `stale`; exit code `6` (`verify-failed`) otherwise. See the CHANGELOG and
+README `verify`. Decisions (user feedback, 2026-11-07):
+- Stale = the csproj version ahead of the newest package (by the number alone, as `pack` compares), **or** a file of the
+  project's folder written after that package. The version check alone missed the common case: editing a library after
+  packing it, since `pack` always writes a version at or above the csproj's.
+- Both entry points over one implementation (`FeedVerifier`): `verify` reads the config, `build --verify` checks the one
+  it just wrote.
 
-Ideas:
-- For each library of the config: its package id and csproj version against the highest version of that id in the local
-  feed. Report `ok`, `missing` (never packed) and `stale` (feed lower than the csproj), as text and `--json`.
-- Version comparison must follow the "Base and iteration" rules in `CLAUDE.md`: a csproj `11.0.0-preview` with `10.7.0`
-  released is *expected* to look stale until packed; compare numbers like `pack` does ("higher" = the number alone,
-  so `1.5.0` vs `1.5.0-alpha.9` is not stale).
-- Exit code for "verification failed" (2), so an agent or a script can gate `up` on it. A `--fix` that runs the
-  `pack --go` for exactly the stale ones is tempting: ask first.
-- Does it belong in `build` (which already reads the feed for `LatestVersion`) or in `status --verify` / a separate
-  `verify`? `build --verify` as asked reuses the scan; a read-only `verify` against an existing config is cheaper for
-  an agent that already ran `build`. Probably both entry points over one implementation.
-- Beyond versions: a version can be right with an old content. Recording the source commit in the package (the nuspec
-  repository commit, or a sidecar file in the feed) would let `--verify` also say "packed from an older commit than
-  HEAD". Heavier; later.
+Left, not started:
+- `--fix`, packing exactly the stale ones (and their users): ask first.
+- Changes outside the project's folder (`Directory.Build.props`, a referenced library's change seen by its users) aren't
+  seen; modification times can be touched without a change. Recording the source commit in the package (nuspec
+  repository commit, or a sidecar file in the feed) would say "packed from an older commit than HEAD". Heavier; later.
 
 ### 6. Projects depending on a left-out cycle fail `pack` **(user, 2026-11-05)**
 

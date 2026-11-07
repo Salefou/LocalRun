@@ -12,6 +12,10 @@ bumps the minor version, anything else the patch.
 - `lrun list`: prints the projects `build` would keep with the same filters (`--users-of`, `--deps-of`, `--git-changes`,
   `--with-services`, …), by depth, with their type, version and solution, and writes nothing. `list --users-of X` answers
   "what uses X?" without touching the config. With `--json`, every project with its depth and dependencies.
+- `lrun verify` (and `build --verify`): checks that the local feed holds an up-to-date package of every library of the
+  config. A library is `missing` (never packed there) or `stale` when its csproj version is ahead of its newest package
+  (a pulled version bump) or a file of its folder changed after that package was written. New exit code `6` (error code
+  `verify-failed`) when one is, with a `package-missing` / `package-stale` diagnostic each.
 
 ## [0.5.0] - 2026-11-06
 
