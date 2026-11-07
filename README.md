@@ -207,6 +207,9 @@ lrun settings
 
 cd ~/work
 
+# 0b. Just asking: what uses the library, and which services would the change reach? (writes nothing)
+lrun list --root ./repos --users-of Shared.Pricing --with-services
+
 # 1. Graph everything that depends on the library you changed, and plot it (the page opens in your browser)
 lrun build --root ./repos --users-of Shared.Pricing --plot
 
@@ -321,6 +324,36 @@ A project in no git repository counts as changed too.
 file(s), 1 commit(s) on feature not on origin/main -> LrSample.Pricing`).
 Nothing is fetched: run `git fetch` first if origin may have moved. With no change at all, `build`
 warns and writes an empty config.
+
+### `list`
+
+Print the projects `build` would keep, **without writing anything**: a question about the graph rather than a
+step of the pipeline. It scans like `build` and takes the same filters with the same meaning, so `list --users-of X`
+answers "what uses X?", `list --deps-of Y` "what does Y need?", and `list --git-changes --with-services` "which services
+do my changes reach?". The projects are listed by depth (the order `go` packs in), with their type, version and
+solution:
+
+```
+> lrun list --root workspace --users-of LrSample.Pricing.Models
+Scanned …\workspace: 11 projects in 5 solutions, 7 libraries and 4 executables
+Kept 6 of 11 (--users-of LrSample.Pricing.Models)
+Depth 1/3:
+  LrSample.Pricing.Models  library     1.4.2.7         Pricing.sln
+Depth 2/3:
+  LrSample.Pricing         library     1.4.0           Pricing.sln
+  LrSample.Reports         library     1.1.0           Reporting.sln
+  LrSample.RiskService     executable  0.9.0-rc.1      Trading.sln
+Depth 3/3:
+  LrSample.OrderGateway    executable  3.0.0           Trading.sln
+  LrSample.ReportCli       executable  1.1.0           Reporting.sln
+```
+
+Options: `--root`, `--users-of`, `--deps-of`, `--union`, `--git-changes`, `--with-services`, `--include-external`,
+`--tests` and `--csproj`, as for [`build`](#build); unknown names fail the same way (exit code `2`). The options about
+the files `build` writes (`--local-nuget`, `--config`, `--plot`) are rejected. `list` never queries the NuGet sources, so
+the versions are the csproj ones (evaluated by MSBuild where needed, unless `--csproj`); depths count within the listed
+projects. With `--json`, the result carries every project with its dependencies (see
+[Machine output](#machine-output---json)).
 
 ### `plot`
 
@@ -737,6 +770,7 @@ Results:
 | Command | `result` |
 |---|---|
 | `build` | `config`, `root`, `localNuget`, `filters` (as typed, or `null`), `scanned` (projects found, without tests and name collisions), `projects` (`total`, `libraries`, `executables`), `services`, `leftOut` (see below), `gitChanges` (the changed projects, with `--git-changes`), `plot` (with `--plot`). |
+| `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
 | `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode` and `output`: the command's error lines, or its last lines when it printed none (at most 20). |
 | `plot` | `plot`: the page's path. |
 | `settings` | `path`, `created`. |

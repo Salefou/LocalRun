@@ -156,6 +156,36 @@ internal sealed record BuildResult(
 
 internal sealed record ProjectCounts(int Total, int Libraries, int Executables);
 
+/// <param name="Filters">The filters given, as typed (<c>--users-of Core, --with-services</c>), or null.</param>
+/// <param name="Projects">What <c>build</c> would keep, in dependency order (depth, then name).</param>
+/// <param name="LeftOut">As for <c>build</c>.</param>
+internal sealed record ListResult(
+    string Root,
+    string? Filters,
+    int Scanned,
+    ProjectCounts Counts,
+    IReadOnlyList<ListedProject> Projects,
+    IReadOnlyList<LeftOutProjects> LeftOut,
+    IReadOnlyList<string>? GitChanges)
+{
+    public static ListResult Of(string root, string? filters, ProjectSelection selection)
+    {
+        int executables = selection.Projects.Count(proj => proj.Type == "executable");
+        return new(root, filters, selection.Summary.Scanned,
+            new ProjectCounts(selection.Projects.Count, selection.Projects.Count - executables, executables),
+            [.. selection.Projects.Select(proj => new ListedProject(proj.Name, proj.PackageIdOrName, proj.Type,
+                selection.Depths[proj.Name], proj.Version.AsVersionString(), proj.Path, proj.SolutionPath, proj.Dependencies))],
+            selection.Summary.LeftOut, selection.Summary.GitChanges);
+    }
+}
+
+/// <param name="Depth">From 0, as in <c>pack</c>'s result.</param>
+/// <param name="Path">The csproj, relative to the root.</param>
+/// <param name="Solution">Full path of the first solution referencing it, or null.</param>
+/// <param name="Dependencies">As in the config: projects and packages it references, kept or not.</param>
+internal sealed record ListedProject(string Name, string PackageId, string Type, int Depth, string Version, string Path,
+    string? Solution, IReadOnlyList<string> Dependencies);
+
 internal sealed record PlotResult(string Plot);
 
 /// <summary>The result of <c>pack</c> and of <c>go</c>.</summary>

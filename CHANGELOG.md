@@ -7,6 +7,12 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Added
+
+- `lrun list`: prints the projects `build` would keep with the same filters (`--users-of`, `--deps-of`, `--git-changes`,
+  `--with-services`, …), by depth, with their type, version and solution, and writes nothing. `list --users-of X` answers
+  "what uses X?" without touching the config. With `--json`, every project with its depth and dependencies.
+
 ## [0.5.0] - 2026-11-06
 
 Machine output, for scripts, pipelines and agents: `--json` on every command, finer exit codes, a code on every

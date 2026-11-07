@@ -63,6 +63,9 @@ shell escaping.
   `--with-services` then adds S's affected executables *with the libraries in between*:
   S ∪ (users-of(S) ∩ deps-of(executables among users-of(S))). The in-between libraries are on purpose
   (user feedback): without them, a service consuming a library as a package keeps the old build.
+- **`list`** (ROADMAP A1, user feedback, 2026-11-06): prints what `build` would keep with the same flags, through the same
+  `ConfigBuilder.SelectProjects`, so the two can't drift; it writes nothing and never queries NuGet. It scans the tree
+  rather than reading a config (usually filtered, maybe stale). A new `build` filter applies to both.
 - **`--git-changes`** (`GitChangeDetector`, user feedback, 2026-10-24): changed projects are added to the
   `--users-of` names. Changed = uncommitted/untracked files, or commits on HEAD not on origin's default
   branch (`origin/HEAD` → `origin/main` → `origin/master`); being behind is not a change. Per project

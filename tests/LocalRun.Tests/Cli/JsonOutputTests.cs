@@ -266,6 +266,42 @@ public sealed class JsonOutputTests : IDisposable
         return root;
     }
 
+    [Fact]
+    public async Task List_SaysWhatBuildWouldKeep_AndWritesNothing()
+    {
+        string root = WriteLibAndApp();
+        WriteCsproj(root, "Other", """<Project Sdk="Microsoft.NET.Sdk" />""");
+
+        var list = await LrunAsync("list", "--root", root, "--users-of", "lib", "--include-external", "--csproj", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, list.ExitCode);
+        AssertPlain(list);
+        var result = list.Json.GetProperty("result");
+        Assert.Equal(root, result.GetProperty("root").GetString());
+        Assert.Equal("--users-of lib", result.GetProperty("filters").GetString());
+        Assert.Equal(3, result.GetProperty("scanned").GetInt32());
+        Assert.Equal(1, result.GetProperty("counts").GetProperty("executables").GetInt32());
+        var projects = result.GetProperty("projects").EnumerateArray().ToArray();
+        Assert.Equal([("Lib", 0, "library"), ("App", 1, "executable")], projects.Select(proj =>
+            (proj.GetProperty("name").GetString(), proj.GetProperty("depth").GetInt32(), proj.GetProperty("type").GetString())));
+        Assert.Equal(["Lib"], projects[1].GetProperty("dependencies").EnumerateArray().Select(dep => dep.GetString()));
+        Assert.Equal("1.0.0", projects[0].GetProperty("version").GetString());
+        Assert.Equal(Path.Combine("Lib", "Lib.csproj"), projects[0].GetProperty("path").GetString());
+        var filtered = Assert.Single(result.GetProperty("leftOut").EnumerateArray());
+        Assert.Equal(["Other"], filtered.GetProperty("projects").EnumerateArray().Select(name => name.GetString()));
+        Assert.Equal(0, list.Json.GetProperty("written").GetArrayLength());
+        Assert.False(Directory.Exists(Path.Combine(workDir, ".lrun")));
+    }
+
+    [Fact]
+    public async Task List_RejectsAnUnknownName()
+    {
+        var list = await LrunAsync("list", "--root", WriteLibAndApp(), "--deps-of", "Nope", "--csproj", "--json");
+
+        Assert.Equal(LocalRunCli.ExitUsage, list.ExitCode);
+        Assert.Contains("Nope", list.Json.GetProperty("error").GetProperty("message").GetString());
+    }
+
     private static IEnumerable<string?> Codes(Run run) =>
         run.Json.GetProperty("diagnostics").EnumerateArray().Select(diagnostic => diagnostic.GetProperty("code").GetString());
 

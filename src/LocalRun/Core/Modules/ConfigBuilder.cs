@@ -24,11 +24,32 @@ public sealed record LeftOutProjects(string Reason, IReadOnlyList<string> Projec
 /// <param name="GitChanges">With <c>--git-changes</c>, the projects found changed.</param>
 public sealed record BuildSummary(int Scanned, IReadOnlyList<LeftOutProjects> LeftOut, IReadOnlyList<string>? GitChanges);
 
+/// <summary>The projects a <c>build</c> keeps, before anything is written.</summary>
+/// <param name="Projects">In dependency order: by depth, then by name.</param>
+/// <param name="Depths">Each project's depth, from 0: the longest path from a project depending on none of the others.</param>
+public sealed record ProjectSelection(IReadOnlyList<ProjectNode> Projects, IReadOnlyDictionary<string, int> Depths, BuildSummary Summary);
+
 public class ConfigBuilder
 {
     private static readonly ILogger<ConfigBuilder> logger = Log.For<ConfigBuilder>();
 
     public (LocalRunConfig Config, BuildSummary Summary) BuildConfig(string rootPath, BuildConfigOptions options, string localNugetRepoPath)
+    {
+        var selection = SelectProjects(rootPath, options);
+        var config = new LocalRunConfig
+        {
+            RootPath = rootPath,
+            LocalNugetPath = localNugetRepoPath,
+            Projects = [.. selection.Projects]
+        };
+        return (config, selection.Summary);
+    }
+
+    /// <summary>
+    /// Scans <paramref name="rootPath"/> and applies the filters of <paramref name="options"/>, as <c>build</c> does:
+    /// what <c>list</c> prints and <c>build</c> writes. Logs what it scanned and left out.
+    /// </summary>
+    public ProjectSelection SelectProjects(string rootPath, BuildConfigOptions options)
     {
         logger.LogInformation(LogEvents.Progress, "Scanning {RootPath}...", rootPath);
 
@@ -90,25 +111,21 @@ public class ConfigBuilder
             }
         }
 
-        var config = new LocalRunConfig
-        {
-            RootPath = rootPath,
-            LocalNugetPath = localNugetRepoPath,
-            Projects = [.. graph.TopologicalOrder()]
-        };
+        List<ProjectNode> projects = [.. graph.TopologicalOrder()];
         if (Filters(options) is { } filters)
-            logger.LogInformation("Kept {Kept} of {Scanned} ({Filters})", config.Projects.Count, scanned.Count, filters);
-        if (config.Projects.Count == 0 && !emptyExplained)
+            logger.LogInformation("Kept {Kept} of {Scanned} ({Filters})", projects.Count, scanned.Count, filters);
+        if (projects.Count == 0 && !emptyExplained)
         {
             if (scanned.Count == 0)
                 logger.LogWarning(DiagnosticEvents.EmptySelection, "No project found under {RootPath}: the config holds none", rootPath);
             else
                 logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing kept: the config holds no project");
         }
-        return (config, new BuildSummary(scanned.Count, LeftOut(graph, scanned, config, cycles), gitChanges));
+        return new ProjectSelection(projects, graph.ComputeNameToDepth(),
+            new BuildSummary(scanned.Count, LeftOut(graph, scanned, projects, cycles), gitChanges));
     }
 
-    private static List<LeftOutProjects> LeftOut(DependencyGraph graph, List<ProjectNode> scanned, LocalRunConfig config,
+    private static List<LeftOutProjects> LeftOut(DependencyGraph graph, List<ProjectNode> scanned, List<ProjectNode> projects,
         List<DependencyGraph.DependencyCycle> cycles)
     {
         List<LeftOutProjects> leftOut = [];
@@ -117,7 +134,7 @@ public class ConfigBuilder
         leftOut.AddRange(graph.Collisions.Select(collision =>
             new LeftOutProjects("name-collision", [collision.Name]) { Paths = collision.Paths, Dependents = collision.Dependents }));
 
-        var kept = config.Projects.Select(proj => proj.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var kept = projects.Select(proj => proj.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var inCycles = cycles.SelectMany(cycle => cycle.Projects).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var filtered = scanned.Select(proj => proj.Name)
             .Where(name => !kept.Contains(name) && !inCycles.Contains(name))
