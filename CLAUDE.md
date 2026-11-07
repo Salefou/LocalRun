@@ -66,6 +66,11 @@ shell escaping.
 - **`list`** (ROADMAP A1, user feedback, 2026-11-06): prints what `build` would keep with the same flags, through the same
   `ConfigBuilder.SelectProjects`, so the two can't drift; it writes nothing and never queries NuGet. It scans the tree
   rather than reading a config (usually filtered, maybe stale). A new `build` filter applies to both.
+- **`verify`** (`FeedVerifier`, ROADMAP item 5, user feedback, 2026-11-07): libraries only (`up` builds executables from
+  source). Stale = csproj version ahead of the feed's newest by the number alone (as `BaseVersion`), or a file of the
+  project's folder (without `bin`, `obj`, dot-folders, nested projects) newer than that package. `verify` reads the config,
+  `build --verify` checks the one just written; same result object. `package-missing` / `package-stale` are not strict:
+  `verify` fails on them itself.
 - **`--git-changes`** (`GitChangeDetector`, user feedback, 2026-10-24): changed projects are added to the
   `--users-of` names. Changed = uncommitted/untracked files, or commits on HEAD not on origin's default
   branch (`origin/HEAD` → `origin/main` → `origin/master`); being behind is not a change. Per project
@@ -116,7 +121,8 @@ shell escaping.
   unsure, keep more" fallbacks) or reports something expected. `empty-selection` is never strict: exit `0` with that
   marker was chosen on purpose (user feedback: empty runs for testing or cleanup). Codes are a contract: never rename.
 - **Exit codes** (`LocalRunCli`, `ErrorCodes.Of`): `0` success, `1` command failed, `2` invalid command line,
-  `3` input missing/invalid, `4` a `dotnet` command failed (`DotnetFailedException`), `5` refused by `--strict`. Few
+  `3` input missing/invalid, `4` a `dotnet` command failed (`DotnetFailedException`), `5` refused by `--strict`, `6` `verify` found a package
+  missing or stale (`VerifyFailedException`, thrown after the result is set). Few
   numbers, many names: a new failure kind gets an `ErrorCodes` name, a new number only if a script would act differently.
   `2` is `UsageException`. External code relies on them: moving a case to another number is a breaking change.
 - **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values`, then call

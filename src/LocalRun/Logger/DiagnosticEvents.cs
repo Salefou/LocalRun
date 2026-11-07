@@ -84,6 +84,14 @@ public static class DiagnosticEvents
     /// <summary><c>up</c>: a warning or error line of a service.</summary>
     public static readonly EventId ServiceOutput = new(133, "service-output");
 
+    // Verification failures: verify fails on them itself (exit code 6), --strict adds nothing
+
+    /// <summary><c>verify</c>: a library of the config has no package in the local feed.</summary>
+    public static readonly EventId PackageMissing = new(140, "package-missing");
+
+    /// <summary><c>verify</c>: a library's newest package in the local feed is older than its csproj version or its files.</summary>
+    public static readonly EventId PackageStale = new(141, "package-stale");
+
     /// <summary>The codes <c>--strict</c> turns into a failure (exit code 5): the result left something out, or may be wrong.</summary>
     public static readonly IReadOnlySet<string> Strict = new HashSet<string>(StringComparer.Ordinal)
     {

@@ -115,11 +115,15 @@ internal static class ErrorCodes
     /// <summary><c>--strict</c>: the command completed, but its result left something out or may be wrong (exit code 5).</summary>
     public const string Strict = "strict";
 
+    /// <summary><c>verify</c> (or <c>build --verify</c>): a library's package is missing from the local feed, or stale (exit code 6).</summary>
+    public const string VerifyFailed = "verify-failed";
+
     /// <summary>Any other failure (exit code 1).</summary>
     public const string CommandFailed = "command-failed";
 
     public static (string Code, int ExitCode) Of(Exception exception) => exception switch
     {
+        VerifyFailedException => (VerifyFailed, LocalRunCli.ExitVerifyFailed),
         UsageException => (Usage, LocalRunCli.ExitUsage),
         ConfigNotFoundException => (ConfigNotFound, LocalRunCli.ExitInput),
         ConfigInvalidException => (ConfigInvalid, LocalRunCli.ExitInput),
@@ -136,12 +140,15 @@ internal sealed class ConfigInvalidException(string message) : Exception(message
 
 internal sealed class RootNotFoundException(string message) : DirectoryNotFoundException(message);
 
+internal sealed class VerifyFailedException(string message) : Exception(message);
+
 internal sealed record HelpResult(string Help);
 
 internal sealed record VersionResult(string Version);
 
 /// <param name="Filters">The filters given, as typed (<c>--deps-of WebApp, --with-services</c>), or null.</param>
 /// <param name="Plot">The page written by <c>--plot</c>, or null.</param>
+/// <param name="Verify">With <c>--verify</c>, the check of the config just written, as <c>verify</c> reports it; else null.</param>
 internal sealed record BuildResult(
     string Config,
     string Root,
@@ -152,7 +159,29 @@ internal sealed record BuildResult(
     IReadOnlyList<string> Services,
     IReadOnlyList<LeftOutProjects> LeftOut,
     IReadOnlyList<string>? GitChanges,
-    string? Plot);
+    string? Plot,
+    VerifyResult? Verify = null);
+
+/// <summary>The result of <c>verify</c>.</summary>
+/// <param name="Feed">The local feed checked, from the config.</param>
+/// <param name="Packages">A check per library of the config, in config order.</param>
+internal sealed record VerifyResult(string Config, string Feed, int Libraries, int Ok, int Missing, int Stale, IReadOnlyList<PackageCheck> Packages)
+{
+    public static VerifyResult Of(string config, string feed, IReadOnlyList<PackageCheck> checks) =>
+        new(config, feed, checks.Count, checks.Count(check => check.Status == FeedVerifier.Ok),
+            checks.Count(check => check.Status == FeedVerifier.Missing), checks.Count(check => check.Status == FeedVerifier.Stale), checks);
+
+    /// <summary>Throws when a package is missing or stale, after the result is set.</summary>
+    public void ThrowIfFailed()
+    {
+        var failed = Packages.Where(check => !check.Ok).Select(check => check.Project).ToList();
+        if (failed.Count != 0)
+        {
+            throw new VerifyFailedException($"{failed.Count} of {Text.Count(Libraries, "library", "libraries")} missing or stale in the local feed: "
+                + $"{Text.Abbreviate(failed)}. Run '{LocalRunCli.CommandName} pack' to repack the config.");
+        }
+    }
+}
 
 internal sealed record ProjectCounts(int Total, int Libraries, int Executables);
 
