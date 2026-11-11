@@ -380,7 +380,8 @@ libraries are blue, executables green.
   outside dependencies on a band above it; unrelated parts follow after a wider gap. *Free* is the layered layout
   of the whole graph (ELK), where unrelated parts are laid out separately and placed side by side, never inside
   another part's frame or edge loops.
-- Search (Enter focuses the first match), wheel to zoom, drag to pan, *Fit*, Escape to clear.
+- Search (Enter focuses the first match), wheel to zoom, drag anywhere to pan (boxes included: a click pins,
+  a drag pans), *Fit*, Escape to clear.
 
 Dependencies that aren't projects of the config are drawn with a grey dashed outline and dashed
 edges: projects a `build` filter left out, a name collision or a cycle, and with `--include-external`

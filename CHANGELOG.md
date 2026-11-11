@@ -17,6 +17,15 @@ bumps the minor version, anything else the patch.
   (a pulled version bump) or a file of its folder changed after that package was written. New exit code `6` (error code
   `verify-failed`) when one is, with a `package-missing` / `package-stale` diagnostic each.
 
+### Fixed
+
+- `plot` page: dragging pans from anywhere, including from a project box or a solution header (it used to select
+  text there, sometimes far from the pointer). A click still pins a box or collapses a group; the click ending a drag
+  no longer does, and hover highlighting holds still during a drag. Text on the graph can't be selected any more;
+  the details panel's can.
+- `plot` page: hovering over a large graph is lighter. Moving from box to box highlights once per frame, only the
+  elements whose highlight changes are restyled, and nothing is redone while a box is pinned.
+
 ## [0.5.0] - 2026-11-06
 
 Machine output, for scripts, pipelines and agents: `--json` on every command, finer exit codes, a code on every
