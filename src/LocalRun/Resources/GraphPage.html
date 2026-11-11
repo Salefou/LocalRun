@@ -160,7 +160,20 @@
     for (const p of DATA.projects) { const g = groupOf(p.name); if (g != null) keys.add(g); }
     return [...keys].sort((a, b) => a.localeCompare(b));
   }
-  function membersOf(key) { return DATA.projects.filter(p => groupOf(p.name) === key).map(p => p.name); }
+  let members = { groupBy: null, byGroup: null }; // built once per grouping: hovering asks for it per frame
+  function membersOf(key) {
+    if (members.groupBy !== state.groupBy) {
+      const byGroup = new Map();
+      for (const p of DATA.projects) {
+        const g = groupOf(p.name);
+        if (g == null) continue;
+        if (!byGroup.has(g)) byGroup.set(g, []);
+        byGroup.get(g).push(p.name);
+      }
+      members = { groupBy: state.groupBy, byGroup };
+    }
+    return members.byGroup.get(key) ?? [];
+  }
 
   function closure(seeds, next) {
     const seen = new Set(seeds), todo = [...seeds];
@@ -283,7 +296,7 @@
 
   // ---- Rendering ----
   const svg = document.getElementById("canvas"), viewport = document.getElementById("viewport");
-  let current = null; // { gg, graph (laid out), abs: Map id -> {x, y, node} }
+  let current = null; // { gg, graph (laid out), abs: Map id -> {x, y, node}; after render: nodeEls, groupEls, edgeEls, edgeById }
   let firstLayout = true;
 
   function el(tag, attrs, parent) {
@@ -534,47 +547,70 @@
         t.textContent = line;
       });
       el("title", {}, g).textContent = collapsed ? `${key}\nDouble-click to expand` : (p ? p.path : `${key}: not a project of the config`);
-      g.addEventListener("mouseenter", () => { state.hovered = id; highlight(); });
-      g.addEventListener("mouseleave", () => { if (state.hovered === id) { state.hovered = null; highlight(); } });
+      g.addEventListener("mouseenter", () => { state.hovered = id; highlightSoon(); });
+      g.addEventListener("mouseleave", () => { if (state.hovered === id) { state.hovered = null; highlightSoon(); } });
       g.addEventListener("click", ev => { ev.stopPropagation(); state.pinned = state.pinned === id ? null : id; highlight(); details(); });
       if (collapsed) g.addEventListener("dblclick", ev => { ev.stopPropagation(); toggle(key); });
     }
+    current.nodeEls = [...nodesLayer.children];
+    current.groupEls = [...groupsLayer.children];
+    current.edgeEls = [...edgesLayer.querySelectorAll("[data-edge]")];
+    current.edgeById = new Map(graph.edges.map(e => [e.id, e]));
     highlight();
     details();
     stats();
   }
 
+  // Hover goes through a frame: moving from box A to box B (leave A, enter B) then highlights once, for B.
+  let highlightQueued = false;
+  function highlightSoon() {
+    if (highlightQueued) return;
+    highlightQueued = true;
+    requestAnimationFrame(() => { highlightQueued = false; highlight(); });
+  }
+
+  // Sets an element's highlight classes, touching the DOM only when they change: every class write
+  // makes the browser restyle, and a sweep of the mouse would otherwise restyle the whole graph per box.
+  const HIGHLIGHT_CLASSES = ["seed", "users", "deps", "dim", "match"];
+  function setHighlight(elem, classes) {
+    const key = classes.join(" ");
+    if (elem.highlight === key) return;
+    elem.classList.remove(...HIGHLIGHT_CLASSES); elem.classList.add(...classes);
+    elem.highlight = key;
+  }
+
   // Cones of the focused node, computed on projects: a collapsed group stands for all its members
+  let highlighted = null; // what the DOM shows: skip the work when hovering doesn't change it (a node is pinned)
   function highlight() {
     const focus = state.pinned ?? state.hovered;
     const q = state.search.trim().toLowerCase();
+    if (highlighted?.view === current && highlighted.focus === focus && highlighted.q === q) return;
+    highlighted = { view: current, focus, q };
     viewport.classList.toggle("focusing", !!focus);
     let seeds = new Set(), ups = new Set(), downs = new Set();
     if (focus && current.abs.has(focus)) {
       seeds = new Set(namesOf(focus));
       ups = usersCone(seeds); downs = depsCone(seeds);
     }
-    for (const g of viewport.querySelectorAll(".node")) {
+    for (const g of current.nodeEls) {
       const names = namesOf(g.dataset.id);
       const role = names.some(n => seeds.has(n)) ? "seed" : names.some(n => ups.has(n)) ? "users"
         : names.some(n => downs.has(n)) ? "deps" : "dim";
-      g.classList.remove("seed", "users", "deps", "dim", "match");
-      if (focus) g.classList.add(role);
-      if (q && names.some(n => n.toLowerCase().includes(q))) g.classList.add("match");
+      const classes = focus ? [role] : [];
+      if (q && names.some(n => n.toLowerCase().includes(q))) classes.push("match");
+      setHighlight(g, classes);
     }
-    for (const g of viewport.querySelectorAll(".group")) {
+    for (const g of current.groupEls) {
       const names = membersOf(g.dataset.id.slice(2));
-      g.classList.toggle("dim", !!focus && !names.some(n => ups.has(n) || downs.has(n)));
+      setHighlight(g, focus && !names.some(n => ups.has(n) || downs.has(n)) ? ["dim"] : []);
     }
-    const edgeById = new Map(current.graph.edges.map(e => [e.id, e]));
-    for (const p of viewport.querySelectorAll("[data-edge]")) {
-      const e = edgeById.get(p.dataset.edge);
-      p.classList.remove("users", "deps", "dim");
-      if (!focus) continue;
+    for (const p of current.edgeEls) {
+      const e = current.edgeById.get(p.dataset.edge);
       // dependency -> user: on the users-of cone when both ends are in it, on the deps-of cone likewise
-      if (e.pairs.some(([d, u]) => ups.has(d) && ups.has(u) && !seeds.has(u))) p.classList.add("users");
-      else if (e.pairs.some(([d, u]) => downs.has(d) && downs.has(u) && !seeds.has(d))) p.classList.add("deps");
-      else p.classList.add("dim");
+      setHighlight(p, !focus ? []
+        : e.pairs.some(([d, u]) => ups.has(d) && ups.has(u) && !seeds.has(u)) ? ["users"]
+        : e.pairs.some(([d, u]) => downs.has(d) && downs.has(u) && !seeds.has(d)) ? ["deps"]
+        : ["dim"]);
     }
   }
 

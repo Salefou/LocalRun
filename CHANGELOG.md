@@ -23,6 +23,8 @@ bumps the minor version, anything else the patch.
   text there, sometimes far from the pointer). A click still pins a box or collapses a group; the click ending a drag
   no longer does, and hover highlighting holds still during a drag. Text on the graph can't be selected any more;
   the details panel's can.
+- `plot` page: hovering over a large graph is lighter. Moving from box to box highlights once per frame, only the
+  elements whose highlight changes are restyled, and nothing is redone while a box is pinned.
 
 ## [0.5.0] - 2026-11-06
 
