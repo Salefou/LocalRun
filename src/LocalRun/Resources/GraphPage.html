@@ -33,8 +33,8 @@
   .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px;
     margin-right: 4px; vertical-align: -1px; background: var(--c); border: 1px solid var(--b, transparent); }
   main { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
-  #canvas { width: 100%; height: 100%; display: block; cursor: grab; }
-  #canvas.dragging { cursor: grabbing; }
+  #canvas { width: 100%; height: 100%; display: block; cursor: grab; user-select: none; -webkit-user-select: none; }
+  #canvas.dragging, #canvas.dragging * { cursor: grabbing; }
   #details { position: absolute; right: 12px; top: 12px; width: 320px; max-height: calc(100% - 24px); overflow: auto;
     background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12); display: none; }
@@ -668,21 +668,34 @@
     view.x = mx - (mx - view.x) * (k / view.k); view.y = my - (my - view.y) * (k / view.k); view.k = k;
     applyView();
   }, { passive: false });
-  let drag = null;
+  // Dragging pans from anywhere, boxes included; a press that moves 3px or less stays a click.
+  let drag = null, dragged = false;
+  function endDrag() { drag = null; svg.classList.remove("dragging"); }
   svg.addEventListener("pointerdown", ev => {
-    if (ev.target.closest(".node, .header")) return;
-    drag = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y, moved: false };
-    svg.setPointerCapture(ev.pointerId); svg.classList.add("dragging");
+    if (ev.button !== 0) return;
+    drag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y, moved: false };
+    dragged = false;
   });
   svg.addEventListener("pointermove", ev => {
     if (!drag) return;
-    drag.moved ||= Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) > 3;
+    if (!(ev.buttons & 1)) { endDrag(); return; } // released outside the page
+    if (!drag.moved) {
+      if (Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) <= 3) return;
+      // Captured from here on, so the boxes crossed get no hover events and the highlight holds still.
+      drag.moved = true; svg.setPointerCapture(drag.id); svg.classList.add("dragging");
+      if (state.hovered) { state.hovered = null; highlight(); }
+    }
     view.x = drag.vx + ev.clientX - drag.x; view.y = drag.vy + ev.clientY - drag.y; applyView();
   });
-  svg.addEventListener("pointerup", () => {
-    if (drag && !drag.moved && state.pinned) { state.pinned = null; highlight(); details(); }
-    drag = null; svg.classList.remove("dragging");
+  svg.addEventListener("pointerup", ev => {
+    if (!drag) return;
+    if (drag.moved) dragged = true;
+    else if (state.pinned && !ev.target.closest(".node, .header")) { state.pinned = null; highlight(); details(); }
+    endDrag();
   });
+  svg.addEventListener("pointercancel", endDrag);
+  // The click that ends a pan must not pin the box or toggle the group it was released on.
+  svg.addEventListener("click", ev => { if (dragged) { dragged = false; ev.stopPropagation(); } }, true);
 
   // ---- Toolbar ----
   const layoutSelect = document.getElementById("layout");
