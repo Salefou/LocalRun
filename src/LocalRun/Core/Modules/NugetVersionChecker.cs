@@ -43,7 +43,7 @@ public sealed class NugetVersionChecker : IDisposable
         return latestPerSource.Max();
     }
 
-    private static List<PackageSource> EnabledSources(string? root)
+    internal static List<PackageSource> EnabledSources(string? root)
     {
         var settings = Settings.LoadDefaultSettings(root);
         return [.. new PackageSourceProvider(settings).LoadPackageSources().Where(s => s.IsEnabled)];
@@ -88,7 +88,7 @@ public sealed class NugetVersionChecker : IDisposable
         return metadata;
     }
 
-    private static bool IsSameFolder(string source, string folder)
+    internal static bool IsSameFolder(string source, string folder)
     {
         if (!Path.IsPathFullyQualified(source))
             return false;

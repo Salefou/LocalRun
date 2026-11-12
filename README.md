@@ -618,6 +618,48 @@ line (`--local-nuget`, `--root`, `--suffix`) always wins.
 
 The file is `~/.lrun/settings.json`, or the path in the `LOCALRUN_SETTINGS` environment variable.
 
+### `doctor`
+
+Check the setup before running anything, when something doesn't work or on a new machine. It takes the root and local
+feed the way `build` does (options, then settings, then defaults), so it works before the first `build`, and changes
+nothing (apart from a file created and deleted in the local feed, to see that it is writable).
+
+| Check | `fail` when | `warn` when |
+|---|---|---|
+| `settings` | The settings file is invalid (the other checks then use the defaults). | — |
+| `dotnet` | `dotnet --version`, run from the root, fails: no SDK, or a `global.json` there pins one that isn't installed. | — |
+| `root` | The root doesn't exist. | It holds no `.csproj`. |
+| `local-feed` | It exists but isn't writable. A feed not created yet is fine: the first `go` creates it. | — |
+| `source` | A NuGet source a project restores from (as `build` reads them, disabled ones aside) is unreachable within 15 s, or is a missing folder. A restore fails on it. | It serves no package metadata: `build` skips it. |
+| `git-base` | — | A repository has no `origin/HEAD`, `origin/main` or `origin/master`: `--git-changes` counts it all as changed. |
+| `git-fetch` | — | Its last fetch is more than 7 days old: `--git-changes` compares with origin as it was then (`lrun` never fetches). |
+
+```
+> lrun doctor --root samples
+ok settings C:\Users\you\.lrun\settings.json: valid
+ok dotnet SDK: 10.0.402
+ok root C:\work\LocalRun\samples: 35 project folders in 1 git repository
+ok local-feed C:\Users\you\.localnuget: writable, 228 packages
+ok source: 2 ok
+[ERR] source unreachable (http://lrun-samples.invalid/v3/index.json): unreachable: No such host is known. Check the URL, the network or proxy, and the credentials in NuGet.Config; or disable the source there.
+[ERR] source missing-folder (C:\work\LocalRun\samples\edge-cases\unreachable-source\no-such-feed): the folder doesn't exist. Create it, fix the path, or disable the source in NuGet.Config.
+ok git-base C:\work\LocalRun: origin/master
+ok git-fetch C:\work\LocalRun: fetched today
+8 ok, 0 warnings, 2 failures
+FAILED doctor failed: 2 checks failed: source unreachable (…), source missing-folder (…).
+```
+
+(The two sources of `samples/edge-cases/unreachable-source` are broken on purpose.) Checks that pass print one line per
+kind; each warning or failure gets its own line, with what to do. It exits `1` when a check fails (error code
+`doctor-failed`), `0` otherwise, warnings included. With `--json`, the result lists every check with its `check`,
+`subject`, `status` (`ok`, `warn`, `fail`), `message` and `hint`; each warning or failure is also a `doctor-warning` /
+`doctor-failure` diagnostic.
+
+| Option | Default | Description |
+|---|---|---|
+| `--root <dir>` | settings `root`, else the current directory | Directory to check, as for `build`. |
+| `--local-nuget <dir>` | settings `localNuget`, else `~/.localnuget` | Local feed to check, as for `build`. |
+
 ### `help`
 
 Print the command reference. Also `--help` and `-h`. Running `lrun` with no arguments prints it too,
@@ -858,6 +900,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `open-failed` | A file or page could not be opened. | — |
 | `package-missing`, `package-stale` | `verify`: a library with no package in the local feed, or an outdated one. `verify` fails on them itself (exit code `6`). | — |
 | `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
+| `doctor-warning`, `doctor-failure` | `doctor`: a setup check that may surprise, or that will make a command fail (the result names the check). `doctor` fails on a failure itself (exit code `1`). | — |
 | `unspecified` | A warning without a code yet. | — |
 
 **`--strict`**, on any command, fails it with exit code `5` (error code `strict`) when a diagnostic marked *fails* was
@@ -1025,6 +1068,9 @@ publishing ones, to check a release would build and pack.
 ---
 
 ## Troubleshooting
+
+Start with **`lrun doctor`**: it checks the SDK, the settings, the local feed, the NuGet sources and the git
+repositories, and says what to do about each problem.
 
 **`'…localrun.config.json' not found. Run 'lrun build' first.`** — the path is resolved against the
 current directory. Run from the directory where you ran `build`, or pass `--config`. When it adds `Found

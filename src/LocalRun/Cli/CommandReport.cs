@@ -118,12 +118,16 @@ internal static class ErrorCodes
     /// <summary><c>verify</c> (or <c>build --verify</c>): a library's package is missing from the local feed, or stale (exit code 6).</summary>
     public const string VerifyFailed = "verify-failed";
 
+    /// <summary><c>doctor</c>: a check failed (exit code 1, as nothing a script would do differently from another failure).</summary>
+    public const string DoctorFailed = "doctor-failed";
+
     /// <summary>Any other failure (exit code 1).</summary>
     public const string CommandFailed = "command-failed";
 
     public static (string Code, int ExitCode) Of(Exception exception) => exception switch
     {
         VerifyFailedException => (VerifyFailed, LocalRunCli.ExitVerifyFailed),
+        DoctorFailedException => (DoctorFailed, LocalRunCli.ExitFailure),
         UsageException => (Usage, LocalRunCli.ExitUsage),
         ConfigNotFoundException => (ConfigNotFound, LocalRunCli.ExitInput),
         ConfigInvalidException => (ConfigInvalid, LocalRunCli.ExitInput),
@@ -141,6 +145,26 @@ internal sealed class ConfigInvalidException(string message) : Exception(message
 internal sealed class RootNotFoundException(string message) : DirectoryNotFoundException(message);
 
 internal sealed class VerifyFailedException(string message) : Exception(message);
+
+internal sealed class DoctorFailedException(string message) : Exception(message);
+
+/// <summary>The result of <c>doctor</c>.</summary>
+/// <param name="Checks">Every finding, ok ones included, in the order they are printed: settings, dotnet, root, local
+/// feed, sources, then each repository.</param>
+internal sealed record DoctorResult(string Root, string LocalNuget, int Ok, int Warn, int Fail, IReadOnlyList<DoctorCheck> Checks)
+{
+    public static DoctorResult Of(string root, string localNuget, IReadOnlyList<DoctorCheck> checks) =>
+        new(root, localNuget, checks.Count(check => check.Status == Doctor.Ok), checks.Count(check => check.Status == Doctor.Warn),
+            checks.Count(check => check.Status == Doctor.Fail), checks);
+
+    /// <summary>Throws when a check failed, after the result is set.</summary>
+    public void ThrowIfFailed()
+    {
+        var failed = Checks.Where(check => check.Status == Doctor.Fail).Select(check => $"{check.Check} {check.Subject}").ToList();
+        if (failed.Count != 0)
+            throw new DoctorFailedException($"{Text.Count(failed.Count, "check")} failed: {Text.Abbreviate(failed)}.");
+    }
+}
 
 internal sealed record HelpResult(string Help);
 
