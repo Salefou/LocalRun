@@ -47,8 +47,33 @@ public class RunProcessorTests
     {
         var ex = Assert.Throws<UsageException>(() => RunProcessor.PlanRun(Config(), [name]));
 
-        Assert.Contains($"not an executable of this config: {name}.", ex.Message);
+        Assert.Contains($"'--exclude': not an executable of this config: {name}.", ex.Message);
         Assert.Contains("Executables: Batch, Reports, Risk, Gateway.", ex.Message);
+    }
+
+    [Fact]
+    public void PlanRun_KeepsOnlyTheGivenExecutables_InDependencyOrder()
+    {
+        Assert.Equal(["Risk"], RunProcessor.PlanRun(Config(), only: ["risk"]).Select(p => p.Name));
+        Assert.Equal(["Batch", "Gateway"], RunProcessor.PlanRun(Config(), only: ["GATEWAY", "Batch"]).Select(p => p.Name));
+    }
+
+    [Fact]
+    public void PlanRun_ExcludesFromTheOnlyOnes()
+    {
+        Assert.Equal(["Batch", "Gateway"],
+            RunProcessor.PlanRun(Config(), exclude: ["Risk"], only: ["Gateway", "Risk", "Batch"]).Select(p => p.Name));
+    }
+
+    [Theory]
+    [InlineData("Pricing")] // a library
+    [InlineData("Nope")]
+    [InlineData("Risk,Batch")] // names are separated by spaces, not commas
+    public void PlanRun_RejectsOnlyWhatIsNotAnExecutable(string name)
+    {
+        var ex = Assert.Throws<UsageException>(() => RunProcessor.PlanRun(Config(), only: [name]));
+
+        Assert.Contains($"'--only': not an executable of this config: {name}.", ex.Message);
     }
 
     [Fact]

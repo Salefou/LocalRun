@@ -559,10 +559,15 @@ starting the next: by design, each service is expected to wait for (or retry) th
 |---|---|---|
 | `--config <file>` | `.lrun/localrun.config.json` | Config file to read. |
 | `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `up` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). |
+| `--only <names…>` | — | Executables to run, leaving out the config's others. Same name rules as `--exclude`, which then removes from them. |
 | `--logs <dir>` | `.lrun/logs` | Folder of the services' log files. |
 
+Names are separated by spaces, after a single flag (not commas, and not the flag repeated):
+
 ```sh
-lrun up --exclude OrderGateway     # everything but OrderGateway, which you start under the debugger
+lrun up --exclude OrderGateway             # everything but OrderGateway, which you start under the debugger
+lrun up --exclude OrderGateway RiskService # several names after one flag
+lrun up --only OrderGateway RiskService    # just these two
 ```
 
 With `--json`, `up` writes one line of JSON per event on stdout as it happens, then the result on one last line

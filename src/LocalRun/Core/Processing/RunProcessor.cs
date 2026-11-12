@@ -44,9 +44,9 @@ public class RunProcessor : IRunProcessor
 
     private void Emit(UpEvent upEvent) => onEvent?.Invoke(upEvent with { Time = DateTimeOffset.UtcNow });
 
-    public async Task RunAsync(LocalRunConfig config, IReadOnlyCollection<string>? exclude = null)
+    public async Task RunAsync(LocalRunConfig config, IReadOnlyCollection<string>? exclude = null, IReadOnlyCollection<string>? only = null)
     {
-        List<ProjectNode> executables = PlanRun(config, exclude);
+        List<ProjectNode> executables = PlanRun(config, exclude, only);
         if (exclude is { Count: > 0 })
         {
             logger.LogInformation("Not running {Projects}: start them yourself (e.g. from your IDE to debug them)",
@@ -164,23 +164,33 @@ public class RunProcessor : IRunProcessor
         }
     }
 
-    /// <summary>The executables to run, dependencies first, without the excluded ones.</summary>
-    internal static List<ProjectNode> PlanRun(LocalRunConfig config, IReadOnlyCollection<string>? exclude = null)
+    /// <summary>
+    /// The executables to run, dependencies first: the <paramref name="only"/> ones if given, without the excluded ones.
+    /// </summary>
+    internal static List<ProjectNode> PlanRun(LocalRunConfig config, IReadOnlyCollection<string>? exclude = null,
+        IReadOnlyCollection<string>? only = null)
     {
         var executables = DependencyGraph.FromConfig(config).TopologicalOrder()
             .Where(project => project.Type == "executable")
             .ToList();
-        var excluded = new HashSet<string>(exclude ?? [], StringComparer.OrdinalIgnoreCase);
+        var excluded = KnownExecutables("--exclude", exclude, executables);
+        var kept = KnownExecutables("--only", only, executables);
 
-        // A misspelt name would silently run the very service being debugged elsewhere
-        var unknown = excluded.Where(name => !executables.Any(exe => exe.Name.Equals(name, StringComparison.OrdinalIgnoreCase))).ToList();
+        return [.. executables.Where(project => (only == null || kept.Contains(project.Name)) && !excluded.Contains(project.Name))];
+    }
+
+    private static HashSet<string> KnownExecutables(string option, IReadOnlyCollection<string>? names, List<ProjectNode> executables)
+    {
+        var set = new HashSet<string>(names ?? [], StringComparer.OrdinalIgnoreCase);
+
+        // A misspelt name would silently run the very service being debugged elsewhere, or not the one asked for
+        var unknown = set.Where(name => !executables.Any(exe => exe.Name.Equals(name, StringComparison.OrdinalIgnoreCase))).ToList();
         if (unknown.Count != 0)
         {
-            throw new UsageException($"'--exclude': not an executable of this config: {string.Join(", ", unknown)}. " +
+            throw new UsageException($"'{option}': not an executable of this config: {string.Join(", ", unknown)}. " +
                 $"Executables: {string.Join(", ", executables.Select(exe => exe.Name))}.");
         }
-
-        return [.. executables.Where(project => !excluded.Contains(project.Name))];
+        return set;
     }
 
     /// <summary>

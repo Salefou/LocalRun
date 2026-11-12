@@ -16,6 +16,8 @@ bumps the minor version, anything else the patch.
   config. A library is `missing` (never packed there) or `stale` when its csproj version is ahead of its newest package
   (a pulled version bump) or a file of its folder changed after that package was written. New exit code `6` (error code
   `verify-failed`) when one is, with a `package-missing` / `package-stale` diagnostic each.
+- `up --only <names…>`: runs just these executables of the config instead of all of them; `--exclude` still removes
+  from them. Unknown names fail with exit code `2`, as for `--exclude`.
 
 ### Fixed
 
