@@ -7,6 +7,11 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-12
+
+Commands to check before running: `list` (what `build` would keep), `verify` (is the local feed up to date) and
+`doctor` (is the setup right), plus `up --only` and a schema version in the configs.
+
 ### Added
 
 - `lrun list`: prints the projects `build` would keep with the same filters (`--users-of`, `--deps-of`, `--git-changes`,
@@ -238,7 +243,8 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/Salefou/LocalRun/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Salefou/LocalRun/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Salefou/LocalRun/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/Salefou/LocalRun/compare/v0.3.1...v0.3.2
