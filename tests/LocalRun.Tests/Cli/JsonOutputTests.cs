@@ -420,6 +420,8 @@ public sealed class JsonOutputTests : IDisposable
     [InlineData("")]
     [InlineData("{ not json")]
     [InlineData("null")]
+    [InlineData("""{"SchemaVersion":2,"Projects":[]}""")] // written by a newer lrun
+    [InlineData("""{"SchemaVersion":0,"Projects":[]}""")]
     public async Task AnInvalidConfig_IsAnInputError(string content)
     {
         Directory.CreateDirectory(Path.Combine(workDir, ".lrun"));

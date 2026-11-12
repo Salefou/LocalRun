@@ -448,7 +448,7 @@ public static class LocalRunCli
     }
 
     private static async Task<T> ReadFromFile<T>(string pathToFile, string option, string producingCommand)
-        where T : class
+        where T : class, IConfigFile
     {
         string fullPath = Path.GetFullPath(pathToFile);
         if (!File.Exists(fullPath))
@@ -460,15 +460,27 @@ public static class LocalRunCli
                 : "";
             throw new ConfigNotFoundException($"'{fullPath}' not found. Run '{CommandName} {producingCommand}' first.{hint}");
         }
+        T config;
         try
         {
-            return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(fullPath))
+            config = JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(fullPath))
                 ?? throw new ConfigInvalidException($"'{fullPath}' is empty.");
         }
         catch (JsonException ex)
         {
             throw new ConfigInvalidException($"'{fullPath}' is not a valid {producingCommand} output: {ex.Message} Run '{CommandName} {producingCommand}' again, or fix it.");
         }
+
+        // A newer shape could read without error and mean something else: refuse it rather than guess
+        int version = config.SchemaVersion;
+        if (version > IConfigFile.CurrentSchemaVersion)
+        {
+            throw new ConfigInvalidException($"'{fullPath}' has SchemaVersion {version}, written by a newer {CommandName} " +
+                $"(this one reads up to {IConfigFile.CurrentSchemaVersion}). Update {CommandName}, or run '{CommandName} {producingCommand}' again.");
+        }
+        if (version < 1)
+            throw new ConfigInvalidException($"'{fullPath}' has SchemaVersion {version}, not a version. Run '{CommandName} {producingCommand}' again, or fix it.");
+        return config;
     }
 
     private static async Task WriteToFile<T>(string fullPath, T content)

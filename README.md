@@ -634,10 +634,16 @@ feed (`~/.localnuget`) lives elsewhere.
 
 The configs are indented JSON, safe to commit, diff or edit by hand between steps.
 
+Each starts with a `SchemaVersion` (absent in files written before 0.5.1, which read as `1`). It changes only when a
+field is renamed, removed or changes meaning, never for an added one. A file whose `SchemaVersion` is newer than
+this `lrun` reads fails with exit code `3` (`config-invalid`) instead of being misread: update `lrun`, or rerun the
+step that wrote it.
+
 ### `localrun.config.json` — written by `build`
 
 ```jsonc
 {
+  "SchemaVersion": 1,
   "RootPath": "C:\\work\\repos",               // absolute; project paths below are relative to it
   "LocalNugetPath": "C:\\Users\\me\\.localnuget",
   "Projects": [                                 // topological order: dependencies first
@@ -664,6 +670,7 @@ they are ignored.)
 
 ```jsonc
 {
+  "SchemaVersion": 1,
   "LocalNugetPath": "C:\\Users\\me\\.localnuget",
   "RepackTrees": [                               // one per connected component, packed in parallel
     {
