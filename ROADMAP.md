@@ -42,11 +42,11 @@ Not on this roadmap yet, and breaking whichever way they are decided, so they ar
 
 - **Project identity**: projects are keyed by file name (collisions left out, see `CLAUDE.md`). Keying by path or
   `PackageId` changes filter names, config keys and collision behaviour.
-- **Config file versioning**: the `--json` document has `schemaVersion`, the two config files don't; they load by
-  ignoring unknown fields, so a changed shape can't be detected or migrated. Adding the field is additive (absent = 1),
-  but only before the first change that needs it.
 - **Solution filters**: additive as a new flag (`--solution`), breaking if `--users-of` / `--deps-of` start accepting
   solution names (a project and a solution can share a name).
+
+Config file versioning, the third blocker, shipped (unreleased): both configs carry a `SchemaVersion`, a newer one fails
+with `config-invalid`. Migrating an older one when the shape changes is left to that change.
 
 Everything else is additive: 1's `LOCALRUN_OUTPUT`, 3 (`status`, and the config recording its build flags, time and
 HEADs as optional fields), 4's flags, 5's `--fix` and source commit, A1's `--config`, A2 (new `--json` fields, no

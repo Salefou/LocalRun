@@ -125,6 +125,10 @@ shell escaping.
   missing or stale (`VerifyFailedException`, thrown after the result is set). Few
   numbers, many names: a new failure kind gets an `ErrorCodes` name, a new number only if a script would act differently.
   `2` is `UsageException`. External code relies on them: moving a case to another number is a breaking change.
+- **Config schema version** (`IConfigFile`, 2026-11-12): both configs start with `SchemaVersion` (absent = 1).
+  Renaming or removing a field, or changing what one means, bumps `IConfigFile.CurrentSchemaVersion` (and then needs a
+  migration or a clear error for the older files); adding one doesn't. A newer version than this `lrun` reads is
+  `config-invalid` (exit 3), never a guess.
 - **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values`, then call
   `EnsureAllConsumed()` before doing work. Unknown/repeated/malformed options must fail, not be ignored.
 - **No machine-specific paths**: every path is an option, defaulting to a file in the current

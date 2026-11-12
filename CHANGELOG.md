@@ -18,6 +18,8 @@ bumps the minor version, anything else the patch.
   `verify-failed`) when one is, with a `package-missing` / `package-stale` diagnostic each.
 - `up --only <names…>`: runs just these executables of the config instead of all of them; `--exclude` still removes
   from them. Unknown names fail with exit code `2`, as for `--exclude`.
+- `localrun.config.json` and `repack.config.json` start with a `SchemaVersion` (`1`; absent in older files, read as
+  `1`). A file newer than the `lrun` reading it fails with exit code `3` (`config-invalid`) instead of being misread.
 
 ### Fixed
 
