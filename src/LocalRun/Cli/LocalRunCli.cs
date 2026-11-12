@@ -173,6 +173,9 @@ public static class LocalRunCli
             case "settings":
                 Settings(options, output);
                 break;
+            case "doctor":
+                await DoctorAsync(options, output);
+                break;
             case "help" or "--help" or "-h":
                 ShowHelp(output);
                 break;
@@ -249,6 +252,48 @@ public static class LocalRunCli
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
         var result = VerifyResult.Of(configPath, config.LocalNugetPath, FeedVerifier.Verify(config));
+        output.Result = result;
+        result.ThrowIfFailed();
+    }
+
+    /// <summary>
+    /// Setup checks, before anything runs: SDK, settings, root, local feed, NuGet sources, git. Takes <c>build</c>'s root
+    /// and feed, so it works before the first <c>build</c>. Fails (exit code 1) when a check fails, not on a warning.
+    /// </summary>
+    private static async Task DoctorAsync(CommandLineArgs args, CommandOutput output)
+    {
+        string? root = args.Value("--root");
+        string? localNuget = args.Value("--local-nuget");
+        args.EnsureAllConsumed();
+
+        // An invalid settings file is a finding here, not a failure: the other checks go on with the defaults
+        var (settingsCheck, settings) = Doctor.CheckSettings();
+        string rootPath = Path.GetFullPath(root ?? settings.Root ?? Directory.GetCurrentDirectory());
+        string localNugetPath = Path.GetFullPath(localNuget ?? settings.LocalNuget ?? DefaultLocalNugetPath);
+        logger.LogInformation(LogEvents.Progress, "Checking {Root}...", rootPath);
+        List<DoctorCheck> checks = [settingsCheck, .. await Doctor.RunAsync(rootPath, localNugetPath)];
+
+        // One line per kind of check when all is well (a platform has dozens of repositories), one per problem
+        foreach (var kind in checks.GroupBy(check => check.Check))
+        {
+            var ok = kind.Where(check => check.Status == Doctor.Ok).ToList();
+            if (ok.Count == 1)
+                logger.LogInformation(LogEvents.Done, "{Check} {Subject}: {Message}", kind.Key, ok[0].Subject, ok[0].Message);
+            else if (ok.Count > 1)
+                logger.LogInformation(LogEvents.Done, "{Check}: {Count} ok", kind.Key, ok.Count);
+            foreach (var check in kind.Where(check => check.Status != Doctor.Ok))
+            {
+                string hint = check.Hint == null ? "" : $". {check.Hint}";
+                if (check.Status == Doctor.Fail)
+                    logger.LogError(DiagnosticEvents.DoctorFailure, "{Check} {Subject}: {Message}{Hint}", check.Check, check.Subject, check.Message, hint);
+                else
+                    logger.LogWarning(DiagnosticEvents.DoctorWarning, "{Check} {Subject}: {Message}{Hint}", check.Check, check.Subject, check.Message, hint);
+            }
+        }
+
+        var result = DoctorResult.Of(rootPath, localNugetPath, checks);
+        logger.LogInformation(result.Fail == 0 ? LogEvents.Done : new EventId(), "{Ok} ok, {Warnings}, {Failures}",
+            result.Ok, Text.Count(result.Warn, "warning"), Text.Count(result.Fail, "failure"));
         output.Result = result;
         result.ThrowIfFailed();
     }
@@ -653,6 +698,15 @@ public static class LocalRunCli
         writer.WriteLine($"        --path                  Only print where the file is (default: ~/.lrun/settings.json, or ${UserSettings.PathVariable})");
         writer.WriteLine();
 
+        writer.WriteLine("  doctor [options]");
+        writer.WriteLine("      Check the setup before running anything: dotnet SDK, settings file, root, local feed (writable),");
+        writer.WriteLine("      every NuGet source the projects restore from (reachable), and in each git repository origin's");
+        writer.WriteLine("      default branch and the last fetch (--git-changes compares with it). Exit code 1 if a check fails.");
+        writer.WriteLine("      Options:");
+        writer.WriteLine("        --root <dir>            Directory to check, as for build (default: settings, else current directory)");
+        writer.WriteLine("        --local-nuget <dir>     Local feed to check, as for build (default: settings, else ~/.localnuget)");
+        writer.WriteLine();
+
         writer.WriteLine("  help");
         writer.WriteLine("      Show this help message.");
         writer.WriteLine();
@@ -663,6 +717,7 @@ public static class LocalRunCli
 
         writer.WriteLine("Example:");
         writer.WriteLine($"  {CommandName} settings                            (once per machine: your local feed, your repos folder...)");
+        writer.WriteLine($"  {CommandName} doctor                              (when something doesn't work: what's wrong with the setup?)");
         writer.WriteLine($"  {CommandName} list --root ./repos --users-of Shared.Pricing --with-services (what would a change touch?)");
         writer.WriteLine($"  {CommandName} build --root ./repos --deps-of WebApp --plot");
         writer.WriteLine($"  {CommandName} plot --open                         (the same graph, opened again)");

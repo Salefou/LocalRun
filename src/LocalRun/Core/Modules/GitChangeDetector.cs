@@ -121,7 +121,7 @@ public static class GitChangeDetector
         }
     }
 
-    private static (string Name, Commit? Commit) FindDefaultBranch(Repository repo)
+    internal static (string Name, Commit? Commit) FindDefaultBranch(Repository repo)
     {
         foreach (string refName in DefaultBranchRefs)
         {

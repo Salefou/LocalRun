@@ -27,6 +27,8 @@ lrun pack --patch --suffix dev                                                 #
 lrun up                                                                        # build and run the services; Ctrl+C stops them
 ```
 
+When something doesn't work, `lrun doctor` checks the setup (SDK, local feed, NuGet sources, git) and says what to fix.
+
 `lrun build --git-changes` picks the projects you changed (uncommitted, or commits not on origin's default
 branch) instead of naming them.
 

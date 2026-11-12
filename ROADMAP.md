@@ -48,7 +48,7 @@ Not on this roadmap yet, and breaking whichever way they are decided, so they ar
 Config file versioning, the third blocker, shipped (unreleased): both configs carry a `SchemaVersion`, a newer one fails
 with `config-invalid`. Migrating an older one when the shape changes is left to that change.
 
-Everything else is additive: 1's `LOCALRUN_OUTPUT`, 3 (`status`, and the config recording its build flags, time and
+Everything else is additive: 3 (`status`, and the config recording its build flags, time and
 HEADs as optional fields), 4's flags, 5's `--fix` and source commit, A1's `--config`, A2 (new `--json` fields, no
 `schemaVersion` bump), A3 (as long as `up` stays in the foreground by default), A5, A6's `help --json` / `schema`,
 A7, A8, the MCP server.
@@ -65,8 +65,8 @@ Decisions (user feedback, 2026-11-05, taking the proposed plan): `--json` only, 
 ask; the field is `diagnostics` (it holds errors too); the document is indented, except for `up`; the services' output
 never goes to stdout but to `.lrun/logs/<name>.log` (A4), the `started` event carrying the path.
 
-Left, not started: an environment variable for a wrapper that always wants machine output (`LOCALRUN_OUTPUT=json`,
-name not decided; it never switches to JSON because of a pipe). Decide whether it's still wanted.
+Rejected (user feedback, 2026-11-12): an environment variable for a wrapper that always wants machine output
+(`LOCALRUN_OUTPUT=json`). Not needed: callers pass `--json`, and no part of the flow reads such a variable.
 
 ### 2. Finer exit codes **(user)**: shipped (branch `claude/exit-codes`, 0.5.0)
 
@@ -190,11 +190,12 @@ Schemas of the files. An agent can then use the tool without reading the README,
 (the contract between steps) get validated on read with a message that names the bad field. A short `AGENTS.md` /
 skill in the repo telling an agent the loop (`build` → `pack` → `go` → `up`, read `status` first) would complement it.
 
-### A7. `lrun doctor` **(claude)**
-Checks that explain most "why doesn't it work" cases up front: `dotnet` SDK version, local feed exists and is writable,
-NuGet sources reachable (the ones `build` will query, listed), `origin/HEAD` known in each repo (`--git-changes` never
-fetches, so a repo never fetched silently counts everything as changed), the settings file valid. Result as a list of
-checks with `ok|warn|fail`, with `--json`.
+### A7. `lrun doctor` **(claude)**: shipped (unreleased)
+Setup checks with `ok|warn|fail` and a hint each: SDK (as the root's `global.json` pins it), settings, root, local feed
+writable, NuGet sources reachable, and per repository origin's default branch and the last fetch's age. Decisions (user
+feedback, 2026-11-12): it scans `build`'s root rather than reading a config (works before the first `build`); a failed
+check exits `1` with `doctor-failed`, no new exit code. Left: a check per repository's `global.json` (only the root's is
+run), and the fetch age limit (7 days) as an option if anyone asks.
 
 ### A8. Feed hygiene **(claude)**
 Iterations accumulate in the local feed (`1.4.3-dev.1` … `.57`). `lrun clean-feed [--keep N]` (dry run by default, or

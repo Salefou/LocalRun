@@ -20,6 +20,10 @@ bumps the minor version, anything else the patch.
   from them. Unknown names fail with exit code `2`, as for `--exclude`.
 - `localrun.config.json` and `repack.config.json` start with a `SchemaVersion` (`1`; absent in older files, read as
   `1`). A file newer than the `lrun` reading it fails with exit code `3` (`config-invalid`) instead of being misread.
+- `lrun doctor`: checks the setup before running anything (the `dotnet` SDK as the root's `global.json` pins it, the
+  settings file, the root, the local feed being writable, every NuGet source the projects restore from being reachable,
+  and in each git repository origin's default branch and the age of the last fetch). Each finding is `ok`, `warn` or
+  `fail` with what to do; exit code `1` (`doctor-failed`) when one fails. Takes `build`'s `--root` and `--local-nuget`.
 
 ### Fixed
 

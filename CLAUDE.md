@@ -71,6 +71,10 @@ shell escaping.
   project's folder (without `bin`, `obj`, dot-folders, nested projects) newer than that package. `verify` reads the config,
   `build --verify` checks the one just written; same result object. `package-missing` / `package-stale` are not strict:
   `verify` fails on them itself.
+- **`doctor`** (`Doctor`, ROADMAP A7, user feedback, 2026-11-12): read-only setup checks on `build`'s root and feed (not
+  a config, so it works before the first `build`), the only write being a probe file created and deleted in the feed.
+  Check names (`dotnet`, `settings`, `root`, `local-feed`, `source`, `git-base`, `git-fetch`) are a contract like codes.
+  `fail` = a command will fail (exit 1, `doctor-failed`); `warn` = works but may surprise (exit 0). Never fixes anything.
 - **`--git-changes`** (`GitChangeDetector`, user feedback, 2026-10-24): changed projects are added to the
   `--users-of` names. Changed = uncommitted/untracked files, or commits on HEAD not on origin's default
   branch (`origin/HEAD` → `origin/main` → `origin/master`); being behind is not a change. Per project

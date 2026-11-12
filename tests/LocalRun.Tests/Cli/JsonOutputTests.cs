@@ -434,6 +434,33 @@ public sealed class JsonOutputTests : IDisposable
     }
 
     [Fact]
+    public async Task Doctor_ReportsEveryCheck_AndAWarningDoesNotFail()
+    {
+        string root = Directory.CreateDirectory(Path.Combine(workDir, "empty")).FullName;
+
+        var run = await LrunAsync("doctor", "--json", "--root", root, "--local-nuget", Path.Combine(workDir, "feed"));
+
+        Assert.Equal(LocalRunCli.ExitSuccess, run.ExitCode);
+        AssertPlain(run);
+        var result = run.Json.GetProperty("result");
+        Assert.Equal(["settings", "dotnet", "root", "local-feed"],
+            result.GetProperty("checks").EnumerateArray().Select(check => check.GetProperty("check").GetString()));
+        Assert.Equal(1, result.GetProperty("warn").GetInt32()); // no project under the root
+        Assert.Equal(["doctor-warning"], Codes(run));
+    }
+
+    [Fact]
+    public async Task Doctor_FailsOnAFailedCheck()
+    {
+        var run = await LrunAsync("doctor", "--json", "--root", Path.Combine(workDir, "no-such-dir"), "--local-nuget", Path.Combine(workDir, "feed"));
+
+        Assert.Equal(LocalRunCli.ExitFailure, run.ExitCode);
+        Assert.Equal("doctor-failed", run.Json.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("fail", run.Json.GetProperty("result").GetProperty("checks").EnumerateArray()
+            .Single(check => check.GetProperty("check").GetString() == "root").GetProperty("status").GetString());
+    }
+
+    [Fact]
     public async Task InvalidSettings_AreAnInputError()
     {
         File.WriteAllText(Path.Combine(workDir, "settings.json"), """{ "root": "relative/path" }""");

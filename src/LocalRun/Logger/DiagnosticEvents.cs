@@ -92,6 +92,14 @@ public static class DiagnosticEvents
     /// <summary><c>verify</c>: a library's newest package in the local feed is older than its csproj version or its files.</summary>
     public static readonly EventId PackageStale = new(141, "package-stale");
 
+    // Setup findings of doctor: the result holds each one's check name; doctor fails on a failure itself (exit code 1)
+
+    /// <summary><c>doctor</c>: a check that works, but whose result may surprise (an old fetch, no origin branch).</summary>
+    public static readonly EventId DoctorWarning = new(150, "doctor-warning");
+
+    /// <summary><c>doctor</c>: a check that will make a command fail (no SDK, a source unreachable, the feed not writable).</summary>
+    public static readonly EventId DoctorFailure = new(151, "doctor-failure");
+
     /// <summary>The codes <c>--strict</c> turns into a failure (exit code 5): the result left something out, or may be wrong.</summary>
     public static readonly IReadOnlySet<string> Strict = new HashSet<string>(StringComparer.Ordinal)
     {
