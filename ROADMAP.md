@@ -172,7 +172,7 @@ Today `up` runs in the foreground until Ctrl+C. An agent can't hold that. Candid
 `up --detach` writing a state file in `.lrun/` (pids, ports from launch settings, start time), `lrun ps` to list them,
 `lrun down` to stop them, `lrun logs <service> [--tail N] [--level warn]`. Readiness stays out by design (user feedback,
 2026-10-24): if wanted, make it opt-in (`--wait <service>=<url>` or a log pattern), never the default.
-Also `up --only <names>`; today there is only `--exclude`.
+`up --only <names>` shipped (unreleased).
 
 ### A4. Service logs on disk, with levels **(claude)**: plain logs shipped (0.5.0)
 `up` writes each service's lines to `.lrun/logs/<service>.log` (`--logs`), plain text without colors, rewritten on each

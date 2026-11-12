@@ -388,6 +388,7 @@ public static class LocalRunCli
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
         List<string>? exclude = args.Values("--exclude");
+        List<string>? only = args.Values("--only");
         string logsFolder = Path.GetFullPath(args.Value("--logs") ?? DefaultLogsFolder);
         args.EnsureAllConsumed();
 
@@ -399,7 +400,7 @@ public static class LocalRunCli
         var processor = new RunProcessor(logsFolder, events == null ? null : events.Write);
         try
         {
-            await processor.RunAsync(config, exclude);
+            await processor.RunAsync(config, exclude, only);
         }
         finally
         {
@@ -628,6 +629,7 @@ public static class LocalRunCli
         writer.WriteLine("      Options:");
         writer.WriteLine($"        --config <file>         Config file to read (default: {DefaultConfigPath})");
         writer.WriteLine("        --exclude <names>       Executables not to run, e.g. the one you debug from your IDE");
+        writer.WriteLine("        --only <names>          Executables to run, the config's others left out (combines with --exclude)");
         writer.WriteLine($"        --logs <dir>            Folder of the services' log files, overwritten each run (default: {DefaultLogsFolder})");
         writer.WriteLine();
 
