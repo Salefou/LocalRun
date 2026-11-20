@@ -8,6 +8,7 @@ using LocalRun.Options;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -435,9 +436,13 @@ public static class LocalRunCli
         List<string>? exclude = args.Values("--exclude");
         List<string>? only = args.Values("--only");
         string logsFolder = Path.GetFullPath(args.Value("--logs") ?? DefaultLogsFolder);
+        string? stopTimeoutOption = args.Value("--stop-timeout");
         args.EnsureAllConsumed();
+        int? stopTimeout = stopTimeoutOption == null ? null
+            : int.TryParse(stopTimeoutOption, NumberStyles.None, CultureInfo.InvariantCulture, out int seconds) ? seconds
+            : throw new UsageException($"'--stop-timeout' must be a number of seconds, 0 or more (got '{stopTimeoutOption}').");
 
-        int? stopTimeout = UserSettings.Load().StopTimeout;
+        stopTimeout ??= UserSettings.Load().StopTimeout;
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
         // Creates the folder, and the work folder's .gitignore when the logs are in it
@@ -684,7 +689,7 @@ public static class LocalRunCli
 
         writer.WriteLine("  up [options]");
         writer.WriteLine("      Build the executables of a config file, then run them side by side; Ctrl+C stops them all,");
-        writer.WriteLine("      killing what still runs after 10 seconds (stopTimeout in your settings).");
+        writer.WriteLine("      killing what still runs after a grace period (--stop-timeout).");
         writer.WriteLine("      Each one's output also goes to <logs>/<name>.log. With --json, stdout gets one line per event");
         writer.WriteLine("      (building, started, running, stopping, exited), then the result on one line.");
         writer.WriteLine("      Options:");
@@ -692,6 +697,8 @@ public static class LocalRunCli
         writer.WriteLine("        --exclude <names>       Executables not to run, e.g. the one you debug from your IDE");
         writer.WriteLine("        --only <names>          Executables to run, the config's others left out (combines with --exclude)");
         writer.WriteLine($"        --logs <dir>            Folder of the services' log files, overwritten each run (default: {DefaultLogsFolder})");
+        writer.WriteLine("        --stop-timeout <s>      Seconds to wait after Ctrl+C before killing what still runs, 0 or more");
+        writer.WriteLine("                                (default: your settings, else 10)");
         writer.WriteLine();
 
         writer.WriteLine("  settings [options]");

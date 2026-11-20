@@ -14,7 +14,7 @@ public sealed class SettingsInvalidException(string message) : Exception(message
 /// <param name="LocalNuget">Default of <c>build --local-nuget</c>. Absolute, or starting with <c>~</c>.</param>
 /// <param name="Root">Default of <c>build --root</c>. Absolute, or starting with <c>~</c>.</param>
 /// <param name="Suffix">Default of <c>pack --suffix</c>.</param>
-/// <param name="StopTimeout">Seconds <c>up</c> waits after Ctrl+C before killing what still runs; 0 or more.</param>
+/// <param name="StopTimeout">Default of <c>up --stop-timeout</c>: seconds <c>up</c> waits after Ctrl+C before killing what still runs; 0 or more.</param>
 public sealed record UserSettings(string? LocalNuget = null, string? Root = null, string? Suffix = null, int? StopTimeout = null)
 {
     /// <summary>Overrides <see cref="DefaultPath"/>; also how tests and hand testing keep clear of the real file.</summary>

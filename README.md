@@ -531,7 +531,7 @@ the services, as `docker compose up` does for containers:
    or after, to see what one service said.
 3. **Wait** until they have all exited. One-shot jobs simply finish; services run until you press
    **Ctrl+C**. They all receive it (they share the console). Whatever is still running 10 seconds later
-   (`stopTimeout` in your [settings](#settings)) is killed, with its child processes. Ctrl+C during the builds stops `up` before anything starts.
+   (`--stop-timeout`) is killed, with its child processes. Ctrl+C during the builds stops `up` before anything starts.
 
 A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
@@ -561,6 +561,7 @@ starting the next: by design, each service is expected to wait for (or retry) th
 | `--exclude <names…>` | — | Executables not to run. Typically the service you debug: start it from your IDE, and `up` starts all the others around it. Names must be executables of the config (exit code `2` otherwise, listing them). |
 | `--only <names…>` | — | Executables to run, leaving out the config's others. Same name rules as `--exclude`, which then removes from them. |
 | `--logs <dir>` | `.lrun/logs` | Folder of the services' log files. |
+| `--stop-timeout <seconds>` | your [settings](#settings), else `10` | How long the processes get to exit after Ctrl+C before they are killed with their child processes. A whole number, `0` or more (`0` kills right away). |
 
 Names are separated by spaces, after a single flag (not commas, and not the flag repeated):
 
@@ -612,8 +613,7 @@ it on every command:
 The file is created with all of it commented out, and never overwritten. Comments and trailing commas are allowed;
 an unknown key or a bad value fails the command that reads it (`build`, `pack`, `up`) with the file's path. Paths are
 absolute or start with `~`; a relative one would depend on where you run `lrun` from. An option on the command
-line (`--local-nuget`, `--root`, `--suffix`) always wins. `stopTimeout` is a whole number of seconds, `0` or more
-(`0` kills right away); it has no command-line option.
+line (`--local-nuget`, `--root`, `--suffix`, `--stop-timeout`) always wins.
 
 | Option | Description |
 |---|---|
