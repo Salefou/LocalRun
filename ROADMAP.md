@@ -1,4 +1,4 @@
-# Roadmap
+﻿# Roadmap
 
 Feature requests and candidate tasks for LocalRun, so that none lives only in a chat. Nothing here is decided or
 started unless it says so: propose it, don't build it silently (see "Known issues / candidate tasks" in `CLAUDE.md`).
@@ -210,6 +210,19 @@ Decisions (user feedback, 2026-11-20):
   against the options each command reads.
 - No `AGENTS.md` in this repository: there it would read as instructions for working *on* LocalRun. README "From an
   agent" gives a snippet for users to paste into their own workspace's instructions instead.
+
+Next, not started (user feedback, 2026-11-20): let an agent update its own instructions about `lrun` from the install
+alone, offline, when asked. Both reached through commands, not files in the package: a file packed into the nupkg lands
+in the tool store (`~/.dotnet/tools/.store/...`, a path that changes with the version and the install mode), where no
+agent looks. PACKAGE.md was ruled out too: same place, and it is the nuget.org page.
+- `lrun changelog [--since <version>]`, its own command (not a `help` flag: a different question, a result of its own
+  shape): CHANGELOG.md embedded in the tool, printing the sections after that version; `--json` gives them as data
+  (version, date, entries by kind). A local build shows `[Unreleased]` too, labelled as such.
+- The agent snippet as one embedded text: `lrun help --agent` prints it as markdown, `help --json` carries it in a new
+  field (additive). It starts with a stamp (`<!-- written for lrun 0.6.0 -->`); a test keeps README "From an agent"
+  word for word equal to it. Kept short, pointing to `help --json` for details, so a release asks for a small rewrite.
+- The loop it enables: read the stamp in the user's file, compare with `lrun version`, read
+  `lrun changelog --since <stamp>`, rewrite from `lrun help --agent` keeping the user's own additions.
 
 ### A7. `lrun doctor` **(claude)**: shipped (unreleased)
 Setup checks with `ok|warn|fail` and a hint each: SDK (as the root's `global.json` pins it), settings, root, local feed
