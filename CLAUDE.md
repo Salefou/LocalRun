@@ -291,7 +291,9 @@ shell escaping.
 
 Listed for users in README "Known limitations". Do not fix silently; propose them.
 Feature requests (machine output, exit codes, `status`, `--since`, `--verify`, agent-oriented ideas) live in
-`ROADMAP.md`: read it before designing anything of that kind, and update it when one ships or is rejected.
+`ROADMAP.md`: read it before designing anything of that kind, and update it when one ships or is rejected. It says
+what each item is for and what it builds on, never when it comes: no schedule, no "next up" (user feedback, 2026-11-20).
+Only "Before 1.0" orders anything, because breaking changes get expensive after it.
 
 - Batch git operations across the repos of a config (`lrun git …`, keep going on failure, summary):
   floated in user feedback on 2026-10-24, postponed until enough real use cases come up. Never stash or reset without being asked.

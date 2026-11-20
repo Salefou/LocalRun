@@ -10,16 +10,31 @@ Opened 2026-11-04. Each item is marked **(user)** when it came from user feedbac
 An agent can't watch a terminal, hold a foreground process, or parse an emoji-prefixed log: it needs results it can
 parse, failures it can classify, queries that don't write anything, and services it can start and leave running.
 
-## Suggested order
+This file says what each item is for, what it builds on and what is left to decide; it holds no schedule. Pick the one
+that serves your purpose, or one next to an item you just shipped ("Related" below). The only ordering that matters to
+everyone is "Before 1.0".
 
-1. **Machine output** (1) and **error codes** (2): everything else reports through them. Done (0.5.0).
-2. **`status`** (3) and **`build --verify`** (5): read-only questions, with a shared "what does this config hold" model.
-   `verify` shipped (unreleased); `status` waits for its goal to be confirmed.
-3. **`--since`** (4): extends `GitChangeDetector`, independent of the rest. Postponed (see 4).
-4. The agent-oriented additions (A1–A8) once 1–2 exist; A1 (queries) and A4 (service logs on disk) first, they are cheap.
-   A1 shipped as `lrun list`, A4's plain logs in 0.5.0, A6 as `help --json` and `lrun schema` (unreleased).
+## Open items at a glance
 
-## Breaking for 1.0?
+| Item | Useful for | Builds on / related |
+|---|---|---|
+| 3, `lrun status` | Reading what a config holds without the JSON or the plot; agents' read-only entry point | Goal to confirm first. Related: 4 (`--since-last-build`), 5 (`--drift`), A8 (feed size) |
+| 4, `build --since` | Saying what "changed" means (since a tag, since the last pack) | Postponed. Builds on 3 for `--since-last-build` |
+| 5, `verify` follow-ups | `--fix` (pack only the stale ones); staleness from outside the project folder | Shipped core; the second part is a 1.0 question |
+| 7, More settings | Machines behind a slow proxy (skip NuGet queries); `doctor`'s fetch age | Related: A7 |
+| A1, `list --config` | Fast queries on large platforms, from an existing config | Shipped core (`lrun list`) |
+| A2, Parsed build failures | Agents turning a failed `pack` / `go` into fixable tasks | Related: A5, `go --dry-run` |
+| A3, `up --detach` / `ps` / `down` / `logs` | Agents starting services and leaving them running | Related: A4 (`logs`) |
+| A4, Log levels on disk | Filtering service logs by level, diffing runs | Shipped plain logs; additive form only (1.0) |
+| A5, `lrun test` | Running the tests affected by a change, without a CI | Builds on A2 for its summary |
+| A6, `lrun changelog`, `help --agent` | Agents updating their own instructions about `lrun`, offline | Shipped core; design settled below |
+| A7, `doctor` follow-ups | Per-repository `global.json`, fetch age as an option | Related: 7 |
+| A8, `clean-feed` | Local feeds piling up iterations | Related: 3 |
+| Project identity | Projects sharing a file name (keyed by path or `PackageId`) | 1.0 blocker: breaking either way |
+| Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
+| MCP server | Agents calling `lrun` as tools | Builds on 3 and A1–A4; conflicts with "Non-interactive CLI": ask first |
+
+## Before 1.0
 
 1.0.0 promises that a breaking change costs a major version. The public API is the commands and options (and filter
 semantics), `localrun.config.json` / `repack.config.json`, the `--json` document, exit and diagnostic codes, the settings
@@ -246,4 +261,4 @@ versions.
 - Non-interactive: nothing prompts, reads stdin or opens windows unless a flag asks.
 - "When unsure, keep more": selections err on the side of including; extra projects are easy to delete.
 - No machine-specific paths: new outputs default into `.lrun/`.
-- A new command updates `PrintHelp`, the README and has tests; each user-visible change gets a CHANGELOG line.
+- A new command goes into `CommandCatalog` and the README, and has tests; each user-visible change gets a CHANGELOG line.
