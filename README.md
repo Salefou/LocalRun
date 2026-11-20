@@ -242,7 +242,8 @@ General form: `lrun <command> [options]`.
 > Commands and options were renamed before the first release (e.g. `visualize` is now `plot`, `run` is now
 > `up`); the old names are gone. See [CHANGELOG.md](CHANGELOG.md) for the full list and for every change since.
 
-- Options are `--name` followed by zero or more values; values run until the next `--option`.
+- Options are `--name` followed by zero or more values; values run until the next `--option`. The one command
+  taking an argument, `schema <name>`, takes it before any option.
 - Unknown options, repeated options, missing values and extra values are **rejected** (exit code `2`)
   rather than ignored, so typos never silently change what runs.
 - **Relative paths are resolved against the current directory** — not against the location of the
@@ -668,10 +669,35 @@ kind; each warning or failure gets its own line, with what to do. It exits `1` w
 | `--root <dir>` | settings `root`, else the current directory | Directory to check, as for `build`. |
 | `--local-nuget <dir>` | settings `localNuget`, else `~/.localnuget` | Local feed to check, as for `build`. |
 
+### `schema`
+
+Print the [JSON Schema](https://json-schema.org/) (draft 2020-12) of a file LocalRun reads or writes, as is, to save
+or pipe:
+
+| Name | Describes |
+|---|---|
+| `config` | `localrun.config.json`, written by `build`. |
+| `repack` | `repack.config.json`, written by `pack`. |
+| `result` | The [`--json` document](#machine-output---json), with each command's result and the events `up` streams (`UpEvent`). |
+| `settings` | `~/.lrun/settings.json` (the schema lists the canonical names; `lrun` also accepts other cases). |
+
+```sh
+lrun schema config > .lrun/localrun.config.schema.json   # for an editor, or to generate types
+```
+
+The schemas are written by hand and tested against the types `lrun` serializes. They follow the files' schema versions:
+a field renamed or removed bumps `SchemaVersion` (configs) or `schemaVersion` (`--json`), an added field doesn't. Treat
+fields you don't know as ignorable. With `--json`, the result is `name` and `schema` (the schema as an object).
+
 ### `help`
 
 Print the command reference. Also `--help` and `-h`. Running `lrun` with no arguments prints it too,
 with exit code `2`.
+
+With `--json`, the result holds the same reference as data, so a program or an agent can learn the tool without this
+README: `globalOptions`; `commands`, each with its `name`, `summary`, `arguments`, `options` (`name`, `kind`: `flag`,
+`value` or `values`, `value` as shown in the help, `description`) and `aliases`; `exitCodes`; `errorCodes` (`code`,
+`exitCode`, `meaning`); `diagnosticCodes` (`code`, `strict`: whether `--strict` fails on it, `meaning`).
 
 ---
 
@@ -683,6 +709,10 @@ folder (yours is kept if you write one), so running `lrun` from a repository nev
 feed (`~/.localnuget`) lives elsewhere.
 
 The configs are indented JSON, safe to commit, diff or edit by hand between steps.
+
+`lrun schema config` and `lrun schema repack` print their JSON Schemas. A field a command doesn't know, such as a typo
+in a hand edit, is ignored with an `unknown-config-field` warning naming it, so older files keep loading; `--strict`
+refuses it.
 
 Each starts with a `SchemaVersion` (absent in files written before 0.5.1, which read as `1`). It changes only when a
 field is renamed, removed or changes meaning, never for an added one. A file whose `SchemaVersion` is newer than
@@ -714,7 +744,7 @@ step that wrote it.
 `build` rewrites this file from scratch, so hand edits last until the next `build`. To leave a project
 out of a repack, delete it from `repack.config.json` before `go`. To leave an executable out of `up`,
 use `up --exclude`. (Configs from before 2026-10-24 may still hold `SkipRepack` / `SkipRun` fields:
-they are ignored.)
+they are ignored, with an `unknown-config-field` warning.)
 
 ### `repack.config.json` — written by `pack`
 
@@ -874,7 +904,8 @@ Results:
 | `plot` | `plot`: the page's path. |
 | `settings` | `path`, `created`. |
 | `version` | `version`. |
-| `help` | `help`: the help text. |
+| `help` | `help`: the help text; `globalOptions`, `commands`, `exitCodes`, `errorCodes`, `diagnosticCodes`: the same as data (see [`help`](#help)). |
+| `schema` | `name`, `schema`: the JSON Schema as an object. |
 | `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C, `killed` after the grace period), `exitCode`, `log`. |
 
 `leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" |
@@ -901,6 +932,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `source-query-failed` | A NuGet source could not be queried (unreachable, or a local folder that doesn't exist): some latest versions may be missing. | fails |
 | `package-version-override` | A csproj sets `PackageVersion`, which overrides the planned version. | fails |
 | `packages-folder-unknown` | A global packages folder is unknown: an iteration number may be reused. | fails |
+| `unknown-config-field` | A config file read holds fields this `lrun` doesn't know (a typo in a hand edit, or a field of another version): they are ignored. The message gives their paths (`$.Projects[3].Depht`). | fails |
 | `empty-selection` | Nothing to do: no project kept, nothing to pack, no executable to run. The command succeeds. | — |
 | `no-solution` | A project no solution references: its commands get no `$(SolutionDir)`. | — |
 | `csproj-ahead-of-latest` | The csproj version is ahead of the latest on the sources: `pack` starts from it. | — |
@@ -961,6 +993,26 @@ $plan = Get-Content repack.config.json -Raw | ConvertFrom-Json
 $plan.RepackTrees.Projects | Format-Table Name, Depth
 ```
 
+### From an agent
+
+An agent (a coding assistant, an automation) needs no more than `lrun help --json`, `lrun schema result` and the
+exit codes. To give it the loop up front, paste something like this into the instructions it reads in your workspace
+(`AGENTS.md`, `CLAUDE.md`, ...):
+
+```markdown
+## Trying a library change in its consumers: `lrun` (LocalRun)
+
+- Learn the commands from `lrun help --json` (options, exit and error codes, diagnostic codes); the shape of
+  every result from `lrun schema result`. Always pass `--json`: one JSON document on stdout, logs on stderr.
+- Ask first, without writing anything: `lrun list --users-of <Library> --with-services --json`.
+- Then: `lrun build --users-of <Library> --with-services --json`, `lrun pack --json`, and before starting services,
+  `lrun verify --json` (exit code 6: pack again).
+- Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
+  4 a dotnet build failed (fix the code; `result.packages[].failure` has the error lines), 5 refused by `--strict`.
+- `lrun up` stays in the foreground until Ctrl+C: run it in the background and read `.lrun/logs/<service>.log`.
+- When a command fails for no visible reason: `lrun doctor --json`.
+```
+
 ### From bash / CI
 
 ```sh
@@ -1004,7 +1056,8 @@ LocalRun.sln                     Solution: the two projects below
 src/
 └─ LocalRun/                     CLI project (packed as the `lrun` .NET tool); also hosts the engine
    ├─ Program.cs                 Main: calls LocalRunCli, flushes logs
-   ├─ Cli/LocalRunCli.cs         Command dispatch, file I/O, help text, exit codes
+   ├─ Cli/                       LocalRunCli (command dispatch, file I/O, exit codes), CommandCatalog (the help,
+   │                             as text and data), CommandReport (the --json document), Schemas
    ├─ Options/                   Command-line parsing (CommandLineArgs) and per-command option objects
    ├─ Core/
    │  ├─ Graph/                  DependencyGraph: building, filtering, cycles, layered topological sort
@@ -1012,7 +1065,8 @@ src/
    │  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphPage,
    │  │                          NugetVersionChecker, SolutionScanner
    │  └─ Processing/             RunProcessor: the `up` command
-   ├─ Resources/                 GraphPage.html (the plot page template) and the vendored elkjs
+   ├─ Resources/                 GraphPage.html (the plot page template), the vendored elkjs, and the JSON
+   │                             Schemas printed by `lrun schema` (Schemas/)
    └─ Logger/                    Logger factory and console formatter
 tests/
 └─ LocalRun.Tests/               xUnit tests, one folder per area of src/LocalRun (Graph, Options, …)
@@ -1053,7 +1107,10 @@ rule on `master` requiring the **build-and-test** check.
    doing any work, so typos fail fast with exit code `2`.
 3. Throw `UsageException` for command-line mistakes; any other exception becomes exit code `1`.
 4. Resolve paths with `Path.GetFullPath` and log the absolute path of anything you write.
-5. Document it in `PrintHelp` and in this README, and add a line under `[Unreleased]` in `CHANGELOG.md`.
+5. Describe it and its options in `CommandCatalog.Commands` (the text help and `help --json` come from there;
+   `CommandCatalogTests` fails until every option it reads is listed), give its result a `$defs` entry in
+   `Resources/Schemas/result.schema.json` (`SchemasTests`), document it in this README, and add a line under
+   `[Unreleased]` in `CHANGELOG.md`.
 
 ### Releasing
 

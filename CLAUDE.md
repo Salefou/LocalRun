@@ -135,8 +135,15 @@ shell escaping.
   Renaming or removing a field, or changing what one means, bumps `IConfigFile.CurrentSchemaVersion` (and then needs a
   migration or a clear error for the older files); adding one doesn't. A newer version than this `lrun` reads is
   `config-invalid` (exit 3), never a guess.
-- **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values`, then call
-  `EnsureAllConsumed()` before doing work. Unknown/repeated/malformed options must fail, not be ignored.
+- **Strict parsing**: commands read options via `CommandLineArgs.Flag/Value/Values` (and positional arguments, before any
+  option, via `Argument()`: only `schema <name>` has one), then call `EnsureAllConsumed()` before doing work.
+  Unknown/repeated/malformed options and stray arguments must fail, not be ignored.
+- **Self-description** (ROADMAP A6, user feedback, 2026-11-20): `CommandCatalog` is the one description of commands,
+  options and exit codes; `ErrorCodes.All` and `DiagnosticEvents.All` carry each code's meaning. `help --json` returns
+  them. `Resources/Schemas/*.schema.json` are hand-written JSON Schemas (`lrun schema`): a field added to a config, a
+  result or the settings goes into its schema too (`SchemasTests` compares them with the serialized types, and
+  `JsonOutputTests` checks every document against `result`). Configs are checked against theirs on read: unknown fields
+  warn `unknown-config-field` (strict), never fail.
 - **No machine-specific paths**: every path is an option, defaulting to a file in the current
   directory's `.lrun` folder (`localrun.config.json`, `repack.config.json`, `plots/dependencies-<date-time>`;
   `.lrun` ignores itself with a `.gitignore` of `*`) or
@@ -197,7 +204,8 @@ shell escaping.
   then reports it). `LOCALRUN_LOG_LEVEL` was removed in 0.6.0 (user feedback, 2026-11-20: no env variable next to the
   settings). Errors log the message; `LogDebug(ex, …)` carries the stack trace.
 - Options objects live in `Options/`, one parser per command (`*OptionsParser.Parse(CommandLineArgs)`).
-- New command: see README "Adding a command". Update `LocalRunCli.PrintHelp` and README together.
+- New command: see README "Adding a command". Describe it in `CommandCatalog` (renders the text help and `help --json`;
+  `CommandCatalogTests` checks it against the options the command reads) and the README together.
 - Each project has its own folder, so default globs never overlap. (Before the move to `src/`, the CLI
   csproj sat at the root and had to exclude every sibling folder; forgetting one compiled its
   generated `.cs` files into the CLI, symptom CS0579 duplicate attribute.)

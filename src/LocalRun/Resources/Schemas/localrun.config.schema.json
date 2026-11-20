@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "localrun.config.json",
+  "description": "The dependency graph written by 'lrun build', read by plot, pack, verify and up. Safe to edit by hand between steps; build rewrites it from scratch.",
+  "type": "object",
+  "properties": {
+    "SchemaVersion": {
+      "description": "Shape of the file. Absent in files written before 0.5.1, which read as 1. A version newer than the lrun reading it is refused (config-invalid).",
+      "type": "integer",
+      "minimum": 1
+    },
+    "RootPath": {
+      "description": "The directory build scanned, absolute. Project paths are relative to it.",
+      "type": "string"
+    },
+    "LocalNugetPath": {
+      "description": "The local NuGet feed pack and go write into, absolute.",
+      "type": "string"
+    },
+    "Projects": {
+      "description": "The projects kept, in topological order: dependencies first.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/ProjectNode" }
+    }
+  },
+  "required": ["RootPath", "LocalNugetPath", "Projects"],
+  "additionalProperties": false,
+  "$defs": {
+    "ProjectNode": {
+      "type": "object",
+      "properties": {
+        "Name": {
+          "description": "The csproj file name without extension: the key filters and dependencies use.",
+          "type": "string"
+        },
+        "PackageId": {
+          "description": "The id it is packed under (<PackageId>, else <AssemblyName>), only when it isn't the name.",
+          "type": "string"
+        },
+        "Path": {
+          "description": "The csproj, relative to RootPath.",
+          "type": "string"
+        },
+        "SolutionPath": {
+          "description": "Full path of the first solution referencing it; its commands get its $(SolutionDir). Null when none does.",
+          "type": ["string", "null"]
+        },
+        "Type": {
+          "description": "executable when <OutputType> is Exe, else library.",
+          "enum": ["library", "executable"]
+        },
+        "Version": {
+          "description": "The csproj version: <Version>, else <VersionPrefix>[-<VersionSuffix>], else 1.0.0.",
+          "$ref": "#/$defs/ProjectVersion"
+        },
+        "LatestVersion": {
+          "description": "The highest version on the project's NuGet sources and the local feed; pack starts from it. Absent with build --csproj, or when none was found.",
+          "$ref": "#/$defs/ProjectVersion"
+        },
+        "Dependencies": {
+          "description": "Names of the projects and packages it references, kept in the config or not.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["Name", "Path", "Type", "Version", "Dependencies"],
+      "additionalProperties": false
+    },
+    "ProjectVersion": {
+      "description": "A version split as Major.Minor.PatchAndSuffix: 1.4.3-dev.2 is 1, 4, \"3-dev.2\".",
+      "type": "object",
+      "properties": {
+        "Major": { "type": "integer", "minimum": 0 },
+        "Minor": { "type": "integer", "minimum": 0 },
+        "PatchAndSuffix": {
+          "description": "The patch number, then the prerelease label and build metadata if any.",
+          "type": "string"
+        }
+      },
+      "required": ["Major", "Minor", "PatchAndSuffix"],
+      "additionalProperties": false
+    }
+  }
+}

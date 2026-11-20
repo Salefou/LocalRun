@@ -1,0 +1,447 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "lrun --json document",
+  "description": "The one document a command run with --json writes on stdout, whether it succeeds or fails. Renaming or removing a field bumps schemaVersion; adding one doesn't, so ignore fields you don't know. up first streams events, one per line (UpEvent), then writes this document on one line.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "command": {
+      "description": "The command as given, lowercased; null without one.",
+      "type": ["string", "null"]
+    },
+    "status": { "enum": ["succeeded", "failed"] },
+    "exitCode": {
+      "description": "The process exit code (help --json lists them).",
+      "type": "integer"
+    },
+    "durationMs": { "type": "integer", "minimum": 0 },
+    "result": {
+      "description": "The command's own result, or null (failed before having one).",
+      "anyOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/BuildResult" },
+        { "$ref": "#/$defs/ListResult" },
+        { "$ref": "#/$defs/VerifyResult" },
+        { "$ref": "#/$defs/PlotResult" },
+        { "$ref": "#/$defs/PackResult" },
+        { "$ref": "#/$defs/UpResult" },
+        { "$ref": "#/$defs/SettingsResult" },
+        { "$ref": "#/$defs/DoctorResult" },
+        { "$ref": "#/$defs/SchemaResult" },
+        { "$ref": "#/$defs/HelpResult" },
+        { "$ref": "#/$defs/VersionResult" }
+      ]
+    },
+    "diagnostics": {
+      "description": "The warnings and errors logged, in order (stderr has them too).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Diagnostic" }
+    },
+    "written": {
+      "description": "Full paths of the files written.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "error": {
+      "description": "Why the command failed, or null.",
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/ReportError" }]
+    }
+  },
+  "required": ["schemaVersion", "command", "status", "exitCode", "durationMs", "result", "diagnostics", "written", "error"],
+  "additionalProperties": false,
+  "$defs": {
+    "Diagnostic": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "What it is about, to branch on (help --json lists the codes); unspecified without one.",
+          "type": "string"
+        },
+        "level": { "enum": ["warning", "error"] },
+        "message": { "description": "For people: may change.", "type": "string" }
+      },
+      "required": ["code", "level", "message"],
+      "additionalProperties": false
+    },
+    "ReportError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "A short stable string to branch on (help --json lists the codes with their exit code).",
+          "type": "string"
+        },
+        "message": { "description": "For people: may change.", "type": "string" }
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false
+    },
+    "BuildResult": {
+      "type": "object",
+      "properties": {
+        "config": { "description": "The config written, full path.", "type": "string" },
+        "root": { "type": "string" },
+        "localNuget": { "type": "string" },
+        "filters": { "description": "The filters given, as typed, or null.", "type": ["string", "null"] },
+        "scanned": { "description": "Projects found, test projects and name collisions excluded.", "type": "integer" },
+        "projects": { "$ref": "#/$defs/ProjectCounts" },
+        "services": { "description": "The executables kept.", "type": "array", "items": { "type": "string" } },
+        "leftOut": { "type": "array", "items": { "$ref": "#/$defs/LeftOutProjects" } },
+        "gitChanges": {
+          "description": "With --git-changes, the projects found changed; else null.",
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        },
+        "plot": { "description": "The page written by --plot, or null.", "type": ["string", "null"] },
+        "verify": {
+          "description": "With --verify, the check of the config just written; else null.",
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/VerifyResult" }]
+        }
+      },
+      "required": ["config", "root", "localNuget", "filters", "scanned", "projects", "services", "leftOut", "gitChanges", "plot", "verify"],
+      "additionalProperties": false
+    },
+    "ProjectCounts": {
+      "type": "object",
+      "properties": {
+        "total": { "type": "integer" },
+        "libraries": { "type": "integer" },
+        "executables": { "type": "integer" }
+      },
+      "required": ["total", "libraries", "executables"],
+      "additionalProperties": false
+    },
+    "LeftOutProjects": {
+      "description": "What build left out of the config, one entry per reason.",
+      "type": "object",
+      "properties": {
+        "reason": { "enum": ["test", "filter", "name-collision", "cycle"] },
+        "projects": { "type": "array", "items": { "type": "string" } },
+        "paths": {
+          "description": "For a name collision: the paths of the projects sharing the name, relative to the root.",
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        },
+        "dependents": {
+          "description": "For a name collision or a cycle: the projects kept without their dependency on these.",
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["reason", "projects", "paths", "dependents"],
+      "additionalProperties": false
+    },
+    "ListResult": {
+      "type": "object",
+      "properties": {
+        "root": { "type": "string" },
+        "filters": { "type": ["string", "null"] },
+        "scanned": { "type": "integer" },
+        "counts": { "$ref": "#/$defs/ProjectCounts" },
+        "projects": {
+          "description": "What build would keep, in dependency order (depth, then name).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ListedProject" }
+        },
+        "leftOut": { "type": "array", "items": { "$ref": "#/$defs/LeftOutProjects" } },
+        "gitChanges": { "type": ["array", "null"], "items": { "type": "string" } }
+      },
+      "required": ["root", "filters", "scanned", "counts", "projects", "leftOut", "gitChanges"],
+      "additionalProperties": false
+    },
+    "ListedProject": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "packageId": { "type": "string" },
+        "type": { "enum": ["library", "executable"] },
+        "depth": { "description": "From 0.", "type": "integer" },
+        "version": { "description": "The csproj's.", "type": "string" },
+        "path": { "description": "The csproj, relative to the root.", "type": "string" },
+        "solution": { "description": "Full path of the first solution referencing it, or null.", "type": ["string", "null"] },
+        "dependencies": {
+          "description": "As in the config: projects and packages it references, kept or not.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["name", "packageId", "type", "depth", "version", "path", "solution", "dependencies"],
+      "additionalProperties": false
+    },
+    "VerifyResult": {
+      "type": "object",
+      "properties": {
+        "config": { "type": "string" },
+        "feed": { "description": "The local feed checked, from the config.", "type": "string" },
+        "libraries": { "type": "integer" },
+        "ok": { "type": "integer" },
+        "missing": { "type": "integer" },
+        "stale": { "type": "integer" },
+        "packages": {
+          "description": "A check per library of the config, in config order.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/PackageCheck" }
+        }
+      },
+      "required": ["config", "feed", "libraries", "ok", "missing", "stale", "packages"],
+      "additionalProperties": false
+    },
+    "PackageCheck": {
+      "type": "object",
+      "properties": {
+        "project": { "type": "string" },
+        "packageId": { "type": "string" },
+        "status": { "enum": ["ok", "missing", "stale"] },
+        "reason": {
+          "description": "For a stale one: its csproj version is ahead of the newest package, or a file of its folder was edited after it.",
+          "enum": ["csproj-ahead", "edited", null]
+        },
+        "csprojVersion": { "type": "string" },
+        "feedVersion": { "description": "The newest in the feed, or null.", "type": ["string", "null"] },
+        "packedAt": { "type": ["string", "null"], "format": "date-time" },
+        "editedFile": { "description": "Relative to the project's folder.", "type": ["string", "null"] },
+        "editedAt": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "required": ["project", "packageId", "status", "reason", "csprojVersion", "feedVersion", "packedAt", "editedFile", "editedAt"],
+      "additionalProperties": false
+    },
+    "PlotResult": {
+      "type": "object",
+      "properties": {
+        "plot": { "description": "The page written, full path.", "type": "string" }
+      },
+      "required": ["plot"],
+      "additionalProperties": false
+    },
+    "PackResult": {
+      "description": "The result of pack and of go.",
+      "type": "object",
+      "properties": {
+        "plan": { "description": "The repack config, full path.", "type": "string" },
+        "packed": { "description": "Whether the whole plan was packed (false with --dry-run, or after a failure).", "type": "boolean" },
+        "packages": {
+          "description": "The plan, in packing order (depth, then name), with what became of each project.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/PackageReport" }
+        }
+      },
+      "required": ["plan", "packed", "packages"],
+      "additionalProperties": false
+    },
+    "PackageReport": {
+      "type": "object",
+      "properties": {
+        "project": { "type": "string" },
+        "packageId": { "type": "string" },
+        "depth": { "type": "integer" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "status": {
+          "description": "planned (dry run), packed, failed, or skipped (not reached: a depth starts once the previous one is packed).",
+          "enum": ["planned", "packed", "failed", "skipped"]
+        },
+        "durationMs": { "description": "Time in its dotnet commands, or null when none ran.", "type": ["integer", "null"] },
+        "failure": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/PackFailure" }] }
+      },
+      "required": ["project", "packageId", "depth", "from", "to", "status", "durationMs", "failure"],
+      "additionalProperties": false
+    },
+    "PackFailure": {
+      "type": "object",
+      "properties": {
+        "step": { "enum": ["clean", "restore", "pack"] },
+        "exitCode": { "type": "integer" },
+        "output": {
+          "description": "The command's error lines, or its last lines when it printed none (at most 20).",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["step", "exitCode", "output"],
+      "additionalProperties": false
+    },
+    "UpResult": {
+      "type": "object",
+      "properties": {
+        "logs": { "description": "The folder of the services' log files.", "type": "string" },
+        "services": {
+          "description": "The executables of the config, dependencies first, without the excluded ones.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ServiceReport" }
+        }
+      },
+      "required": ["logs", "services"],
+      "additionalProperties": false
+    },
+    "ServiceReport": {
+      "type": "object",
+      "properties": {
+        "project": { "type": "string" },
+        "status": {
+          "description": "exited: on its own with 0; failed: on its own otherwise; stopped: by Ctrl+C; killed: after the grace period.",
+          "enum": ["not-started", "exited", "failed", "stopped", "killed"]
+        },
+        "exitCode": { "description": "Null when it never started, or was killed and didn't exit in time.", "type": ["integer", "null"] },
+        "log": { "type": ["string", "null"] }
+      },
+      "required": ["project", "status", "exitCode", "log"],
+      "additionalProperties": false
+    },
+    "UpEvent": {
+      "description": "A line up --json streams on stdout before its document. Absent fields don't apply to the event.",
+      "type": "object",
+      "properties": {
+        "event": { "enum": ["building", "started", "running", "stopping", "exited"] },
+        "time": { "description": "When it happened, UTC.", "type": "string", "format": "date-time" },
+        "project": { "type": "string" },
+        "pid": { "description": "started: the process id of dotnet run.", "type": "integer" },
+        "log": { "description": "started: the file the service's output goes to.", "type": "string" },
+        "count": { "description": "running: how many processes were started.", "type": "integer" },
+        "exitCode": { "description": "exited: the exit code.", "type": "integer" },
+        "status": { "description": "exited: as in ServiceReport.", "type": "string" }
+      },
+      "required": ["event", "time"],
+      "additionalProperties": false
+    },
+    "SettingsResult": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "created": { "type": "boolean" }
+      },
+      "required": ["path", "created"],
+      "additionalProperties": false
+    },
+    "DoctorResult": {
+      "type": "object",
+      "properties": {
+        "root": { "type": "string" },
+        "localNuget": { "type": "string" },
+        "ok": { "type": "integer" },
+        "warn": { "type": "integer" },
+        "fail": { "type": "integer" },
+        "checks": {
+          "description": "Every finding, ok ones included.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/DoctorCheck" }
+        }
+      },
+      "required": ["root", "localNuget", "ok", "warn", "fail", "checks"],
+      "additionalProperties": false
+    },
+    "DoctorCheck": {
+      "type": "object",
+      "properties": {
+        "check": { "enum": ["dotnet", "settings", "root", "local-feed", "source", "git-base", "git-fetch"] },
+        "subject": { "description": "What was checked: a path, a source, a repository.", "type": "string" },
+        "status": { "enum": ["ok", "warn", "fail"] },
+        "message": { "type": "string" },
+        "hint": { "description": "What to do about it, or null.", "type": ["string", "null"] }
+      },
+      "required": ["check", "subject", "status", "message", "hint"],
+      "additionalProperties": false
+    },
+    "SchemaResult": {
+      "type": "object",
+      "properties": {
+        "name": { "enum": ["config", "repack", "result", "settings"] },
+        "schema": { "description": "The JSON Schema itself.", "type": "object" }
+      },
+      "required": ["name", "schema"],
+      "additionalProperties": false
+    },
+    "HelpResult": {
+      "type": "object",
+      "properties": {
+        "help": { "description": "The help text, as lrun help prints it.", "type": "string" },
+        "globalOptions": {
+          "description": "Options every command takes, also before the command name.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/OptionInfo" }
+        },
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/CommandInfo" } },
+        "exitCodes": { "type": "array", "items": { "$ref": "#/$defs/ExitCodeInfo" } },
+        "errorCodes": { "type": "array", "items": { "$ref": "#/$defs/ErrorCode" } },
+        "diagnosticCodes": { "type": "array", "items": { "$ref": "#/$defs/DiagnosticCode" } }
+      },
+      "required": ["help", "globalOptions", "commands", "exitCodes", "errorCodes", "diagnosticCodes"],
+      "additionalProperties": false
+    },
+    "CommandInfo": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "summary": { "type": "string" },
+        "arguments": {
+          "description": "Positional arguments, before any option.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ArgumentInfo" }
+        },
+        "options": { "type": "array", "items": { "$ref": "#/$defs/OptionInfo" } },
+        "aliases": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["name", "summary", "arguments", "options", "aliases"],
+      "additionalProperties": false
+    },
+    "ArgumentInfo": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "values": { "description": "The values it accepts.", "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "values", "description"],
+      "additionalProperties": false
+    },
+    "OptionInfo": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "kind": {
+          "description": "flag: no value; value: exactly one; values: one or more, up to the next option.",
+          "enum": ["flag", "value", "values"]
+        },
+        "value": { "description": "How the value is shown in the help, or null for a flag.", "type": ["string", "null"] },
+        "description": { "type": "string" }
+      },
+      "required": ["name", "kind", "value", "description"],
+      "additionalProperties": false
+    },
+    "ExitCodeInfo": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "integer" },
+        "meaning": { "type": "string" }
+      },
+      "required": ["code", "meaning"],
+      "additionalProperties": false
+    },
+    "ErrorCode": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "exitCode": { "type": "integer" },
+        "meaning": { "type": "string" }
+      },
+      "required": ["code", "exitCode", "meaning"],
+      "additionalProperties": false
+    },
+    "DiagnosticCode": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "strict": { "description": "Whether --strict fails on it.", "type": "boolean" },
+        "meaning": { "type": "string" }
+      },
+      "required": ["code", "strict", "meaning"],
+      "additionalProperties": false
+    },
+    "VersionResult": {
+      "type": "object",
+      "properties": {
+        "version": { "description": "The package version, with the commit it was built from.", "type": "string" }
+      },
+      "required": ["version"],
+      "additionalProperties": false
+    }
+  }
+}

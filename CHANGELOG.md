@@ -14,6 +14,18 @@ bumps the minor version, anything else the patch.
 - `pack` warns (`planned-below-base`) when, without a bump flag, a prerelease base gets a lower label on the same
   version (`1.0.1-q.2` → `1.0.1-local.1`): a restore of the latest wouldn't pick it. `--next` plans above it.
 - `--log-level <level>` on every command (before or after its name), and `logLevel` in the settings for your default.
+- `help --json` describes the tool as data, besides the text: global options, every command with its arguments and
+  options (each `flag`, `value` or `values`), exit codes, error codes with their exit code, and diagnostic codes with
+  whether `--strict` fails on them. A program or an agent no longer needs the README to drive `lrun`.
+- `lrun schema config|repack|result|settings` prints the JSON Schema of `localrun.config.json`, `repack.config.json`,
+  the `--json` document (with each command's result and `up`'s events) and the settings file.
+- Reading a config with fields `lrun` doesn't know (a typo in a hand edit, `SkipRepack` from an old file) warns
+  `unknown-config-field` with their paths, instead of ignoring them silently. `--strict` fails on it.
+
+### Changed
+
+- `lrun help` rejects options, like every other command (`lrun help --nope` exits `2`). The help text is reflowed: the
+  same content, rendered from the description `help --json` returns, and `list` spells out its options.
 
 ### Removed
 

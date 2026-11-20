@@ -35,9 +35,35 @@ public class CommandLineArgsTests
     }
 
     [Fact]
-    public void ArgumentBeforeAnyOption_IsRejected()
+    public void AnArgumentNoReaderTakes_IsRejected()
     {
-        Assert.Throws<UsageException>(() => new CommandLineArgs(["stray"]));
+        var args = new CommandLineArgs(["stray", "--open"]);
+        args.Flag("--open");
+
+        var ex = Assert.Throws<UsageException>(args.EnsureAllConsumed);
+        Assert.Contains("stray", ex.Message);
+    }
+
+    [Fact]
+    public void Arguments_ComeBeforeTheOptions_InOrder()
+    {
+        var args = new CommandLineArgs(["config", "more", "--open", "value"]);
+
+        Assert.Equal("config", args.Argument());
+        Assert.Equal("more", args.Argument());
+        Assert.Null(args.Argument());
+        Assert.Equal("value", args.Value("--open"));
+        args.EnsureAllConsumed();
+    }
+
+    [Fact]
+    public void Asked_HoldsEveryOptionRead_GivenOrNot()
+    {
+        var args = new CommandLineArgs(["--config", "a.json"]);
+        args.Value("--config");
+        args.Flag("--open");
+
+        Assert.Equal(["--config", "--open"], args.Asked.Order());
     }
 
     [Fact]

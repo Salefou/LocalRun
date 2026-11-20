@@ -46,6 +46,8 @@
 		<!-- The page written by 'plot', and the layout library inlined into it so it works offline -->
 		<EmbeddedResource Include="Resources\GraphPage.html" LogicalName="LocalRun.GraphPage.html" />
 		<EmbeddedResource Include="Resources\elkjs\elk.bundled.js" LogicalName="LocalRun.elk.bundled.js" />
+		<!-- The schemas printed by 'lrun schema', also used to find unknown fields in the configs it reads -->
+		<EmbeddedResource Include="Resources\Schemas\*.schema.json" LogicalName="LocalRun.Schemas.%(Filename)%(Extension)" />
 	</ItemGroup>
 
 	<ItemGroup>
