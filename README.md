@@ -1074,6 +1074,7 @@ scripts/                         install-tools.ps1 (build, pack, install/update 
 samples/                         Dummy multi-repo workspace for hand testing (see samples/README.md)
 .github/workflows/ci.yml         CI: build, test, install-script check on every PR
 CLAUDE.md                        Context for AI coding assistants working on this repo
+.claude/commands/                Their commands: /next-agent-item starts the next ROADMAP item
 artifacts/                       (ignored) build output of the install script
 ```
 

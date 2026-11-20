@@ -17,7 +17,7 @@ public and permanent. Keep personal and work details out, and never describe the
   engine (`Core/`, `Options/`, `Logger/`).
 - `tests/LocalRun.Tests/` — xUnit, references `src/LocalRun`; folders mirror it.
 
-The repository root holds only repo-wide files (solution, docs, `.github/`, git config) and the
+The repository root holds only repo-wide files (solution, docs, `.github/`, `.claude/commands/`, git config) and the
 `src/`, `tests/`, `scripts/`, `samples/` folders. Keep it that way: new projects go under `src/` or
 `tests/` and into `LocalRun.sln`.
 

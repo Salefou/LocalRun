@@ -19,6 +19,19 @@ parse, failures it can classify, queries that don't write anything, and services
 4. The agent-oriented additions (A1–A8) once 1–2 exist; A1 (queries) and A4 (service logs on disk) first, they are cheap.
    A1 shipped as `lrun list`, A4's plain logs in 0.5.0, A6 as `help --json` and `lrun schema` (unreleased).
 
+### Next up (agent integration, 2026-11-20)
+
+In this order; one PR each, from `origin/master`. `/next-agent-item` (`.claude/commands/`) starts the first one not done.
+
+1. **A6 follow-up**: `lrun changelog [--since <version>]` and `lrun help --agent` (see A6). Decided, ready to build.
+2. **A2, parsed build failures**: MSBuild `file(line,col): error CODE: message` lines as data in `pack` / `go` results.
+   To decide: the cap, and the field names (additive, no `schemaVersion` bump).
+3. **3, `status`**: blocked on its goal (asked 2026-11-20: is it "what the config holds", and should `build` record its
+   flags, time and each repo's HEAD in the config?).
+4. **A3, `up --detach` / `ps` / `down` / `logs`**: only if agents should run services; decide how `down` stops a
+   detached service (a host process staying alive, or a kill without grace period) first.
+5. A5 (`lrun test`, after A2), A8 (`clean-feed`): later.
+
 ## Breaking for 1.0?
 
 1.0.0 promises that a breaking change costs a major version. The public API is the commands and options (and filter
@@ -80,7 +93,7 @@ and README "Diagnostic codes". Decisions (user feedback, 2026-11-05: "you know b
 
 ### 3. `lrun status` **(user)**
 
-Goal (as understood: **to confirm**): pretty-print what the current config holds, to read or save it with a build, without
+Goal (as understood: **to confirm**, asked again 2026-11-20): pretty-print what the current config holds, to read or save it with a build, without
 opening the JSON or the plot.
 
 Ideas:
