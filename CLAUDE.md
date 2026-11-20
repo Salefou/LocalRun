@@ -149,6 +149,11 @@ shell escaping.
   `**Breaking:**` first in a breaking entry); `ChangelogTests` parses the real file. `Resources/AgentInstructions.md` is
   what `help --agent` prints, after a stamp with `LocalRunCli.ReleaseVersion`; README "From an agent" must equal it (a
   test, the stamp's version aside). Change both together, and keep it short: details belong in `help --json`.
+- **Build errors as data** (ROADMAP A2, user feedback, 2026-11-20): `PackFailure.Errors` comes from
+  `DotnetOutput.Errors`, errors only, and keeps one entry per (code, message, file, line, column, project), the project
+  without `::TargetFramework=…`: MSBuild's summary and the per-framework copies merge, the same code at another place or
+  in another project doesn't. Capped at 50 (`RepackExecutor.FailureErrors`), `ErrorCount` before the cap; `Output` stays.
+  Telling per-target errors apart is a ROADMAP item, not a bug.
 - **No machine-specific paths**: every path is an option, defaulting to a file in the current
   directory's `.lrun` folder (`localrun.config.json`, `repack.config.json`, `plots/dependencies-<date-time>`;
   `.lrun` ignores itself with a `.gitignore` of `*`) or
@@ -203,7 +208,8 @@ shell escaping.
   Launched = a process `up` started, Start = any other step about to run), which the formatter renders as `› ▸ ✓ × ■` on a terminal and `> + ok FAILED -` when redirected (`Terminal.IsAttached`); a change is
   `Terminal.Arrow`. Glyphs must have no emoji variant (`✔ ✖ ▶` don't qualify). On a terminal the colour says the
   level; redirected, `[WRN]` / `[ERR]` prefixes do. Long lists go through `Text.Abbreviate` ("and N more"), and `go`
-  prints one line per depth, never per project. Of `dotnet` output, only warning and error lines, verbatim, not deduplicated.
+  prints one line per depth, never per project. Of `dotnet` output, only warning and error lines, verbatim, not deduplicated
+  (in the logs; `failure.errors` is the parsed form, each error once).
 - Level via `--log-level` (global, like `--json`), else the settings' `logLevel`, else Information: `Main` sets
   `Log.MinimumLevel` before anything logs, falling back to Information on a bad value or unreadable settings (the command
   then reports it). `LOCALRUN_LOG_LEVEL` was removed in 0.6.0 (user feedback, 2026-11-20: no env variable next to the

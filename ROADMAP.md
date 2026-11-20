@@ -23,7 +23,7 @@ everyone is "Before 1.0".
 | 5, `verify` follow-ups | `--fix` (pack only the stale ones); staleness from outside the project folder | Shipped core; the second part is a 1.0 question |
 | 7, More settings | Machines behind a slow proxy (skip NuGet queries); `doctor`'s fetch age | Related: A7 |
 | A1, `list --config` | Fast queries on large platforms, from an existing config | Shipped core (`lrun list`) |
-| A2, Parsed build failures | Agents turning a failed `pack` / `go` into fixable tasks | Related: A5, `go --dry-run` |
+| A2, Build failures follow-ups | Per-target errors told from duplicates; `up`'s build failures as data | Shipped core (`failure.errors`). Related: A3, A5 |
 | A3, `up --detach` / `ps` / `down` / `logs` | Agents starting services and leaving them running | Related: A4 (`logs`) |
 | A4, Log levels on disk | Filtering service logs by level, diffing runs | Shipped plain logs; additive form only (1.0) |
 | A5, `lrun test` | Running the tests affected by a change, without a CI | Builds on A2 for its summary |
@@ -191,10 +191,24 @@ its depth and dependencies. Decisions (user feedback, 2026-11-06): one command w
 config, which is usually filtered and may be stale. Left: reading an existing config (`--config`) as a fast path, if a
 large platform makes the scan slow.
 
-### A2. Parsed build and pack failures **(claude)**
-When `go` / `build` fails, an agent needs the compiler errors, not the log. Parse MSBuild's
-`file(line,col): error CSxxxx: message` lines, and return them in the result (project, file, line, code, message, capped)
-so a failure becomes a fixable task. Related: `go --dry-run` printing the order and versions without running.
+### A2. Parsed build and pack failures **(claude)**: shipped (unreleased)
+When `pack` / `go` fails, `result.packages[].failure.errors` holds MSBuild's error lines as data (`code`, `message`,
+`file`, `line`, `column`, `project`), so a failure becomes a fixable task. Decisions (user feedback, 2026-11-20):
+- Next to `output`, which stays: it is all there is when no line parses (a crash, a timeout). Errors only; warnings stay
+  `dotnet-warning` diagnostics.
+- `file` as MSBuild prints it (absolute); `project` from the trailing `[….csproj]`, without `::TargetFramework=…`: the
+  project being built, which may be one the failing project references, where the fix goes.
+- Each error once: MSBuild's summary repeats it, and a multi-targeted project reports it once per target framework.
+  The same code at another place, or in another project, stays. Capped at 50, with `errorCount` before the cap.
+- `pack` / `go` only: `up`'s result has no place for a build failure yet (see A3).
+
+Left, not started:
+- **Per-target errors** (user feedback, 2026-11-20): merging one error across target frameworks assumes the same fix,
+  which holds for a plain duplicate but not for code under `#if NET48` or a reference only one target has. Telling the
+  two apart may need the context of what fails: which target framework (`::TargetFramework=` is dropped today), and
+  maybe the build mode (configuration, conditional properties). Additive (a `frameworks` field, or one entry per
+  target when they differ); a `frameworks` field alone was turned down as noise for single-target projects.
+- `up`'s build failures as data, with A3. Related: `go --dry-run` printing the order and versions without running.
 
 ### A3. `up` an agent can use **(claude)**
 Today `up` runs in the foreground until Ctrl+C. An agent can't hold that. Candidates, each its own decision:

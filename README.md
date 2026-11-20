@@ -924,7 +924,7 @@ Results:
 | `build` | `config`, `root`, `localNuget`, `filters` (as typed, or `null`), `scanned` (projects found, without tests and name collisions), `projects` (`total`, `libraries`, `executables`), `services`, `leftOut` (see below), `gitChanges` (the changed projects, with `--git-changes`), `plot` (with `--plot`). |
 | `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
 | `verify` | `config`, `feed`, `libraries`, `ok`, `missing`, `stale` (counts), `packages` in config order: `project`, `packageId`, `status` (`ok`, `missing`, `stale`), `reason` (for `stale`: `csproj-ahead` or `edited`), `csprojVersion`, `feedVersion` (the newest in the feed), `packedAt`, `editedFile` (relative to the project's folder) and `editedAt` (times in UTC). `build --verify` puts the same object under `verify` in its result. |
-| `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode` and `output`: the command's error lines, or its last lines when it printed none (at most 20). |
+| `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
 | `plot` | `plot`: the page's path. |
 | `settings` | `path`, `created`. |
 | `version` | `version`. |
@@ -1033,7 +1033,8 @@ your workspace (`AGENTS.md`, `CLAUDE.md`, ...). For this version:
 - Then: `lrun build --users-of <Library> --with-services --json`, `lrun pack --json`, and before starting services,
   `lrun verify --json` (exit code 6: pack again).
 - Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
-  4 a dotnet build failed (fix the code; `result.packages[].failure` has the error lines), 5 refused by `--strict`.
+  4 a dotnet build failed (fix the code: `result.packages[].failure.errors` has each file, line and code),
+  5 refused by `--strict`.
 - `lrun up` stays in the foreground until Ctrl+C: run it in the background and read `.lrun/logs/<service>.log`.
 - When a command fails for no visible reason: `lrun doctor --json`.
 - When `lrun version` is newer than the version in the comment above this section, read

@@ -26,6 +26,9 @@ bumps the minor version, anything else the patch.
 - `lrun help --agent` prints instructions to paste into an agent's (`AGENTS.md`, `CLAUDE.md`, ...), stamped with the
   version they were written for; `help --json` carries them as `agentInstructions`. After an upgrade, the agent reads
   `lrun changelog --since` that version and rewrites them from `lrun help --agent`.
+- When `pack` or `go` fails, `--json` gives the build errors as data in `failure.errors`: `code`, `message`, `file`,
+  `line`, `column` and `project` each, at most 50, each error once (MSBuild's summary and multi-targeting repeat them),
+  with `errorCount` before that cap. `failure.output` still has the lines as printed.
 
 ### Changed
 

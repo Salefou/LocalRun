@@ -45,6 +45,7 @@ public class SchemasTests
         { Schemas.Result, "PackResult", typeof(PackResult) },
         { Schemas.Result, "PackageReport", typeof(PackageReport) },
         { Schemas.Result, "PackFailure", typeof(PackFailure) },
+        { Schemas.Result, "BuildError", typeof(BuildError) },
         { Schemas.Result, "UpResult", typeof(UpResult) },
         { Schemas.Result, "ServiceReport", typeof(ServiceReport) },
         { Schemas.Result, "UpEvent", typeof(UpEvent) },
