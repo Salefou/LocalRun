@@ -22,6 +22,7 @@
         { "$ref": "#/$defs/BuildResult" },
         { "$ref": "#/$defs/ListResult" },
         { "$ref": "#/$defs/VerifyResult" },
+        { "$ref": "#/$defs/StatusResult" },
         { "$ref": "#/$defs/PlotResult" },
         { "$ref": "#/$defs/PackResult" },
         { "$ref": "#/$defs/UpResult" },
@@ -163,9 +164,105 @@
           "description": "As in the config: projects and packages it references, kept or not.",
           "type": "array",
           "items": { "type": "string" }
+        },
+        "latestVersion": {
+          "description": "status: the highest version build found on the NuGet sources and the local feed; null when none was found, with build --csproj, and always in list (it never queries them).",
+          "type": ["string", "null"]
+        },
+        "test": { "description": "A test project, kept with --tests.", "type": "boolean" }
+      },
+      "required": ["name", "packageId", "type", "depth", "version", "path", "solution", "dependencies", "latestVersion", "test"],
+      "additionalProperties": false
+    },
+    "StatusResult": {
+      "description": "What a config holds and the plan made from it, read from the files alone.",
+      "type": "object",
+      "properties": {
+        "config": { "type": "string" },
+        "written": { "description": "When the config file was last written, a hand edit included.", "type": "string", "format": "date-time" },
+        "root": { "type": "string" },
+        "localNuget": { "type": "string" },
+        "build": {
+          "description": "How build made the config; null for a config written before 0.6.0.",
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/BuildRecord" }]
+        },
+        "counts": { "$ref": "#/$defs/ProjectCounts" },
+        "projects": {
+          "description": "The projects of the config, in dependency order (depth, then name).",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ListedProject" }
+        },
+        "plan": {
+          "description": "The repack plan, or null when there is none.",
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/StatusPlan" }]
         }
       },
-      "required": ["name", "packageId", "type", "depth", "version", "path", "solution", "dependencies"],
+      "required": ["config", "written", "root", "localNuget", "build", "counts", "projects", "plan"],
+      "additionalProperties": false
+    },
+    "BuildRecord": {
+      "description": "As recorded in the config (lrun schema config): the flags build was given, what it found and left out, and each repository's HEAD.",
+      "type": "object",
+      "properties": {
+        "time": { "type": "string", "format": "date-time" },
+        "lrunVersion": { "type": "string" },
+        "filters": { "description": "The filters given, as typed, or null.", "type": ["string", "null"] },
+        "usersOf": { "type": ["array", "null"], "items": { "type": "string" } },
+        "depsOf": { "type": ["array", "null"], "items": { "type": "string" } },
+        "gitChanges": { "type": "boolean" },
+        "union": { "type": "boolean" },
+        "withServices": { "type": "boolean" },
+        "includeExternal": { "type": "boolean" },
+        "tests": { "type": "boolean" },
+        "csproj": { "type": "boolean" },
+        "changedProjects": { "description": "With --git-changes, the projects found changed; absent otherwise.", "type": "array", "items": { "type": "string" } },
+        "scanned": { "type": "integer" },
+        "leftOut": { "type": "array", "items": { "$ref": "#/$defs/LeftOutProjects" } },
+        "repositories": { "type": "array", "items": { "$ref": "#/$defs/RepositoryHead" } }
+      },
+      "required": ["time", "lrunVersion", "filters", "usersOf", "depsOf", "gitChanges", "union", "withServices", "includeExternal",
+        "tests", "csproj", "scanned", "leftOut", "repositories"],
+      "additionalProperties": false
+    },
+    "RepositoryHead": {
+      "type": "object",
+      "properties": {
+        "path": { "description": "The repository's working directory, relative to the root (. for the root itself).", "type": "string" },
+        "head": { "description": "The commit checked out, or null in a repository without commits.", "type": ["string", "null"] },
+        "branch": { "description": "The branch checked out, or null when HEAD is detached.", "type": ["string", "null"] }
+      },
+      "required": ["path", "head", "branch"],
+      "additionalProperties": false
+    },
+    "StatusPlan": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "written": { "type": "string", "format": "date-time" },
+        "olderThanConfig": {
+          "description": "Written before the config, so planned from an earlier one (warning plan-older-than-config).",
+          "type": "boolean"
+        },
+        "clean": { "description": "Whether go cleans the projects before restoring them (pack --clean).", "type": "boolean" },
+        "packages": {
+          "description": "In the order go packs them: by depth, then by name.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/PlannedPackage" }
+        }
+      },
+      "required": ["path", "written", "olderThanConfig", "clean", "packages"],
+      "additionalProperties": false
+    },
+    "PlannedPackage": {
+      "type": "object",
+      "properties": {
+        "project": { "type": "string" },
+        "packageId": { "type": "string" },
+        "depth": { "description": "From 0.", "type": "integer" },
+        "from": { "type": "string" },
+        "to": { "type": "string" }
+      },
+      "required": ["project", "packageId", "depth", "from", "to"],
       "additionalProperties": false
     },
     "VerifyResult": {

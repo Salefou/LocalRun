@@ -460,6 +460,97 @@ public sealed class JsonOutputTests : IDisposable
     }
 
     [Fact]
+    public async Task Status_ShowsTheConfig_HowItWasBuilt_AndThePlan()
+    {
+        string root = WriteLibAndApp();
+        WriteCsproj(root, "Lib.Tests", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+                <ProjectReference Include="..\Lib\Lib.csproj" />
+              </ItemGroup>
+            </Project>
+            """);
+        WriteCsproj(root, "Other", """<Project Sdk="Microsoft.NET.Sdk" />""");
+        string feed = Path.Combine(workDir, "feed");
+        Assert.Equal(LocalRunCli.ExitSuccess, (await LrunAsync("build", "--root", root, "--local-nuget", feed, "--users-of", "Lib",
+            "--include-external", "--tests", "--csproj", "--json")).ExitCode);
+
+        var status = await LrunAsync("status", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, status.ExitCode);
+        AssertPlain(status);
+        var result = status.Json.GetProperty("result");
+        string config = Path.Combine(workDir, ".lrun", "localrun.config.json");
+        Assert.Equal(config, result.GetProperty("config").GetString());
+        Assert.Equal(root, result.GetProperty("root").GetString());
+        Assert.Equal(feed, result.GetProperty("localNuget").GetString());
+        var build = result.GetProperty("build");
+        Assert.Equal(LocalRunCli.Version, build.GetProperty("lrunVersion").GetString());
+        Assert.Equal("--users-of Lib", build.GetProperty("filters").GetString());
+        Assert.True(build.GetProperty("tests").GetBoolean());
+        Assert.True(build.GetProperty("csproj").GetBoolean());
+        Assert.False(build.GetProperty("union").GetBoolean());
+        var filtered = Assert.Single(build.GetProperty("leftOut").EnumerateArray());
+        Assert.Equal(("filter", "Other"), (filtered.GetProperty("reason").GetString(), filtered.GetProperty("projects")[0].GetString()));
+        Assert.Equal([("Lib", 0, false), ("App", 1, false), ("Lib.Tests", 1, true)], result.GetProperty("projects").EnumerateArray()
+            .Select(proj => (proj.GetProperty("name").GetString(), proj.GetProperty("depth").GetInt32(), proj.GetProperty("test").GetBoolean())));
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("plan").ValueKind);
+        Assert.Equal(0, status.Json.GetProperty("written").GetArrayLength());
+        Assert.Contains("Plan: none", status.Stderr);
+        Assert.Contains("Built with: --users-of Lib, --include-external, --tests, --csproj", status.Stderr);
+
+        Assert.Equal(LocalRunCli.ExitSuccess, (await LrunAsync("pack", "--patch", "--dry-run", "--json")).ExitCode);
+        var planned = await LrunAsync("status", "--json");
+
+        var plan = planned.Json.GetProperty("result").GetProperty("plan");
+        Assert.Equal(Path.Combine(workDir, ".lrun", "repack.config.json"), plan.GetProperty("path").GetString());
+        Assert.False(plan.GetProperty("olderThanConfig").GetBoolean());
+        var lib = plan.GetProperty("packages").EnumerateArray().First(package => package.GetProperty("project").GetString() == "Lib");
+        Assert.Equal(("1.0.0", "1.0.1-local.1", 0), (lib.GetProperty("from").GetString(), lib.GetProperty("to").GetString(), lib.GetProperty("depth").GetInt32()));
+        Assert.DoesNotContain("plan-older-than-config", Codes(planned));
+
+        // A plan made before the config was rebuilt: go would pack the earlier one
+        File.SetLastWriteTime(plan.GetProperty("path").GetString()!, DateTime.Now.AddMinutes(-5));
+        var stale = await LrunAsync("status", "--strict", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, stale.ExitCode);
+        Assert.True(stale.Json.GetProperty("result").GetProperty("plan").GetProperty("olderThanConfig").GetBoolean());
+        Assert.Equal(["plan-older-than-config"], Codes(stale));
+    }
+
+    [Fact]
+    public async Task Status_OfAConfigFromAnOlderLrun_HasNoBuildRecord()
+    {
+        Directory.CreateDirectory(Path.Combine(workDir, ".lrun"));
+        File.WriteAllText(Path.Combine(workDir, ".lrun", "localrun.config.json"), """
+            { "RootPath": "C:\\repos", "LocalNugetPath": "C:\\feed", "Projects": [ { "Name": "Lib", "Path": "Lib\\Lib.csproj",
+              "Type": "library", "Version": { "Major": 1, "Minor": 2, "PatchAndSuffix": "0" },
+              "LatestVersion": { "Major": 1, "Minor": 2, "PatchAndSuffix": "1-local.3" }, "Dependencies": [] } ] }
+            """);
+
+        var status = await LrunAsync("status", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, status.ExitCode);
+        var result = status.Json.GetProperty("result");
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("build").ValueKind);
+        var lib = Assert.Single(result.GetProperty("projects").EnumerateArray());
+        Assert.Equal(("1.2.0", "1.2.1-local.3"), (lib.GetProperty("version").GetString(), lib.GetProperty("latestVersion").GetString()));
+        Assert.Empty(Codes(status));
+        Assert.Contains("Built by an older lrun", status.Stderr);
+    }
+
+    [Fact]
+    public async Task Status_WithoutAConfig_PointsAtBuild()
+    {
+        var status = await LrunAsync("status", "--json");
+
+        Assert.Equal(LocalRunCli.ExitInput, status.ExitCode);
+        Assert.Equal("config-not-found", status.Json.GetProperty("error").GetProperty("code").GetString());
+        Assert.Contains("lrun build", status.Json.GetProperty("error").GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task Verify_FailsWithItsOwnCode_WhenAPackageIsMissing()
     {
         string root = WriteLibAndApp();

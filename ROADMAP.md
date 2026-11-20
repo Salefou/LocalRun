@@ -18,7 +18,7 @@ everyone is "Before 1.0".
 
 | Item | Useful for | Builds on / related |
 |---|---|---|
-| 3, `lrun status` | Reading what a config holds without the JSON or the plot; agents' read-only entry point | Goal to confirm first. Related: 4 (`--since-last-build`), 5 (`--drift`), A8 (feed size) |
+| 3, `status` follow-ups | Filtering the listing (`--only`, `--solution`); `--drift` against the sources and the repos now | Shipped core (`lrun status`). Related: 4 (`--since-last-build`), 5, A8 (feed size) |
 | 4, `build --since` | Saying what "changed" means (since a tag, since the last pack) | Postponed. Builds on 3 for `--since-last-build` |
 | 5, `verify` follow-ups | `--fix` (pack only the stale ones); staleness from outside the project folder | Shipped core; the second part is a 1.0 question |
 | 7, More settings | Machines behind a slow proxy (skip NuGet queries); `doctor`'s fetch age | Related: A7 |
@@ -93,19 +93,25 @@ and README "Diagnostic codes". Decisions (user feedback, 2026-11-05: "you know b
 - `--strict` fails on "left out or possibly wrong" (collisions, cycles, MSBuild/NuGet fallbacks, PackageVersion override,
   unknown packages folder), not on the git fallbacks, which keep more.
 
-### 3. `lrun status` **(user)**
+### 3. `lrun status` **(user)**: shipped (unreleased)
 
-Goal (as understood: **to confirm**): pretty-print what the current config holds, to read or save it with a build, without
-opening the JSON or the plot.
+`lrun status` prints what a config holds and the plan made from it, from the files alone; `--json` makes it the
+read-only entry point for agents. `build` records in the config how it made it (`Build`: time, `lrun` version, flags,
+changed projects, what it left out, each repository's HEAD) and marks kept test projects (`Test`). Decisions (user
+feedback, 2026-11-20 and 2026-11-21):
+- Goal confirmed: read what the config holds without the JSON or the plot. Read-only, no scan, no NuGet query, no git
+  call; how fresh the feed is stays `verify`'s question.
+- The recorded fields are additive and optional: no `SchemaVersion` bump, and an older config shows without them.
+- What `build` left out is recorded in the config with its reasons (the same shape as `build`'s `leftOut`), not only
+  counted, so `status` can name it.
+- Repository HEADs are recorded and shown, not compared with the current ones: that comparison belongs to
+  `--since-last-build` (4) and `--drift` (5).
+- A plan older than the config warns `plan-older-than-config`, not strict: nothing is left out, but `go` would pack a
+  plan made from an earlier config.
+- Projects are grouped by solution, then by type (libraries, executables, tests), each line with its depth.
 
-Ideas:
-- Header: config path and age, `lrun` version that wrote it, root, local feed, the filters and flags of the `build` that
-  made it. **To check:** the config does not seem to record the flags it was built with; adding them (and a timestamp,
-  and each repo's HEAD at build time) makes `status` useful and enables `--since-last-build` (4).
-- Body: projects by solution and by layer (libraries, executables, tests), version and latest known version, counts,
-  what was left out and why (collisions, cycles), the plan of `repack.config.json` when there is one.
-- `--json` (1) makes it the main read-only entry point for agents. Without a config: exit `3` with the `build` hint.
-- Candidate flags: `--only executables|libraries`, `--solution <name>`, `--drift` (see 5).
+Left, not started: `--only executables|libraries`, `--solution <name>`, and `--drift` (comparing the recorded HEADs and
+versions with the repositories and sources now, see 5).
 
 ### 4. `build --since <rev>` **(user)**: postponed
 

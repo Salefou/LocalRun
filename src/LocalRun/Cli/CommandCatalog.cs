@@ -99,6 +99,13 @@ internal static class CommandCatalog
         [
             ReadConfig,
         ]),
+        Command("status", "Print what a config holds, from the files alone (no scan, no NuGet source, no git): when and how build " +
+            "made it (flags, lrun version, each repository's commit), its projects by solution and type with their versions, what " +
+            "was left out and why, and the repack plan if any. Warns when the plan is older than the config.",
+        [
+            ReadConfig,
+            OptionInfo.One("--repack-config", "<file>", $"Repack config file to read, if there is one (default: {LocalRunCli.DefaultRepackConfigPath})."),
+        ]),
         Command("plot", "Render the dependency graph of a config file as an interactive HTML page: projects framed by solution, " +
             "collapsible into the solution graph, hover or click for users-of / deps-of.",
         [
@@ -180,6 +187,7 @@ internal static class CommandCatalog
         $"{LocalRunCli.CommandName} pack --patch --suffix dev",
         $"{LocalRunCli.CommandName} pack --patch --suffix dev --dry-run (review .lrun/repack.config.json, then:)",
         $"{LocalRunCli.CommandName} go",
+        $"{LocalRunCli.CommandName} status                              (what the config holds, how it was built, the plan)",
         $"{LocalRunCli.CommandName} verify                              (exit code 6: something to pack before 'up')",
         $"{LocalRunCli.CommandName} up",
         $"{LocalRunCli.CommandName} help --json                         (all of this as data, for a program or an agent)",

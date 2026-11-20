@@ -20,6 +20,26 @@ public class ConfigBuilderTests
         }));
     }
 
+    [Fact]
+    public void TheRecord_KeepsTheFlags_WhatWasFound_AndWhen()
+    {
+        var options = Options("--users-of", "A", "--git-changes", "--with-services", "--tests", "--csproj");
+        var summary = new BuildSummary(5, [new("filter", ["C"])], ["A", "B"], []);
+        var time = DateTimeOffset.Now;
+
+        var record = ConfigBuilder.Record("root", options, summary, "0.6.0-local", time);
+
+        Assert.Equal((time, "0.6.0-local", "--users-of A, --git-changes, --with-services"), (record.Time, record.LrunVersion, record.Filters));
+        Assert.Equal(["A"], record.UsersOf);
+        Assert.Null(record.DepsOf);
+        Assert.Equal((true, false, true, false, true, true),
+            (record.GitChanges, record.Union, record.WithServices, record.IncludeExternal, record.Tests, record.Csproj));
+        Assert.Equal(["A", "B"], record.ChangedProjects);
+        Assert.Equal(5, record.Scanned);
+        Assert.Equal("filter", Assert.Single(record.LeftOut).Reason);
+        Assert.Empty(record.Repositories);
+    }
+
     private static DependencyGraph Graph(params string[] names) => DependencyGraph.FromConfig(new LocalRunConfig
     {
         Projects = [.. names.Select(name => new ProjectNode

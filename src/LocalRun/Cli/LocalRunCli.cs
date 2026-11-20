@@ -189,6 +189,9 @@ public static class LocalRunCli
             case "verify":
                 await VerifyAsync(options, output);
                 break;
+            case "status":
+                await StatusAsync(options, output);
+                break;
             case "plot":
                 await PlotAsync(options, output);
                 break;
@@ -283,6 +286,7 @@ public static class LocalRunCli
 
         var configBuilder = new ConfigBuilder();
         var (localRunConfig, summary) = configBuilder.BuildConfig(rootPath, configOptions, localNugetPath);
+        localRunConfig.Build = ConfigBuilder.Record(rootPath, configOptions, summary, Version, DateTimeOffset.Now);
         if (!configOptions.CsprojVersionsOnly)
             await configBuilder.FetchLatestVersionsAsync(localRunConfig);
         await WriteToFile(configPath, localRunConfig);
@@ -316,6 +320,26 @@ public static class LocalRunCli
         var result = VerifyResult.Of(configPath, config.LocalNugetPath, FeedVerifier.Verify(config));
         output.Result = result;
         result.ThrowIfFailed();
+    }
+
+    /// <summary>
+    /// What a config holds, with the plan made from it: read from the files alone (no scan, no NuGet source, no git), so it
+    /// shows what <c>pack</c>, <c>go</c> and <c>up</c> will work from. Without a plan, says so; a plan older than the config warns.
+    /// </summary>
+    private static async Task StatusAsync(CommandLineArgs args, CommandOutput output)
+    {
+        string configPath = Path.GetFullPath(args.Value("--config") ?? DefaultConfigPath);
+        string repackConfigPath = Path.GetFullPath(args.Value("--repack-config") ?? DefaultRepackConfigPath);
+        args.EnsureAllConsumed();
+
+        LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
+        RepackConfig? plan = File.Exists(repackConfigPath)
+            ? await ReadFromFile<RepackConfig>(repackConfigPath, "--repack-config", "pack")
+            : null;
+        var result = StatusResult.Of(configPath, File.GetLastWriteTime(configPath), config,
+            plan == null ? null : (repackConfigPath, File.GetLastWriteTime(repackConfigPath), plan));
+        StatusText.Print(result);
+        output.Result = result;
     }
 
     /// <summary>

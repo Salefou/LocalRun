@@ -215,8 +215,9 @@ lrun list --root ./repos --users-of Shared.Pricing --with-services
 # 1. Graph everything that depends on the library you changed, and plot it (the page opens in your browser)
 lrun build --root ./repos --users-of Shared.Pricing --plot
 
-# 2. Or open the graph of the current config again
+# 2. Or open the graph of the current config again, or read it as text (how it was built, versions, the plan)
 lrun plot --open
+lrun status
 
 # 3. Pack everything into ~/.localnuget with a patch bump and a "dev" suffix, in dependency order
 lrun pack --patch --suffix dev
@@ -512,6 +513,55 @@ touching files without changing them makes a library look stale: repacking is th
 |---|---|---|
 | `--config <file>` | `.lrun/localrun.config.json` | Config file to read; the feed checked is its `LocalNugetPath`. |
 
+### `status`
+
+Print what a config holds, and the plan made from it, **from the files alone**: no scan, no NuGet source, no git. It
+answers "what will `pack`, `go` and `up` work from?" without opening the JSON or the plot:
+
+```
+> lrun status
+Config: …\.lrun\localrun.config.json, built 2026-11-21 10:42 (2 hours ago) by lrun 0.6.0
+Root: C:\work\repos
+Feed: C:\Users\you\.localnuget
+Built with: --users-of Shared.Pricing, --with-services
+Repositories at build: pricing main@1a2b3c4, trading (detached) 9f8e7d6
+Projects: 4, 3 libraries, 1 executable
+pricing\Pricing.sln
+  libraries
+    Shared.Pricing      d0  1.4.2  latest 1.4.3-dev.2
+    Pricing.Engine      d1  2.0.0  latest 2.0.1-dev.2
+trading\Trading.sln
+  libraries
+    Trading.Contracts   d2  3.1.0  latest 3.1.0
+  executables
+    OrderGateway        d3  3.0.0
+Left out (filter): Reporting, ReportCli
+Plan: …\.lrun\repack.config.json, written 2026-11-21 10:45 (2 hours ago), 3 packages
+  Depth 1/3: Shared.Pricing 1.4.3-dev.2 -> 1.4.4-dev.3
+  Depth 2/3: Pricing.Engine 2.0.1-dev.2 -> 2.0.2-dev.3
+  Depth 3/3: Trading.Contracts 3.1.0 -> 3.1.1-dev.3
+```
+
+- The header comes from what `build` records in the config (`Build`, see
+  [the file](#localrunconfigjson--written-by-build)): when it ran, which `lrun`, the flags, the projects found changed
+  with `--git-changes`, and each repository's branch and commit at that time. A config written by an older `lrun` has
+  none of it: `status` says so and shows the rest.
+- Projects are grouped by solution, then libraries, executables and test projects (kept with `--tests`), each with its
+  depth (from 0, the order `go` packs in), its csproj version and the latest version `build` found.
+- `Left out` lists what `build` left out and why: `test`, `filter`, `name-collision` (with the paths), `cycle` (with the
+  projects kept without it).
+- A plan older than the config was made from an earlier one: `go` would pack that. `status` warns
+  (`plan-older-than-config`; run `pack` again). With `--config` pointing elsewhere, give the matching `--repack-config`
+  too: the default plan may come from another config.
+
+It exits `0`, or `3` (`config-not-found`) without a config. With `--json`, the result has all of the above as data (see
+[Machine output](#machine-output---json)).
+
+| Option | Default | Description |
+|---|---|---|
+| `--config <file>` | `.lrun/localrun.config.json` | Config file to read. |
+| `--repack-config <file>` | `.lrun/repack.config.json` | Repack config file to read, if it exists. |
+
 ### `up`
 
 Run every project of type `executable` in the config **side by side**, like a local deployment of
@@ -761,9 +811,21 @@ step that wrote it.
       "LatestVersion": { "Major": 1, "Minor": 5, "PatchAndSuffix": "0" },   // on your NuGet sources; absent with --csproj or when not found
       "Dependencies": []                        // names of other projects in the graph
     }
-  ]
+  ],
+  "Build": {                                    // how build made it, for lrun status; absent before 0.6.0
+    "Time": "2026-11-21T10:42:07.512+01:00",
+    "LrunVersion": "0.6.0+…",
+    "Filters": "--users-of Shared.Pricing, --with-services",   // as typed; null without any
+    "UsersOf": ["Shared.Pricing"], "DepsOf": null,
+    "GitChanges": false, "Union": false, "WithServices": true, "IncludeExternal": false, "Tests": false, "Csproj": false,
+    "Scanned": 6,                               // projects found, without tests and name collisions
+    "LeftOut": [ { "Reason": "filter", "Projects": ["Reporting", "ReportCli"], "Paths": null, "Dependents": null } ],
+    "Repositories": [ { "Path": "pricing", "Head": "1a2b3c4…", "Branch": "main" } ]   // Branch null when detached
+  }
 }
 ```
+
+A test project kept with `--tests` also has `"Test": true`. `pack`, `go` and `up` don't read `Build`.
 
 `build` rewrites this file from scratch, so hand edits last until the next `build`. To leave a project
 out of a repack, delete it from `repack.config.json` before `go`. To leave an executable out of `up`,
@@ -922,7 +984,8 @@ Results:
 | Command | `result` |
 |---|---|
 | `build` | `config`, `root`, `localNuget`, `filters` (as typed, or `null`), `scanned` (projects found, without tests and name collisions), `projects` (`total`, `libraries`, `executables`), `services`, `leftOut` (see below), `gitChanges` (the changed projects, with `--git-changes`), `plot` (with `--plot`). |
-| `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
+| `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not), `latestVersion` (always `null`: `list` never queries the sources), `test` (a test project, with `--tests`); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
+| `status` | `config`, `written` (when the file was last written), `root`, `localNuget`, `build` (the config's `Build` in camelCase, or `null` for an older config), `counts`, `projects` as in `list` (with `latestVersion`), `plan` (`null` without one): `path`, `written`, `olderThanConfig`, `clean`, `packages` in packing order (`project`, `packageId`, `depth`, `from`, `to`). `written` (the envelope's) is empty. |
 | `verify` | `config`, `feed`, `libraries`, `ok`, `missing`, `stale` (counts), `packages` in config order: `project`, `packageId`, `status` (`ok`, `missing`, `stale`), `reason` (for `stale`: `csproj-ahead` or `edited`), `csprojVersion`, `feedVersion` (the newest in the feed), `packedAt`, `editedFile` (relative to the project's folder) and `editedAt` (times in UTC). `build --verify` puts the same object under `verify` in its result. |
 | `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
 | `plot` | `plot`: the page's path. |
@@ -966,6 +1029,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `open-failed` | A file or page could not be opened. | — |
 | `package-missing`, `package-stale` | `verify`: a library with no package in the local feed, or an outdated one. `verify` fails on them itself (exit code `6`). | — |
 | `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
+| `plan-older-than-config` | `status`: the repack plan is older than the config, so made from an earlier one; `go` would pack that. `pack` plans again. | — |
 | `doctor-warning`, `doctor-failure` | `doctor`: a setup check that may surprise, or that will make a command fail (the result names the check). `doctor` fails on a failure itself (exit code `1`). | — |
 | `unspecified` | A warning without a code yet. | — |
 
@@ -1030,6 +1094,8 @@ your workspace (`AGENTS.md`, `CLAUDE.md`, ...). For this version:
 - Learn the commands from `lrun help --json` (options, exit and error codes, diagnostic codes); the shape of
   every result from `lrun schema result`. Always pass `--json`: one JSON document on stdout, logs on stderr.
 - Ask first, without writing anything: `lrun list --users-of <Library> --with-services --json`.
+- Where things stand (what the config holds, how and when it was built, the plan `go` would run):
+  `lrun status --json`. It reads the files only: fast, and safe to run any time.
 - Then: `lrun build --users-of <Library> --with-services --json`, `lrun pack --json`, and before starting services,
   `lrun verify --json` (exit code 6: pack again).
 - Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),

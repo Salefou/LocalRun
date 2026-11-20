@@ -447,6 +447,8 @@ public class DependencyGraphTests
 
             Assert.Equal(expected, graph.AllProjects.Select(p => p.Name).Order());
             Assert.Equal(includeTests ? [] : ["Lib.Tests"], graph.LeftOutTests);
+            // Kept, they are marked, so status can tell them from the libraries
+            Assert.Equal(includeTests ? ["Lib.Tests"] : [], graph.AllProjects.Where(p => p.Test).Select(p => p.Name));
         }
         finally
         {

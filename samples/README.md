@@ -91,6 +91,31 @@ lrun plot --open
 - *Collapse all* leaves one node per solution: Core → Pricing → Trading and Reporting (Core → Trading as well,
   through Logging), Island and `(no solution)` apart. Hovering `Pricing.sln` lights Trading and Reporting in
   orange, Core in blue.
+- `lrun status` prints the config back, from the files alone (instant, nothing scanned):
+
+  ```
+  Config: …\samples\.lrun\localrun.config.json, built <date time> (just now) by lrun <version>
+  Root: …\samples\workspace
+  Feed: …\samples\.feed
+  Built with: no filter
+  Repositories at build: ..\.. <branch>@<commit>
+  Projects: 11, 7 libraries, 4 executables
+  core\Core.sln
+    libraries
+      LrSample.Primitives      d0  1.0.0
+      LrSample.Logging         d1  2.3.1-beta
+  island\Island.sln
+    ...
+  (no solution)
+    libraries
+      LrSample.Orphan          d0  0.0.1
+  Plan: none ('lrun pack --dry-run' writes one)
+  ```
+
+  The repository is this one, two levels above the root. After `lrun pack --dry-run --patch`, the last line becomes
+  `Plan: …\repack.config.json, written …, 11 packages`, then one line per depth (`Depth 1/4: LrSample.Island.Core 0.1.0
+  -> 0.1.1-local.1, …`). Rebuilding the config after that adds `[WRN] The plan is older than the config…`
+  (`plan-older-than-config`) until `pack` runs again.
 
 ### 2. Filters
 

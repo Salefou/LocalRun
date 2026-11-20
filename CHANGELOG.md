@@ -29,6 +29,13 @@ bumps the minor version, anything else the patch.
 - When `pack` or `go` fails, `--json` gives the build errors as data in `failure.errors`: `code`, `message`, `file`,
   `line`, `column` and `project` each, at most 50, each error once (MSBuild's summary and multi-targeting repeat them),
   with `errorCount` before that cap. `failure.output` still has the lines as printed.
+- `lrun status` prints what a config holds, from the files alone (no scan, no NuGet source, no git): when and how
+  `build` made it (its flags, the `lrun` version, each repository's branch and commit), the projects by solution and type
+  with their csproj and latest versions, what was left out and why, and the plan `go` would run. It warns
+  (`plan-older-than-config`) when that plan was made from an earlier config. `--json` gives all of it as data.
+- `build` records how it made the config, in a new `Build` field of `localrun.config.json` (time, `lrun` version, flags,
+  projects found changed, what it left out, each repository's HEAD), and marks test projects kept with `--tests`
+  (`"Test": true`). Older configs still load. `list --json` gives each project's `test` too.
 
 ### Changed
 

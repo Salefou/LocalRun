@@ -3,6 +3,8 @@
 - Learn the commands from `lrun help --json` (options, exit and error codes, diagnostic codes); the shape of
   every result from `lrun schema result`. Always pass `--json`: one JSON document on stdout, logs on stderr.
 - Ask first, without writing anything: `lrun list --users-of <Library> --with-services --json`.
+- Where things stand (what the config holds, how and when it was built, the plan `go` would run):
+  `lrun status --json`. It reads the files only: fast, and safe to run any time.
 - Then: `lrun build --users-of <Library> --with-services --json`, `lrun pack --json`, and before starting services,
   `lrun verify --json` (exit code 6: pack again).
 - Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
