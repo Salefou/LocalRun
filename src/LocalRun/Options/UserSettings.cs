@@ -1,4 +1,4 @@
-namespace LocalRun.Options;
+﻿namespace LocalRun.Options;
 
 using System;
 using System.IO;
@@ -14,7 +14,8 @@ public sealed class SettingsInvalidException(string message) : Exception(message
 /// <param name="LocalNuget">Default of <c>build --local-nuget</c>. Absolute, or starting with <c>~</c>.</param>
 /// <param name="Root">Default of <c>build --root</c>. Absolute, or starting with <c>~</c>.</param>
 /// <param name="Suffix">Default of <c>pack --suffix</c>.</param>
-public sealed record UserSettings(string? LocalNuget = null, string? Root = null, string? Suffix = null)
+/// <param name="StopTimeout">Default of <c>up --stop-timeout</c>: seconds <c>up</c> waits after Ctrl+C before killing what still runs; 0 or more.</param>
+public sealed record UserSettings(string? LocalNuget = null, string? Root = null, string? Suffix = null, int? StopTimeout = null)
 {
     /// <summary>Overrides <see cref="DefaultPath"/>; also how tests and hand testing keep clear of the real file.</summary>
     internal const string PathVariable = "LOCALRUN_SETTINGS";
@@ -49,7 +50,10 @@ public sealed record UserSettings(string? LocalNuget = null, string? Root = null
           // "root": "~/source/repos",
 
           // Prerelease label 'pack' gives the planned versions (default: local)
-          // "suffix": "local"
+          // "suffix": "local",
+
+          // Seconds 'up' waits after Ctrl+C before killing the processes still running (default: 10)
+          // "stopTimeout": 10
         }
         """;
 
@@ -74,6 +78,8 @@ public sealed record UserSettings(string? LocalNuget = null, string? Root = null
         {
             if (settings.Suffix != null)
                 RepackOptionsParser.EnsureValidSuffix(settings.Suffix, "suffix");
+            if (settings.StopTimeout < 0)
+                throw new UsageException($"'stopTimeout' must be a number of seconds, 0 or more (got {settings.StopTimeout}).");
             return settings with
             {
                 LocalNuget = ResolvePath(settings.LocalNuget, "localNuget"),

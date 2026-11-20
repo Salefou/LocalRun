@@ -15,28 +15,32 @@ using System.Threading.Tasks;
 /// <summary>
 /// Builds the executables of a config one by one, then starts them all side by side and waits until they
 /// have all exited. Ctrl+C stops them: they receive it too (same console), and whatever is still running
-/// after <see cref="StopGracePeriod"/> is killed with its child processes. On Windows they also run in a
-/// <see cref="ProcessJob"/>, so they are stopped when LocalRun is killed. Each service's output also goes to its own
+/// after the stop grace period (<see cref="DefaultStopGracePeriod"/> unless given) is killed with its child
+/// processes. On Windows they also run in a <see cref="ProcessJob"/>, so they are stopped when LocalRun is killed. Each service's output also goes to its own
 /// file in the logs folder, and what happens is reported as <see cref="UpEvent"/>s and in <see cref="Services"/>.
 /// </summary>
 public class RunProcessor : IRunProcessor
 {
     private static readonly ILogger<RunProcessor> logger = Log.For<RunProcessor>();
 
-    internal static readonly TimeSpan StopGracePeriod = TimeSpan.FromSeconds(10);
+    internal static readonly TimeSpan DefaultStopGracePeriod = TimeSpan.FromSeconds(10);
 
     private readonly string? logsFolder;
 
     private readonly Action<UpEvent>? onEvent;
 
+    private readonly TimeSpan stopGracePeriod;
+
     private readonly ConcurrentDictionary<string, ServiceOutcome> services = new(StringComparer.OrdinalIgnoreCase);
 
     /// <param name="logsFolder">Where each service's output goes, as <c>&lt;name&gt;.log</c> (overwritten); null for none.</param>
     /// <param name="onEvent">Told of each <see cref="UpEvent"/> as it happens, from any thread.</param>
-    public RunProcessor(string? logsFolder = null, Action<UpEvent>? onEvent = null)
+    /// <param name="stopGracePeriod">How long the processes get to exit after Ctrl+C before being killed.</param>
+    public RunProcessor(string? logsFolder = null, Action<UpEvent>? onEvent = null, TimeSpan? stopGracePeriod = null)
     {
         this.logsFolder = logsFolder;
         this.onEvent = onEvent;
+        this.stopGracePeriod = stopGracePeriod ?? DefaultStopGracePeriod;
     }
 
     /// <summary>Each executable of the last run, by name; complete after a failure too.</summary>
@@ -140,7 +144,7 @@ public class RunProcessor : IRunProcessor
             failed = [.. running.Where(process => process.Exited.IsCompletedSuccessfully && process.Exited.Result != 0)];
             if (stopping.IsCancellationRequested)
             {
-                await Task.WhenAny(allExited, Task.Delay(StopGracePeriod));
+                await Task.WhenAny(allExited, Task.Delay(stopGracePeriod));
             }
         }
         finally

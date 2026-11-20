@@ -95,8 +95,8 @@ shell escaping.
 - **`up` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
   references would collide), start all with `dotnet run --no-build` without awaiting, Ctrl+C →
   `e.Cancel = true` + children get Ctrl+C themselves (same console) + kill the process tree after
-  `StopGracePeriod`. On Windows the `dotnet run` processes (not the builds: MSBuild nodes outlive them) go
-  into a kill-on-close `ProcessJob`, so they die with `lrun` even when it is killed from outside; failing
+  the stop grace period (10 s, `--stop-timeout`, else `stopTimeout` in the settings). On Windows the `dotnet run` processes (not the builds:
+  MSBuild nodes outlive them) go into a kill-on-close `ProcessJob`, so they die with `lrun` even when it is killed from outside; failing
   to create/assign it only warns. No readiness checks, by design (user feedback, 2026-10-24): services are
   expected to wait for/retry their dependencies. Exit code 1 only for processes that failed before a stop was requested. To test
   Ctrl+C from automation, start `lrun up` in its own console and send a real `CTRL_C_EVENT`
@@ -109,11 +109,12 @@ shell escaping.
 - **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
   rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
 - **User settings** (`UserSettings`, user feedback, 2026-10-28): `~/.lrun/settings.json` (or `LOCALRUN_SETTINGS`) holds
-  per-user defaults (`localNuget`, `root`, `suffix`), created by `lrun settings` with everything commented out and opened
-  right away (the command itself is the flag that allows opening a window). Precedence: command-line option > settings >
-  built-in default. Paths are absolute or `~`-prefixed (relative would depend on the cwd: keep rejecting them), unknown
-  keys fail. Tests and hand testing set `LOCALRUN_SETTINGS`; never touch the real file. Not read by `plot`/`go`/`up`:
-  they only use the configs. A new setting = a property there + the template + README `settings` + a test.
+  per-user defaults (`localNuget`, `root`, `suffix`, `stopTimeout`), created by `lrun settings` with everything commented
+  out and opened right away (the command itself is the flag that allows opening a window). Precedence: command-line
+  option > settings > built-in default. Paths are absolute or `~`-prefixed (relative would depend on the cwd: keep
+  rejecting them), unknown keys fail. Tests and hand testing set `LOCALRUN_SETTINGS`; never touch the real file. Not read
+  by `plot`/`go`, and `up` reads only `stopTimeout` (default of `--stop-timeout`, seconds after Ctrl+C before the kill;
+  user feedback, 2026-11-20): they only use the configs. A new setting = a property there + the template + README `settings` + a test.
 - **`--json`** (ROADMAP item 1, 2026-11-05): stdout holds exactly one document (`CommandReport`, `schemaVersion` 1) for
   every run, failures and usage errors included; logs go to stderr, plain. `Main` sets `OutputMode.Json` before anything
   logs (`Log` creates its factory lazily and reads it once; `Terminal.IsAttached` is false in this mode). A command

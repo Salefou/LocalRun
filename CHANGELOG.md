@@ -7,6 +7,11 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Added
+
+- `up --stop-timeout <seconds>`, and `stopTimeout` in the settings (`lrun settings`): how many seconds `up` waits
+  after Ctrl+C before killing the processes still running (default `10`, as before).
+
 ## [0.5.1] - 2026-11-12
 
 Commands to check before running: `list` (what `build` would keep), `verify` (is the local feed up to date) and
