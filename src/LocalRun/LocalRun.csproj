@@ -48,6 +48,9 @@
 		<EmbeddedResource Include="Resources\elkjs\elk.bundled.js" LogicalName="LocalRun.elk.bundled.js" />
 		<!-- The schemas printed by 'lrun schema', also used to find unknown fields in the configs it reads -->
 		<EmbeddedResource Include="Resources\Schemas\*.schema.json" LogicalName="LocalRun.Schemas.%(Filename)%(Extension)" />
+		<!-- What 'lrun changelog' prints, and the agent instructions 'lrun help' prints: read offline, from the install -->
+		<EmbeddedResource Include="..\..\CHANGELOG.md" LogicalName="LocalRun.CHANGELOG.md" />
+		<EmbeddedResource Include="Resources\AgentInstructions.md" LogicalName="LocalRun.AgentInstructions.md" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -689,15 +689,39 @@ The schemas are written by hand and tested against the types `lrun` serializes. 
 a field renamed or removed bumps `SchemaVersion` (configs) or `schemaVersion` (`--json`), an added field doesn't. Treat
 fields you don't know as ignorable. With `--json`, the result is `name` and `schema` (the schema as an object).
 
+### `changelog`
+
+Print what changed in each release of `lrun`, newest first, as written in [CHANGELOG.md](CHANGELOG.md). The changelog
+ships inside the tool, so no network is needed. A build made after the last release (a local install, `dotnet run`)
+also shows its `[Unreleased]` changes.
+
+| Option | Default | Description |
+|---|---|---|
+| `--since <version>` | the whole changelog | Only the releases after this one, e.g. the version your scripts or an agent's instructions were written for. Not a version: exit code `2`. |
+
+```sh
+lrun changelog --since 0.5.1
+```
+
+With `--json`, the result is `since` and `releases`, newest first, each with `version` (for unreleased changes, the
+version they will ship as), `date` (null when unreleased), `unreleased`, `summary` (the paragraph a release opens
+with, or null) and `sections`: `kind` (`Added`, `Changed`, `Fixed`, `Removed`, ...) and `entries`, each `text`
+(markdown) and `breaking` (something that worked may now fail or behave differently).
+
 ### `help`
 
 Print the command reference. Also `--help` and `-h`. Running `lrun` with no arguments prints it too,
 with exit code `2`.
 
+| Option | Description |
+|---|---|
+| `--agent` | Print instructions to paste into an agent's instead (see [From an agent](#from-an-agent)), stamped with this version. |
+
 With `--json`, the result holds the same reference as data, so a program or an agent can learn the tool without this
 README: `globalOptions`; `commands`, each with its `name`, `summary`, `arguments`, `options` (`name`, `kind`: `flag`,
 `value` or `values`, `value` as shown in the help, `description`) and `aliases`; `exitCodes`; `errorCodes` (`code`,
-`exitCode`, `meaning`); `diagnosticCodes` (`code`, `strict`: whether `--strict` fails on it, `meaning`).
+`exitCode`, `meaning`); `diagnosticCodes` (`code`, `strict`: whether `--strict` fails on it, `meaning`);
+`agentInstructions` (what `--agent` prints). `help --agent --json` returns the same document.
 
 ---
 
@@ -996,10 +1020,11 @@ $plan.RepackTrees.Projects | Format-Table Name, Depth
 ### From an agent
 
 An agent (a coding assistant, an automation) needs no more than `lrun help --json`, `lrun schema result` and the
-exit codes. To give it the loop up front, paste something like this into the instructions it reads in your workspace
-(`AGENTS.md`, `CLAUDE.md`, ...):
+exit codes. To give it the loop up front, paste the output of `lrun help --agent` into the instructions it reads in
+your workspace (`AGENTS.md`, `CLAUDE.md`, ...). For this version:
 
 ```markdown
+<!-- written for lrun 0.6.0 -->
 ## Trying a library change in its consumers: `lrun` (LocalRun)
 
 - Learn the commands from `lrun help --json` (options, exit and error codes, diagnostic codes); the shape of
@@ -1011,7 +1036,14 @@ exit codes. To give it the loop up front, paste something like this into the ins
   4 a dotnet build failed (fix the code; `result.packages[].failure` has the error lines), 5 refused by `--strict`.
 - `lrun up` stays in the foreground until Ctrl+C: run it in the background and read `.lrun/logs/<service>.log`.
 - When a command fails for no visible reason: `lrun doctor --json`.
+- When `lrun version` is newer than the version in the comment above this section, read
+  `lrun changelog --since <that version> --json` (`breaking` entries change what you do), then rewrite this section
+  from `lrun help --agent`, keeping what was added to it by hand.
 ```
+
+The last line keeps it current: after you upgrade `lrun`, ask the agent to update its instructions. Everything it needs
+ships with the tool, so this works offline: what changed since the stamped version (`lrun changelog`), and the current
+text (`lrun help --agent`). Your own additions to the section stay.
 
 ### From bash / CI
 
@@ -1057,7 +1089,8 @@ src/
 └─ LocalRun/                     CLI project (packed as the `lrun` .NET tool); also hosts the engine
    ├─ Program.cs                 Main: calls LocalRunCli, flushes logs
    ├─ Cli/                       LocalRunCli (command dispatch, file I/O, exit codes), CommandCatalog (the help,
-   │                             as text and data), CommandReport (the --json document), Schemas
+   │                             as text and data), CommandReport (the --json document), Schemas, Changelog,
+   │                             AgentInstructions
    ├─ Options/                   Command-line parsing (CommandLineArgs) and per-command option objects
    ├─ Core/
    │  ├─ Graph/                  DependencyGraph: building, filtering, cycles, layered topological sort
@@ -1065,8 +1098,9 @@ src/
    │  ├─ Modules/                ConfigBuilder, RepackConfigBuilder, RepackExecutor, GraphPage,
    │  │                          NugetVersionChecker, SolutionScanner
    │  └─ Processing/             RunProcessor: the `up` command
-   ├─ Resources/                 GraphPage.html (the plot page template), the vendored elkjs, and the JSON
-   │                             Schemas printed by `lrun schema` (Schemas/)
+   ├─ Resources/                 GraphPage.html (the plot page template), the vendored elkjs, the JSON
+   │                             Schemas printed by `lrun schema` (Schemas/), and AgentInstructions.md
+   │                             (`lrun help --agent`); CHANGELOG.md is embedded from the root
    └─ Logger/                    Logger factory and console formatter
 tests/
 └─ LocalRun.Tests/               xUnit tests, one folder per area of src/LocalRun (Graph, Options, …)
@@ -1116,7 +1150,8 @@ rule on `master` requiring the **build-and-test** check.
 
 `<VersionPrefix>` in `src/LocalRun/LocalRun.csproj` is always **the next version to release**.
 
-1. Move the `[Unreleased]` entries of `CHANGELOG.md` under the new version, in a PR, and merge it.
+1. Move the `[Unreleased]` entries of `CHANGELOG.md` under the new version, in a PR, and merge it. The tool embeds
+   this file and `lrun changelog` parses it: keep its headings (`## [x.y.z] - yyyy-MM-dd`, `### Kind`, `- ` entries).
 2. Tag that commit of `master` `v<VersionPrefix>` (e.g. `v0.1.0`) and push the tag.
    `.github/workflows/release.yml` then tests, checks the tag matches `<VersionPrefix>`, packs, pushes the
    package and its symbols to nuget.org and creates the GitHub release. nuget.org takes a few minutes, up to an

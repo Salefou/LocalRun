@@ -185,8 +185,10 @@ internal sealed record DoctorResult(string Root, string LocalNuget, int Ok, int 
 }
 
 /// <param name="Help">The help text, as <c>lrun help</c> prints it; the other fields hold the same as data.</param>
+/// <param name="AgentInstructions">What <c>help --agent</c> prints: a section for an agent's instructions, stamped with this release.</param>
 internal sealed record HelpResult(string Help, IReadOnlyList<OptionInfo> GlobalOptions, IReadOnlyList<CommandInfo> Commands,
-    IReadOnlyList<ExitCodeInfo> ExitCodes, IReadOnlyList<ErrorCode> ErrorCodes, IReadOnlyList<DiagnosticCode> DiagnosticCodes);
+    IReadOnlyList<ExitCodeInfo> ExitCodes, IReadOnlyList<ErrorCode> ErrorCodes, IReadOnlyList<DiagnosticCode> DiagnosticCodes,
+    string AgentInstructions);
 
 /// <param name="Name">One of <see cref="Schemas.Names"/>.</param>
 internal sealed record SchemaResult(string Name, JsonElement Schema);

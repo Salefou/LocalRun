@@ -28,6 +28,7 @@
         { "$ref": "#/$defs/SettingsResult" },
         { "$ref": "#/$defs/DoctorResult" },
         { "$ref": "#/$defs/SchemaResult" },
+        { "$ref": "#/$defs/ChangelogResult" },
         { "$ref": "#/$defs/HelpResult" },
         { "$ref": "#/$defs/VersionResult" }
       ]
@@ -361,9 +362,52 @@
         "commands": { "type": "array", "items": { "$ref": "#/$defs/CommandInfo" } },
         "exitCodes": { "type": "array", "items": { "$ref": "#/$defs/ExitCodeInfo" } },
         "errorCodes": { "type": "array", "items": { "$ref": "#/$defs/ErrorCode" } },
-        "diagnosticCodes": { "type": "array", "items": { "$ref": "#/$defs/DiagnosticCode" } }
+        "diagnosticCodes": { "type": "array", "items": { "$ref": "#/$defs/DiagnosticCode" } },
+        "agentInstructions": {
+          "description": "What lrun help --agent prints: markdown for an agent's instructions, starting with a comment naming the release it was written for.",
+          "type": "string"
+        }
       },
-      "required": ["help", "globalOptions", "commands", "exitCodes", "errorCodes", "diagnosticCodes"],
+      "required": ["help", "globalOptions", "commands", "exitCodes", "errorCodes", "diagnosticCodes", "agentInstructions"],
+      "additionalProperties": false
+    },
+    "ChangelogResult": {
+      "type": "object",
+      "properties": {
+        "since": { "description": "The version given to --since, or null for the whole changelog.", "type": ["string", "null"] },
+        "releases": { "description": "Newest first.", "type": "array", "items": { "$ref": "#/$defs/ChangelogRelease" } }
+      },
+      "required": ["since", "releases"],
+      "additionalProperties": false
+    },
+    "ChangelogRelease": {
+      "type": "object",
+      "properties": {
+        "version": { "description": "The release; when unreleased, the version it will ship as.", "type": "string" },
+        "date": { "description": "The release date (yyyy-MM-dd), null when unreleased.", "type": ["string", "null"] },
+        "unreleased": { "description": "Changes of a local build made after the last release.", "type": "boolean" },
+        "summary": { "description": "The paragraph the release opens with, or null.", "type": ["string", "null"] },
+        "sections": { "type": "array", "items": { "$ref": "#/$defs/ChangelogSection" } }
+      },
+      "required": ["version", "date", "unreleased", "summary", "sections"],
+      "additionalProperties": false
+    },
+    "ChangelogSection": {
+      "type": "object",
+      "properties": {
+        "kind": { "description": "The heading as written: Added, Changed, Fixed, Removed...", "type": "string" },
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/ChangelogEntry" } }
+      },
+      "required": ["kind", "entries"],
+      "additionalProperties": false
+    },
+    "ChangelogEntry": {
+      "type": "object",
+      "properties": {
+        "text": { "description": "The entry as markdown.", "type": "string" },
+        "breaking": { "description": "Something that worked may now fail or behave differently.", "type": "boolean" }
+      },
+      "required": ["text", "breaking"],
       "additionalProperties": false
     },
     "CommandInfo": {

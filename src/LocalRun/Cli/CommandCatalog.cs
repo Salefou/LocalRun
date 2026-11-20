@@ -153,8 +153,16 @@ internal static class CommandCatalog
         new("schema", "Print the JSON Schema of a file LocalRun reads or writes, to validate or generate it: the config written " +
             "by build, the plan written by pack, the --json document, or the settings.",
             [new("name", SchemaNames, "Which schema: config, repack, result or settings.")], [], []),
-        new("help", "Show this help message. With --json, the commands, options, exit codes, error codes and diagnostic codes as data.",
-            [], [], ["--help", "-h"]),
+        Command("changelog", "Print what changed in each release of lrun, newest first, from the changelog shipped with it (no " +
+            "network). A local build shows its unreleased changes too. With --json, each release's entries by kind, breaking ones marked.",
+        [
+            OptionInfo.One("--since", "<version>", "Only the releases after this one, e.g. the version your scripts or an agent's " +
+                "instructions were written for."),
+        ]),
+        new("help", "Show this help message. With --json, the commands, options, exit codes, error codes and diagnostic codes as " +
+            "data, and the agent instructions.",
+            [], [OptionInfo.Flag("--agent", "Print instructions to paste into an agent's (AGENTS.md, CLAUDE.md...): how to drive lrun, " +
+                "stamped with this version, and how to update them after an upgrade.")], ["--help", "-h"]),
         new("version", "Show the installed version. Please include it when reporting an issue.", [], [], ["--version"]),
     ];
 
@@ -175,6 +183,7 @@ internal static class CommandCatalog
         $"{LocalRunCli.CommandName} verify                              (exit code 6: something to pack before 'up')",
         $"{LocalRunCli.CommandName} up",
         $"{LocalRunCli.CommandName} help --json                         (all of this as data, for a program or an agent)",
+        $"{LocalRunCli.CommandName} changelog --since 0.5.1             (what changed since the version you knew)",
     ];
 
     public static void WriteHelp(TextWriter writer)

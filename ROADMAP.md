@@ -27,7 +27,7 @@ everyone is "Before 1.0".
 | A3, `up --detach` / `ps` / `down` / `logs` | Agents starting services and leaving them running | Related: A4 (`logs`) |
 | A4, Log levels on disk | Filtering service logs by level, diffing runs | Shipped plain logs; additive form only (1.0) |
 | A5, `lrun test` | Running the tests affected by a change, without a CI | Builds on A2 for its summary |
-| A6, `lrun changelog`, `help --agent` | Agents updating their own instructions about `lrun`, offline | Shipped core; design settled below |
+| A6, Self-description | Agents learning `lrun` and updating their own instructions about it, offline | Shipped |
 | A7, `doctor` follow-ups | Per-repository `global.json`, fetch age as an option | Related: 7 |
 | A8, `clean-feed` | Local feeds piling up iterations | Related: 3 |
 | Project identity | Projects sharing a file name (keyed by path or `PackageId`) | 1.0 blocker: breaking either way |
@@ -226,18 +226,21 @@ Decisions (user feedback, 2026-11-20):
 - No `AGENTS.md` in this repository: there it would read as instructions for working *on* LocalRun. README "From an
   agent" gives a snippet for users to paste into their own workspace's instructions instead.
 
-Next, not started (user feedback, 2026-11-20): let an agent update its own instructions about `lrun` from the install
-alone, offline, when asked. Both reached through commands, not files in the package: a file packed into the nupkg lands
-in the tool store (`~/.dotnet/tools/.store/...`, a path that changes with the version and the install mode), where no
-agent looks. PACKAGE.md was ruled out too: same place, and it is the nuget.org page.
-- `lrun changelog [--since <version>]`, its own command (not a `help` flag: a different question, a result of its own
-  shape): CHANGELOG.md embedded in the tool, printing the sections after that version; `--json` gives them as data
-  (version, date, entries by kind). A local build shows `[Unreleased]` too, labelled as such.
-- The agent snippet as one embedded text: `lrun help --agent` prints it as markdown, `help --json` carries it in a new
-  field (additive). It starts with a stamp (`<!-- written for lrun 0.6.0 -->`); a test keeps README "From an agent"
-  word for word equal to it. Kept short, pointing to `help --json` for details, so a release asks for a small rewrite.
-- The loop it enables: read the stamp in the user's file, compare with `lrun version`, read
-  `lrun changelog --since <stamp>`, rewrite from `lrun help --agent` keeping the user's own additions.
+Then shipped (unreleased): an agent updates its own instructions about `lrun` from the install alone, offline, when
+asked: `lrun changelog [--since <version>]` and `lrun help --agent`. Decisions (user feedback, 2026-11-20):
+- Reached through commands, not files in the package: a file packed into the nupkg lands in the tool store
+  (`~/.dotnet/tools/.store/...`, a path that changes with the version and the install mode), where no agent looks.
+  PACKAGE.md was ruled out too: same place, and it is the nuget.org page.
+- `changelog` is its own command (not a `help` flag: a different question, a result of its own shape), CHANGELOG.md
+  embedded in the tool. `--json` gives each release's entries by kind, with `breaking` set on the `**Breaking:**` ones.
+  `[Unreleased]` shows when it has entries and the running version has no section yet (a local install, `dotnet run`),
+  versioned as the release it will be, so `--since` compares every release alike.
+- The agent snippet is one embedded text, printed by `help --agent` and carried by `help --json` (`agentInstructions`).
+  Its stamp (`<!-- written for lrun 0.6.0 -->`) is the running release version, generated, not hand-written: after a
+  rewrite it equals `lrun version`, so the loop stops. A test keeps README "From an agent" equal to it, the stamp's
+  version aside.
+- The loop, written into the snippet itself: when `lrun version` is newer than the stamp, read
+  `lrun changelog --since <stamp> --json`, rewrite from `lrun help --agent` keeping the user's own additions.
 
 ### A7. `lrun doctor` **(claude)**: shipped (unreleased)
 Setup checks with `ok|warn|fail` and a hint each: SDK (as the root's `global.json` pins it), settings, root, local feed

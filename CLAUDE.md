@@ -144,6 +144,11 @@ shell escaping.
   result or the settings goes into its schema too (`SchemasTests` compares them with the serialized types, and
   `JsonOutputTests` checks every document against `result`). Configs are checked against theirs on read: unknown fields
   warn `unknown-config-field` (strict), never fail.
+- **Changelog and agent instructions** (ROADMAP A6, user feedback, 2026-11-20): `CHANGELOG.md` is embedded and parsed by
+  `lrun changelog` (`Changelog`): keep its Keep a Changelog headings (`## [x.y.z] - date`, `### Kind`, `- ` entries,
+  `**Breaking:**` first in a breaking entry); `ChangelogTests` parses the real file. `Resources/AgentInstructions.md` is
+  what `help --agent` prints, after a stamp with `LocalRunCli.ReleaseVersion`; README "From an agent" must equal it (a
+  test, the stamp's version aside). Change both together, and keep it short: details belong in `help --json`.
 - **No machine-specific paths**: every path is an option, defaulting to a file in the current
   directory's `.lrun` folder (`localrun.config.json`, `repack.config.json`, `plots/dependencies-<date-time>`;
   `.lrun` ignores itself with a `.gitignore` of `*`) or
