@@ -6,6 +6,7 @@ using LocalRun.Core.Processing;
 using LocalRun.Logger;
 using LocalRun.Options;
 using Microsoft.Extensions.Logging;
+using NuGet.Versioning;
 using System;
 using System.Diagnostics;
 using System.Globalization;
@@ -58,6 +59,15 @@ public static class LocalRunCli
     /// <summary>The package version, with the commit it was built from (e.g. <c>0.1.0+1a2b3c4…</c>).</summary>
     internal static string Version =>
         typeof(LocalRunCli).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
+
+    /// <summary>
+    /// The release this build is or comes before (<c>0.6.0</c> for <c>0.6.0-local-0012-1a2b3c4+…</c>): what the agent
+    /// instructions are stamped with and what <c>changelog</c> calls the unreleased changes.
+    /// </summary>
+    internal static string ReleaseVersion =>
+        NuGetVersion.TryParse(Version, out var version)
+            ? $"{version.Major}.{version.Minor}.{version.Patch}"
+            : typeof(LocalRunCli).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
     private static string DefaultLocalNugetPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".localnuget");
@@ -200,9 +210,17 @@ public static class LocalRunCli
             case "schema":
                 Schema(options, output);
                 break;
+            case "changelog":
+                ShowChangelog(options, output);
+                break;
             case "help" or "--help" or "-h":
+                bool agent = options.Flag("--agent");
                 options.EnsureAllConsumed();
-                ShowHelp(output);
+                // With --json, the document carries the agent instructions anyway
+                if (agent && !OutputMode.Json)
+                    Console.Write(AgentInstructions.Text(ReleaseVersion));
+                else
+                    ShowHelp(output);
                 break;
             case "version" or "--version":
                 options.EnsureAllConsumed();
@@ -223,12 +241,30 @@ public static class LocalRunCli
             using var help = new StringWriter();
             WriteHelp(help);
             output.Result = new HelpResult(help.ToString(), CommandCatalog.GlobalOptions, CommandCatalog.Commands, CommandCatalog.ExitCodes,
-                ErrorCodes.All, DiagnosticEvents.All);
+                ErrorCodes.All, DiagnosticEvents.All, AgentInstructions.Text(ReleaseVersion));
         }
         else
         {
             WriteHelp(Console.Out);
         }
+    }
+
+    /// <summary>The embedded changelog, all of it or the releases after <c>--since</c>: as written, or as data with <c>--json</c>.</summary>
+    private static void ShowChangelog(CommandLineArgs args, CommandOutput output)
+    {
+        string? sinceText = args.Value("--since");
+        args.EnsureAllConsumed();
+        NuGetVersion? since = null;
+        if (sinceText != null && !NuGetVersion.TryParse(sinceText, out since))
+            throw new UsageException($"'--since' takes a version, e.g. 0.5.1 (got '{sinceText}').");
+
+        var releases = Changelog.Since(Changelog.Parse(Changelog.Text(), ReleaseVersion), since);
+        if (OutputMode.Json)
+            output.Result = new ChangelogResult(sinceText, releases);
+        else if (releases.Count == 0)
+            logger.LogInformation("No changes after {Since} in {Command} {Version}.", sinceText, CommandName, Version);
+        else
+            Console.WriteLine(string.Join("\n\n", releases.Select(release => release.Markdown)));
     }
 
     private static async Task BuildAsync(CommandLineArgs args, CommandOutput output)

@@ -21,6 +21,11 @@ bumps the minor version, anything else the patch.
   the `--json` document (with each command's result and `up`'s events) and the settings file.
 - Reading a config with fields `lrun` doesn't know (a typo in a hand edit, `SkipRepack` from an old file) warns
   `unknown-config-field` with their paths, instead of ignoring them silently. `--strict` fails on it.
+- `lrun changelog [--since <version>]` prints what changed in each release, from the changelog shipped inside the tool
+  (offline). With `--json`, each release's entries by kind, the breaking ones marked.
+- `lrun help --agent` prints instructions to paste into an agent's (`AGENTS.md`, `CLAUDE.md`, ...), stamped with the
+  version they were written for; `help --json` carries them as `agentInstructions`. After an upgrade, the agent reads
+  `lrun changelog --since` that version and rewrites them from `lrun help --agent`.
 
 ### Changed
 

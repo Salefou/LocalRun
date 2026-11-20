@@ -200,6 +200,51 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal(LocalRunCli.ExitUsage, usage.GetProperty("exitCode").GetInt32());
         var collision = help.GetProperty("diagnosticCodes").EnumerateArray().Single(code => code.GetProperty("code").GetString() == "name-collision");
         Assert.True(collision.GetProperty("strict").GetBoolean());
+        Assert.Equal(AgentInstructions.Text(LocalRunCli.ReleaseVersion), help.GetProperty("agentInstructions").GetString());
+    }
+
+    [Fact]
+    public async Task HelpAgent_PrintsTheAgentInstructions_OrTheWholeHelpWithJson()
+    {
+        var plain = await LrunAsync("help", "--agent");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, plain.ExitCode);
+        Assert.Equal(AgentInstructions.Text(LocalRunCli.ReleaseVersion), Encoding.UTF8.GetString(plain.Stdout).Replace("\r\n", "\n"));
+
+        var json = await LrunAsync("help", "--agent", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, json.ExitCode);
+        Assert.True(json.Json.GetProperty("result").TryGetProperty("commands", out _));
+    }
+
+    [Fact]
+    public async Task Changelog_PrintsTheReleases_AsWrittenOrAsData()
+    {
+        var plain = await LrunAsync("changelog", "--since", "0.5.0");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, plain.ExitCode);
+        string text = Encoding.UTF8.GetString(plain.Stdout);
+        Assert.Contains("## [0.5.1] - 2026-11-12", text);
+        Assert.DoesNotContain("## [0.5.0]", text);
+
+        var json = await LrunAsync("changelog", "--since", "0.4.0", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, json.ExitCode);
+        var result = json.Json.GetProperty("result");
+        Assert.Equal("0.4.0", result.GetProperty("since").GetString());
+        var releases = result.GetProperty("releases").EnumerateArray().ToList();
+        Assert.Equal("0.5.0", releases[^1].GetProperty("version").GetString());
+        var added = releases[^1].GetProperty("sections").EnumerateArray().First(section => section.GetProperty("kind").GetString() == "Added");
+        Assert.NotEmpty(added.GetProperty("entries").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Changelog_RejectsASinceThatIsNoVersion()
+    {
+        var run = await LrunAsync("changelog", "--since", "latest", "--json");
+
+        Assert.Equal(LocalRunCli.ExitUsage, run.ExitCode);
+        Assert.Equal("usage", run.Json.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Fact]
