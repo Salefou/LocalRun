@@ -24,12 +24,13 @@ everyone is "Before 1.0".
 | 7, More settings | Machines behind a slow proxy (skip NuGet queries); `doctor`'s fetch age | Related: A7 |
 | A1, `list --config` | Fast queries on large platforms, from an existing config | Shipped core (`lrun list`) |
 | A2, Build failures follow-ups | Per-target errors told from duplicates; `up`'s build failures as data | Shipped core (`failure.errors`). Related: A3, A5 |
-| A3, `up --detach` / `ps` / `down` / `logs` | Agents starting services and leaving them running | Related: A4 (`logs`) |
+| A3, `lrun down` | Running `up` in the background and stopping it cleanly from another process | Decided, minimal scope. Related: A4, A9 |
 | A4, Log levels on disk | Filtering service logs by level, diffing runs | Shipped plain logs; additive form only (1.0) |
 | A5, `lrun test` | Running the tests affected by a change, without a CI | Builds on A2 for its summary |
 | A6, Self-description | Agents learning `lrun` and updating their own instructions about it, offline | Shipped |
 | A7, `doctor` follow-ups | Per-repository `global.json`, fetch age as an option | Related: 7 |
 | A8, `clean-feed` | Local feeds piling up iterations | Related: 3 |
+| A9, Run from a copy | Rebuilding a service while `up` runs it (no file lock) | Postponed. Builds on A3 |
 | Project identity | Projects sharing a file name (keyed by path or `PackageId`) | 1.0 blocker: breaking either way |
 | Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
 | MCP server | Agents calling `lrun` as tools | Builds on 3 and A1–A4; conflicts with "Non-interactive CLI": ask first |
@@ -216,17 +217,31 @@ Left, not started:
   target when they differ); a `frameworks` field alone was turned down as noise for single-target projects.
 - `up`'s build failures as data, with A3. Related: `go --dry-run` printing the order and versions without running.
 
-### A3. `up` an agent can use **(claude)**
-Today `up` runs in the foreground until Ctrl+C. An agent can't hold that. Candidates, each its own decision:
-`up --detach` writing a state file in `.lrun/` (pids, ports from launch settings, start time), `lrun ps` to list them,
-`lrun down` to stop them, `lrun logs <service> [--tail N] [--level warn]`. Readiness stays out by design (user feedback,
-2026-10-24): if wanted, make it opt-in (`--wait <service>=<url>` or a log pattern), never the default.
-`up --only <names>` shipped (unreleased).
+### A3. `up` an agent can use **(claude)**: decided, minimal scope
+Running `up` in the background is already possible: the caller starts it as a background job (an agent's background
+command, `Start-Process`, `&`), and the agent instructions say so. What was missing is around it: a clean stop (a
+background `up` has no console to get Ctrl+C, so it could only be killed, without the grace period), and finding the
+running `up` again from another shell or session.
+
+Scope (user feedback, 2026-11-21, "as simple as possible, and still allow async running"):
+- `up` writes a state file while it runs (`.lrun/up.json`: its pid, start time, each service's pid and log), deleted
+  when it exits.
+- `up` also listens for a stop request, which takes the Ctrl+C path: grace period, then kill.
+- `lrun down` reads the state file, sends the request and waits for `up` to exit; without a running `up`, it has
+  nothing to stop and exits `0`.
+- `lrun status` shows the running `up` from the state file, so there is no `ps` command (it stays a read of files).
+- A second `up` while one runs (state file present, its process alive) is refused, pointing at `lrun down`.
+- Windows only for the stop request (a named event), as for the job object.
+
+Left out on purpose: `up --detach` (a hidden host process outliving the shell that started `up`: not needed while the
+caller keeps its background job), and `lrun logs` (the `.lrun/logs` files suffice; it waits for A4's levels). Readiness
+stays out by design (user feedback, 2026-10-24): if wanted, make it opt-in (`--wait <service>=<url>` or a log pattern),
+never the default. `up --only <names>` shipped (unreleased).
 
 ### A4. Service logs on disk, with levels **(claude)**: plain logs shipped (0.5.0)
 `up` writes each service's lines to `.lrun/logs/<service>.log` (`--logs`), plain text without colors, rewritten on each
 run, so an agent can read what a service said after the fact. Left: the level of each line (`up` already detects it),
-e.g. as NDJSON with service, level and time, to filter by level or diff two runs; `lrun logs` belongs to A3.
+e.g. as NDJSON with service, level and time, to filter by level or diff two runs; `lrun logs` would come with it (A3 left it out).
 
 ### A5. Test selection **(claude)**
 `--tests` keeps test projects but nothing runs them. `lrun test` (or `affected --tests`) running the tests of the
@@ -273,6 +288,28 @@ run), and the fetch age limit (7 days) as an option and a setting (see 7).
 Iterations accumulate in the local feed (`1.4.3-dev.1` … `.57`). `lrun clean-feed [--keep N]` (dry run by default, or
 `--yes`), and `status` showing the feed size. Careful: only ever delete what LocalRun packed (the suffix), never other
 versions.
+
+### A9. Run from a copy **(claude)**: postponed
+`up` runs each service from its own `bin/` with `dotnet run --no-build`, so Windows locks its files while it runs:
+rebuilding that project (from the IDE, a `dotnet build`, an agent's next step) fails until `up` stops. In the foreground
+that's rare (stop, then rebuild); with `up` in the background (A3) it becomes the usual case.
+
+Idea: build as today, copy each service's output to `.lrun/run/<service>/` and run it from there, freeing the source
+tree (as the install script does for `lrun` itself). The state file of A3 would live next to the copies. It doesn't
+change A3's questions (stopping, a second `up`): ports and services would still clash.
+
+Costs, to weigh when it comes back:
+- Leaving `dotnet run`: `dotnet <copy>/<Service>.dll` ignores `launchSettings.json` (profile environment variables,
+  `applicationUrl`, `ASPNETCORE_ENVIRONMENT`), which `up` would then apply itself.
+- The content root: today the project folder (`appsettings.Development.json`, `wwwroot` from the sources); from a copy,
+  only what the build copies to the output, unless the copy runs with the project folder as working directory.
+- Time and disk: a copy of each service's output on every `up`.
+- Not a shortcut: building straight into a separate `OutputPath` (`-p:`) would keep `dotnet run`, but a global
+  property flows into project references (the trap `PackageVersion` hit, see `CLAUDE.md`).
+
+Postponed (user feedback, 2026-11-21): it came up with a user and an agent each using `lrun` on the same working tree,
+which raises more than this (separate clones or worktrees are the usual answer, outside LocalRun's scope). Revisit when
+the lock gets in the way with A3 in use.
 
 ### Not now
 - An MCP server (`lrun mcp`) exposing the above: attractive once 1–3 and A1–A4 exist; it would be a long-running,
