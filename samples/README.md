@@ -292,7 +292,7 @@ lrun pack --next --suffix dev
 
 - `build` finds your packages in `.feed/` (a source in `NuGet.config`): `Latest versions found for all 11 projects`,
   recorded as `LatestVersion` in the config (`1.0.1-dev.2` for Primitives, `2.3.2-dev.2` for Logging; with
-  `LOCALRUN_LOG_LEVEL=Debug`, a line per project). From a terminal the plot opens, and shows `latest 1.0.1-dev.2`
+  `--log-level Debug`, a line per project). From a terminal the plot opens, and shows `latest 1.0.1-dev.2`
   under Primitives' `1.0.0`.
 - `pack --next --suffix dev` continues the line: `Versions: dev.2 -> dev.3, 11 projects` (Primitives `1.0.1-dev.3`,
   Logging `2.3.2-dev.3`).

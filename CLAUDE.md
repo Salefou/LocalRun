@@ -95,8 +95,8 @@ shell escaping.
 - **`up` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
   references would collide), start all with `dotnet run --no-build` without awaiting, Ctrl+C →
   `e.Cancel = true` + children get Ctrl+C themselves (same console) + kill the process tree after
-  the stop grace period (10 s, `--stop-timeout`, else `stopTimeout` in the settings). On Windows the `dotnet run` processes (not the builds:
-  MSBuild nodes outlive them) go into a kill-on-close `ProcessJob`, so they die with `lrun` even when it is killed from outside; failing
+  the stop grace period (10 s, `--stop-timeout`, else `stopTimeout` in the settings). On Windows the `dotnet run`
+  processes (not the builds: MSBuild nodes outlive them) go into a kill-on-close `ProcessJob`, so they die with `lrun` even when it is killed from outside; failing
   to create/assign it only warns. No readiness checks, by design (user feedback, 2026-10-24): services are
   expected to wait for/retry their dependencies. Exit code 1 only for processes that failed before a stop was requested. To test
   Ctrl+C from automation, start `lrun up` in its own console and send a real `CTRL_C_EVENT`
@@ -109,12 +109,13 @@ shell escaping.
 - **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
   rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
 - **User settings** (`UserSettings`, user feedback, 2026-10-28): `~/.lrun/settings.json` (or `LOCALRUN_SETTINGS`) holds
-  per-user defaults (`localNuget`, `root`, `suffix`, `stopTimeout`), created by `lrun settings` with everything commented
-  out and opened right away (the command itself is the flag that allows opening a window). Precedence: command-line
-  option > settings > built-in default. Paths are absolute or `~`-prefixed (relative would depend on the cwd: keep
-  rejecting them), unknown keys fail. Tests and hand testing set `LOCALRUN_SETTINGS`; never touch the real file. Not read
-  by `plot`/`go`, and `up` reads only `stopTimeout` (default of `--stop-timeout`, seconds after Ctrl+C before the kill;
-  user feedback, 2026-11-20): they only use the configs. A new setting = a property there + the template + README `settings` + a test.
+  per-user defaults (`localNuget`, `root`, `suffix`, `stopTimeout`, `logLevel`), created by `lrun settings` with
+  everything commented out and opened right away (the command itself is the flag that allows opening a window).
+  Precedence: command-line option > settings > built-in default. Paths are absolute or `~`-prefixed (relative would
+  depend on the cwd: keep rejecting them), unknown keys fail. Tests and hand testing set `LOCALRUN_SETTINGS`; never touch
+  the real file. `Main` reads `logLevel` for every command; otherwise `plot`/`go` don't read the settings (they only use
+  the configs) and `up` reads only `stopTimeout` (user feedback, 2026-11-20). A new setting = a property there + the
+  template + README `settings` + a test.
 - **`--json`** (ROADMAP item 1, 2026-11-05): stdout holds exactly one document (`CommandReport`, `schemaVersion` 1) for
   every run, failures and usage errors included; logs go to stderr, plain. `Main` sets `OutputMode.Json` before anything
   logs (`Log` creates its factory lazily and reads it once; `Terminal.IsAttached` is false in this mode). A command
@@ -191,7 +192,10 @@ shell escaping.
   `Terminal.Arrow`. Glyphs must have no emoji variant (`✔ ✖ ▶` don't qualify). On a terminal the colour says the
   level; redirected, `[WRN]` / `[ERR]` prefixes do. Long lists go through `Text.Abbreviate` ("and N more"), and `go`
   prints one line per depth, never per project. Of `dotnet` output, only warning and error lines, verbatim, not deduplicated.
-- Level via `LOCALRUN_LOG_LEVEL`. Errors log the message; `LogDebug(ex, …)` carries the stack trace.
+- Level via `--log-level` (global, like `--json`), else the settings' `logLevel`, else Information: `Main` sets
+  `Log.MinimumLevel` before anything logs, falling back to Information on a bad value or unreadable settings (the command
+  then reports it). `LOCALRUN_LOG_LEVEL` was removed in 0.6.0 (user feedback, 2026-11-20: no env variable next to the
+  settings). Errors log the message; `LogDebug(ex, …)` carries the stack trace.
 - Options objects live in `Options/`, one parser per command (`*OptionsParser.Parse(CommandLineArgs)`).
 - New command: see README "Adding a command". Update `LocalRunCli.PrintHelp` and README together.
 - Each project has its own folder, so default globs never overlap. (Before the move to `src/`, the CLI

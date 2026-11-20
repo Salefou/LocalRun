@@ -34,7 +34,7 @@ public static class LocalRunCli
 
     private const string StrictFlag = "--strict";
 
-    /// <summary>Options every command takes, accepted before the command name too.</summary>
+    /// <summary>Options every command takes, accepted before the command name too (<see cref="Log.LevelOption"/> with its value).</summary>
     private static readonly string[] GlobalFlags = [OutputMode.JsonFlag, StrictFlag];
 
     /// <summary>Name of the installed command, used in messages and help.</summary>
@@ -63,9 +63,9 @@ public static class LocalRunCli
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".localnuget");
 
     /// <param name="args">
-    /// The command name followed by its options, e.g. <c>["plot", "--open"]</c>. The global flags (<c>--json</c>,
-    /// <c>--strict</c>) may also come first. <c>--json</c> only switches to JSON output when <see cref="OutputMode.Json"/>
-    /// is set (by <c>Main</c>, before anything logs).
+    /// The command name followed by its options, e.g. <c>["plot", "--open"]</c>. The global options (<c>--json</c>,
+    /// <c>--strict</c>, <c>--log-level</c>) may also come first. <c>--json</c> and <c>--log-level</c> only take effect once
+    /// <c>Main</c> has set <see cref="OutputMode.Json"/> and <see cref="Log.MinimumLevel"/>, before anything logs.
     /// </param>
     public static async Task<int> RunAsync(string[] args)
     {
@@ -74,7 +74,7 @@ public static class LocalRunCli
         int diagnosticsBefore = Log.Diagnostics.Count;
         IReadOnlyList<Diagnostic> DiagnosticsOfThisRun() => [.. Log.Diagnostics.Skip(diagnosticsBefore)];
 
-        int leadingFlags = args.TakeWhile(arg => GlobalFlags.Contains(arg, StringComparer.Ordinal)).Count();
+        int leadingFlags = CountLeadingGlobalOptions(args);
         string? cmd = leadingFlags < args.Length ? args[leadingFlags].ToLowerInvariant() : null;
         var output = new CommandOutput();
         int exitCode;
@@ -94,6 +94,9 @@ public static class LocalRunCli
                 var options = new CommandLineArgs(args.Take(leadingFlags).Concat(args.Skip(leadingFlags + 1)));
                 // Main has read --json already: consumed here so that a repeated or valued one is rejected like any option
                 options.Flag(OutputMode.JsonFlag);
+                string? logLevel = options.Value(Log.LevelOption);
+                if (logLevel != null && Log.ParseLevel(logLevel) == null)
+                    throw new UsageException($"'{Log.LevelOption}' must be one of {string.Join(", ", Log.LevelNames)} (got '{logLevel}').");
                 bool strict = options.Flag(StrictFlag);
                 await RunCommandAsync(cmd, options, output);
                 (exitCode, error) = strict ? CheckStrict(DiagnosticsOfThisRun()) : (ExitSuccess, null);
@@ -129,6 +132,22 @@ public static class LocalRunCli
             Console.Out.Flush();
         }
         return exitCode;
+    }
+
+    /// <summary>How many arguments before the command name are global options (<see cref="Log.LevelOption"/> counts its value).</summary>
+    private static int CountLeadingGlobalOptions(string[] args)
+    {
+        int count = 0;
+        while (count < args.Length)
+        {
+            if (GlobalFlags.Contains(args[count], StringComparer.Ordinal))
+                count++;
+            else if (args[count] == Log.LevelOption && count + 1 < args.Length)
+                count += 2;
+            else
+                break;
+        }
+        return count;
     }
 
     /// <summary>
@@ -613,6 +632,9 @@ public static class LocalRunCli
         writer.WriteLine("  --strict                      Fail (exit code 5) when the result left something out or may have a wrong");
         writer.WriteLine("                                version: name collisions, cycles, MSBuild or NuGet source failures...");
         writer.WriteLine("                                The files are written all the same");
+        writer.WriteLine($"  --log-level <level>           Least important logs to print: {string.Join(", ", Log.LevelNames)}");
+        writer.WriteLine("                                (default: your settings, else Information). Debug adds timings and the");
+        writer.WriteLine("                                stack trace of a failure");
         writer.WriteLine();
         writer.WriteLine("Commands:");
         writer.WriteLine();

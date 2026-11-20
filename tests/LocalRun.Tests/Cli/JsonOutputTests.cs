@@ -34,7 +34,6 @@ public sealed class JsonOutputTests : IDisposable
             psi.ArgumentList.Add(arg);
         // Never the real settings file
         psi.Environment["LOCALRUN_SETTINGS"] = Path.Combine(workDir, "settings.json");
-        psi.Environment.Remove("LOCALRUN_LOG_LEVEL");
 
         using var process = Process.Start(psi)!;
         using var stdout = new MemoryStream();
@@ -124,6 +123,24 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal(JsonValueKind.Null, run.Json.GetProperty("command").ValueKind);
         Assert.Equal("usage", run.Json.GetProperty("error").GetProperty("code").GetString());
         Assert.Contains("--strict", run.Json.GetProperty("result").GetProperty("help").GetString());
+    }
+
+    [Theory]
+    [InlineData(null, false, "plot", "--json")]
+    [InlineData(null, true, "plot", "--json", "--log-level", "debug")]
+    [InlineData(null, true, "--log-level", "Debug", "plot", "--json")]
+    [InlineData("Debug", true, "plot", "--json")]
+    [InlineData("Debug", false, "plot", "--json", "--log-level", "Information")]   // the option wins
+    public async Task TheLogLevel_ComesFromTheOption_ElseTheSettings(string? setting, bool debug, params string[] args)
+    {
+        if (setting != null)
+            File.WriteAllText(Path.Combine(workDir, "settings.json"), $$"""{ "logLevel": "{{setting}}" }""");
+
+        var run = await LrunAsync(args);
+
+        // A failure's stack trace is logged at Debug
+        Assert.Equal(LocalRunCli.ExitInput, run.ExitCode);
+        Assert.Equal(debug, run.Stderr.Contains("failure details"));
     }
 
     [Fact]

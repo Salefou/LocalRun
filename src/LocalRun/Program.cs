@@ -8,8 +8,9 @@ public class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        // Before anything logs: the logger factory reads it once
+        // Before anything logs: the logger factory reads them once
         OutputMode.Json = OutputMode.AsksForJson(args);
+        Log.MinimumLevel = Log.ChooseLevel(args, () => Options.UserSettings.Load().LogLevel);
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         try
         {

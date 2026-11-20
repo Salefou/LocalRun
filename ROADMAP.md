@@ -151,6 +151,21 @@ config). The reverted commit holds the reference-kind plumbing and tests.
 Not fixed (user feedback, 2026-11-06): the filters are meant to restrict the config to a part that builds, so a run
 keeping a project that reaches a cycle is a selection to narrow, which the warning (and `--strict`) already say.
 
+### 7. More per-machine settings **(user, 2026-11-20)**
+
+The rule (user feedback, 2026-11-20, after `stopTimeout` and `logLevel`): a setting describes the user or the machine,
+never the work at hand, and each one has a command-line option that wins over it. Candidates:
+- **Skipping the NuGet source queries by default**: behind a slow proxy or with an unreachable source, every `build`
+  pays NuGet's retries (about 30 s). Today `--csproj` skips them, but it also skips the MSBuild evaluation: the setting
+  should cover the queries alone, with an option to turn them back on for one run.
+- **`fetchMaxAge`** for `doctor`'s last-fetch warning (`Doctor.FetchAgeLimit`, 7 days; A7 left it "as an option if
+  anyone asks"): someone fetching daily may want a day.
+
+Not now (user feedback, 2026-11-20): the MSBuild evaluation timeout (60 s), `doctor`'s source timeout (15 s) and the
+parallelism (8 evaluations, 8 source lookups). They depend on the machine, but no one has hit them: add one when a real
+case shows up. Rejected: a default `up --exclude` (it belongs to a workspace, not a user) and a default bump flag (the
+same `lrun pack` would plan different versions on two machines).
+
 ---
 
 ## Suggested (agents on a big platform)
@@ -195,7 +210,7 @@ Setup checks with `ok|warn|fail` and a hint each: SDK (as the root's `global.jso
 writable, NuGet sources reachable, and per repository origin's default branch and the last fetch's age. Decisions (user
 feedback, 2026-11-12): it scans `build`'s root rather than reading a config (works before the first `build`); a failed
 check exits `1` with `doctor-failed`, no new exit code. Left: a check per repository's `global.json` (only the root's is
-run), and the fetch age limit (7 days) as an option if anyone asks.
+run), and the fetch age limit (7 days) as an option and a setting (see 7).
 
 ### A8. Feed hygiene **(claude)**
 Iterations accumulate in the local feed (`1.4.3-dev.1` … `.57`). `lrun clean-feed [--keep N]` (dry run by default, or
