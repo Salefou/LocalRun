@@ -87,21 +87,22 @@ public class DependencyGraph
         var scanned = new List<(ProjectNode Project, List<string> PackageReferences)>();
         var leftOutTests = new List<string>();
 
-        var kept = new List<(string Csproj, XDocument Doc)>();
+        var kept = new List<(string Csproj, XDocument Doc, bool Test)>();
         foreach (var csproj in csprojs.Order())
         {
             var doc = XDocument.Load(csproj);
             string name = Path.GetFileNameWithoutExtension(csproj);
-            if (!includeTests && IsTestProject(doc))
+            bool test = IsTestProject(doc);
+            if (!includeTests && test)
             {
                 leftOutTests.Add(name);
                 continue;
             }
-            kept.Add((csproj, doc));
+            kept.Add((csproj, doc, test));
         }
-        var evaluated = EvaluateWhereNeeded(kept, evaluate);
+        var evaluated = EvaluateWhereNeeded([.. kept.Select(project => (project.Csproj, project.Doc))], evaluate);
 
-        foreach (var (csproj, doc) in kept)
+        foreach (var (csproj, doc, test) in kept)
         {
             var ns = doc.Root!.Name.Namespace;
             string name = Path.GetFileNameWithoutExtension(csproj);
@@ -134,6 +135,7 @@ public class DependencyGraph
                 Path = Path.GetRelativePath(rootPath, csproj),
                 SolutionPath = solutionPath,
                 Type = type,
+                Test = test,
                 Version = version,
                 Dependencies = [.. doc.Descendants(ns + "ProjectReference")
                     .Select(e => Path.GetFileNameWithoutExtension(e.Attribute("Include")!.Value))],
@@ -158,6 +160,7 @@ public class DependencyGraph
                 Path = project.Path,
                 SolutionPath = project.SolutionPath,
                 Type = project.Type,
+                Test = project.Test,
                 Version = project.Version,
                 Dependencies = deps,
             });

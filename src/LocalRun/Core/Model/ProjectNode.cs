@@ -21,6 +21,10 @@ public class ProjectNode
 
     public required string Type { get; init; }
 
+    /// <summary>A test project, kept with <c>build --tests</c> (written only when true).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Test { get; init; }
+
     public required ProjectVersion Version { get; init; }
 
     /// <summary>Highest version on the project's NuGet sources (unless <c>build --csproj</c>); <c>pack</c> starts from it when present.</summary>

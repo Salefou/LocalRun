@@ -71,6 +71,11 @@ shell escaping.
   project's folder (without `bin`, `obj`, dot-folders, nested projects) newer than that package. `verify` reads the config,
   `build --verify` checks the one just written; same result object. `package-missing` / `package-stale` are not strict:
   `verify` fails on them itself.
+- **`status`** (`StatusText`, `StatusResult`, ROADMAP item 3, user feedback, 2026-11-21): reads the config and the plan
+  only, never scans, queries NuGet or calls git. Its header comes from `LocalRunConfig.Build` (`BuildRecord`, written by
+  `build` through `ConfigBuilder.Record`); a config without it still shows. Recorded HEADs are shown, not compared (that
+  is ROADMAP 4/5). A plan older than the config warns `plan-older-than-config`, not strict. A new `build` flag goes into
+  `BuildRecord` too.
 - **`doctor`** (`Doctor`, ROADMAP A7, user feedback, 2026-11-12): read-only setup checks on `build`'s root and feed (not
   a config, so it works before the first `build`), the only write being a probe file created and deleted in the feed.
   Check names (`dotnet`, `settings`, `root`, `local-feed`, `source`, `git-base`, `git-fetch`) are a contract like codes.

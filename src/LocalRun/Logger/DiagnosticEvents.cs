@@ -116,6 +116,9 @@ public static class DiagnosticEvents
         "pack: a planned version sorts below its prerelease base on the same version, its label being lower " +
         "(1.0.1-q.2 -> 1.0.1-local.1): a restore of the latest won't pick it. --next plans above it.");
 
+    public static readonly EventId PlanOlderThanConfig = Code(161, "plan-older-than-config", strict: false,
+        "status: the repack plan is older than the config, so planned from an earlier one: go would pack that. pack plans again.");
+
     /// <summary>Every code, in id order, with its meaning; <see cref="DiagnosticsCollector.UnspecifiedCode"/> last.</summary>
     public static IReadOnlyList<DiagnosticCode> All { get; } =
         [.. all, new(DiagnosticsCollector.UnspecifiedCode, false, "A warning without a code yet.")];

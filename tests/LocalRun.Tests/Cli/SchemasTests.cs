@@ -26,6 +26,9 @@ public class SchemasTests
         { Schemas.Config, "", typeof(LocalRunConfig) },
         { Schemas.Config, "ProjectNode", typeof(ProjectNode) },
         { Schemas.Config, "ProjectVersion", typeof(ProjectVersion) },
+        { Schemas.Config, "BuildRecord", typeof(BuildRecord) },
+        { Schemas.Config, "LeftOutProjects", typeof(LeftOutProjects) },
+        { Schemas.Config, "RepositoryHead", typeof(RepositoryHead) },
         { Schemas.Repack, "", typeof(RepackConfig) },
         { Schemas.Repack, "RepackTree", typeof(RepackTree) },
         { Schemas.Repack, "ProjectRepack", typeof(ProjectRepack) },
@@ -41,6 +44,11 @@ public class SchemasTests
         { Schemas.Result, "ListedProject", typeof(ListedProject) },
         { Schemas.Result, "VerifyResult", typeof(VerifyResult) },
         { Schemas.Result, "PackageCheck", typeof(PackageCheck) },
+        { Schemas.Result, "StatusResult", typeof(StatusResult) },
+        { Schemas.Result, "BuildRecord", typeof(BuildRecord) },
+        { Schemas.Result, "RepositoryHead", typeof(RepositoryHead) },
+        { Schemas.Result, "StatusPlan", typeof(StatusPlan) },
+        { Schemas.Result, "PlannedPackage", typeof(PlannedPackage) },
         { Schemas.Result, "PlotResult", typeof(PlotResult) },
         { Schemas.Result, "PackResult", typeof(PackResult) },
         { Schemas.Result, "PackageReport", typeof(PackageReport) },
@@ -109,7 +117,16 @@ public class SchemasTests
         {
             RootPath = "root",
             LocalNugetPath = "feed",
-            Projects = [new() { Name = "A", PackageId = "Acme.A", Path = "A.csproj", Type = "library", Version = version, LatestVersion = version, Dependencies = ["B"] }],
+            Projects = [new() { Name = "A", PackageId = "Acme.A", Path = "A.csproj", Type = "library", Test = true, Version = version, LatestVersion = version, Dependencies = ["B"] }],
+            Build = new BuildRecord
+            {
+                Time = DateTimeOffset.Now,
+                LrunVersion = "0.6.0",
+                UsersOf = ["A"],
+                ChangedProjects = ["A"],
+                LeftOut = [new("cycle", ["C", "D"]) { Dependents = ["E"] }],
+                Repositories = [new(".", null, null)],
+            },
         };
 
         var json = JsonSerializer.SerializeToElement(config);

@@ -26,6 +26,15 @@ public static class Text
         _ => $"{(int)duration.TotalMinutes} min {duration.Seconds:00} s",
     };
 
+    /// <summary><c>just now</c>, <c>5 min ago</c>, <c>3 hours ago</c>, <c>2 days ago</c>: how long ago something was written.</summary>
+    public static string Age(TimeSpan age) => age switch
+    {
+        { TotalMinutes: < 1 } => "just now",
+        { TotalHours: < 1 } => $"{(int)age.TotalMinutes} min ago",
+        { TotalDays: < 1 } => $"{Count((int)age.TotalHours, "hour")} ago",
+        _ => $"{Count((int)age.TotalDays, "day")} ago",
+    };
+
     /// <summary><c>1 project</c>, <c>12 projects</c>.</summary>
     public static string Count(int count, string singular, string? plural = null) =>
         $"{count} {(count == 1 ? singular : plural ?? singular + "s")}";

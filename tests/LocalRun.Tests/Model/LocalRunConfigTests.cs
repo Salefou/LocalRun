@@ -30,6 +30,48 @@ public class LocalRunConfigTests
     }
 
     [Fact]
+    public void TheBuildRecord_RoundTrips_AndIsAbsentFromOlderConfigs()
+    {
+        var config = new LocalRunConfig
+        {
+            RootPath = "root",
+            Build = new BuildRecord
+            {
+                Time = new DateTimeOffset(2026, 11, 21, 10, 30, 0, TimeSpan.FromHours(1)),
+                LrunVersion = "0.6.0",
+                Filters = "--users-of A",
+                UsersOf = ["A"],
+                Tests = true,
+                LeftOut = [new("name-collision", ["Dup"]) { Paths = ["One/Dup.csproj", "Two/Dup.csproj"], Dependents = ["B"] }],
+                Repositories = [new(".", "1a2b3c", "main")],
+            },
+        };
+
+        var read = JsonSerializer.Deserialize<LocalRunConfig>(JsonSerializer.Serialize(config))!;
+
+        Assert.Equal(config.Build.Time, read.Build!.Time);
+        Assert.Equal(["A"], read.Build.UsersOf);
+        Assert.True(read.Build.Tests);
+        var collision = Assert.Single(read.Build.LeftOut);
+        Assert.Equal("name-collision", collision.Reason);
+        Assert.Equal(["Dup"], collision.Projects);
+        Assert.Equal(["One/Dup.csproj", "Two/Dup.csproj"], collision.Paths);
+        Assert.Equal(new RepositoryHead(".", "1a2b3c", "main"), Assert.Single(read.Build.Repositories));
+        Assert.Null(JsonSerializer.Deserialize<LocalRunConfig>("""{"Projects":[]}""")!.Build);
+        Assert.DoesNotContain("\"Build\"", JsonSerializer.Serialize(new LocalRunConfig()));
+    }
+
+    [Fact]
+    public void Test_IsWrittenOnlyForTestProjects()
+    {
+        var project = new ProjectNode { Name = "A", Path = "A/A.csproj", Type = "library", Version = ProjectVersion.Parse("1.0.0"), Dependencies = [] };
+        Assert.DoesNotContain("\"Test\"", JsonSerializer.Serialize(project));
+
+        var test = new ProjectNode { Name = "A.Tests", Path = "A.Tests/A.Tests.csproj", Type = "library", Test = true, Version = ProjectVersion.Parse("1.0.0"), Dependencies = [] };
+        Assert.True(JsonSerializer.Deserialize<ProjectNode>(JsonSerializer.Serialize(test))!.Test);
+    }
+
+    [Fact]
     public void LatestVersion_IsWrittenOnlyWhenKnown()
     {
         var project = new ProjectNode { Name = "A", Path = "A/A.csproj", Type = "library", Version = ProjectVersion.Parse("1.0.0"), Dependencies = [] };

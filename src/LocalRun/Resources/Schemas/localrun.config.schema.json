@@ -21,11 +21,79 @@
       "description": "The projects kept, in topological order: dependencies first.",
       "type": "array",
       "items": { "$ref": "#/$defs/ProjectNode" }
+    },
+    "Build": {
+      "description": "How build made the config, which lrun status shows. Absent from configs written before 0.6.0.",
+      "$ref": "#/$defs/BuildRecord"
     }
   },
   "required": ["RootPath", "LocalNugetPath", "Projects"],
   "additionalProperties": false,
   "$defs": {
+    "BuildRecord": {
+      "description": "Written by build for status; pack, go and up don't read it.",
+      "type": "object",
+      "properties": {
+        "Time": { "description": "When build ran.", "type": "string", "format": "date-time" },
+        "LrunVersion": { "description": "The lrun that wrote the config, as lrun version prints it.", "type": "string" },
+        "Filters": { "description": "The filters given, as typed (--deps-of WebApp, --with-services), or null without any.", "type": ["string", "null"] },
+        "UsersOf": { "description": "The names given to --users-of, or null.", "type": ["array", "null"], "items": { "type": "string" } },
+        "DepsOf": { "description": "The names given to --deps-of, or null.", "type": ["array", "null"], "items": { "type": "string" } },
+        "GitChanges": { "type": "boolean" },
+        "Union": { "type": "boolean" },
+        "WithServices": { "type": "boolean" },
+        "IncludeExternal": { "type": "boolean" },
+        "Tests": { "type": "boolean" },
+        "Csproj": { "type": "boolean" },
+        "ChangedProjects": {
+          "description": "With --git-changes, the projects found changed (added to the --users-of names); absent otherwise.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "Scanned": { "description": "Projects found, test projects and name collisions excluded.", "type": "integer" },
+        "LeftOut": {
+          "description": "What build left out of the config, one entry per reason.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/LeftOutProjects" }
+        },
+        "Repositories": {
+          "description": "The git repositories holding the scanned projects, with their HEAD at build time.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/RepositoryHead" }
+        }
+      },
+      "required": ["Time", "LrunVersion"],
+      "additionalProperties": false
+    },
+    "LeftOutProjects": {
+      "type": "object",
+      "properties": {
+        "Reason": { "enum": ["test", "filter", "name-collision", "cycle"] },
+        "Projects": { "type": "array", "items": { "type": "string" } },
+        "Paths": {
+          "description": "For a name collision: the paths of the projects sharing the name, relative to the root.",
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        },
+        "Dependents": {
+          "description": "For a name collision or a cycle: the projects kept without their dependency on these.",
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["Reason", "Projects"],
+      "additionalProperties": false
+    },
+    "RepositoryHead": {
+      "type": "object",
+      "properties": {
+        "Path": { "description": "The repository's working directory, relative to RootPath (. for the root itself).", "type": "string" },
+        "Head": { "description": "The commit checked out, or null in a repository without commits.", "type": ["string", "null"] },
+        "Branch": { "description": "The branch checked out, or null when HEAD is detached.", "type": ["string", "null"] }
+      },
+      "required": ["Path", "Head", "Branch"],
+      "additionalProperties": false
+    },
     "ProjectNode": {
       "type": "object",
       "properties": {
@@ -48,6 +116,10 @@
         "Type": {
           "description": "executable when <OutputType> is Exe, else library.",
           "enum": ["library", "executable"]
+        },
+        "Test": {
+          "description": "A test project, kept with build --tests. Absent when false.",
+          "type": "boolean"
         },
         "Version": {
           "description": "The csproj version: <Version>, else <VersionPrefix>[-<VersionSuffix>], else 1.0.0.",

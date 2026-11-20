@@ -29,6 +29,8 @@ public class LocalRunCliTests
     [InlineData("pack", "--nope")]
     [InlineData("pack", "--go", "yes")]
     [InlineData("go", "--nope")]
+    [InlineData("status", "--nope")]
+    [InlineData("status", "stray")]
     [InlineData("up", "--nope")]
     [InlineData("up", "--stop-timeout", "-1")]
     [InlineData("up", "--stop-timeout", "10s")]

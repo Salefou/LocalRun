@@ -22,7 +22,9 @@ public sealed record LeftOutProjects(string Reason, IReadOnlyList<string> Projec
 /// <summary>What <c>build</c> found besides the config: how many projects it scanned, what it left out and why.</summary>
 /// <param name="Scanned">Projects found, test projects and name collisions excluded.</param>
 /// <param name="GitChanges">With <c>--git-changes</c>, the projects found changed.</param>
-public sealed record BuildSummary(int Scanned, IReadOnlyList<LeftOutProjects> LeftOut, IReadOnlyList<string>? GitChanges);
+/// <param name="Csprojs">Full paths of every csproj found, left out ones included.</param>
+public sealed record BuildSummary(int Scanned, IReadOnlyList<LeftOutProjects> LeftOut, IReadOnlyList<string>? GitChanges,
+    IReadOnlyList<string> Csprojs);
 
 /// <summary>The projects a <c>build</c> keeps, before anything is written.</summary>
 /// <param name="Projects">In dependency order: by depth, then by name.</param>
@@ -122,7 +124,7 @@ public class ConfigBuilder
                 logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing kept: the config holds no project");
         }
         return new ProjectSelection(projects, graph.ComputeNameToDepth(),
-            new BuildSummary(scanned.Count, LeftOut(graph, scanned, projects, cycles), gitChanges));
+            new BuildSummary(scanned.Count, LeftOut(graph, scanned, projects, cycles), gitChanges, csprojs));
     }
 
     private static List<LeftOutProjects> LeftOut(DependencyGraph graph, List<ProjectNode> scanned, List<ProjectNode> projects,
@@ -146,6 +148,26 @@ public class ConfigBuilder
         leftOut.AddRange(cycles.Select(cycle => new LeftOutProjects("cycle", cycle.Projects) { Dependents = cycle.Dependents }));
         return leftOut;
     }
+
+    /// <summary>What <c>status</c> shows of a <c>build</c>: its flags, what it found and left out, each repository's HEAD.</summary>
+    public static BuildRecord Record(string rootPath, BuildConfigOptions options, BuildSummary summary, string lrunVersion, DateTimeOffset time) => new()
+    {
+        Time = time,
+        LrunVersion = lrunVersion,
+        Filters = Filters(options),
+        UsersOf = options.RetainDependsOn,
+        DepsOf = options.RetainIsDependencyOf,
+        GitChanges = options.RetainGitChanges,
+        Union = options.Union,
+        WithServices = options.WithServices,
+        IncludeExternal = options.IncludeExternal,
+        Tests = options.IncludeTests,
+        Csproj = options.CsprojVersionsOnly,
+        ChangedProjects = summary.GitChanges?.ToList(),
+        Scanned = summary.Scanned,
+        LeftOut = [.. summary.LeftOut],
+        Repositories = RepositoryHeads.Find(rootPath, summary.Csprojs),
+    };
 
     /// <summary>The filters given to <c>build</c>, as typed (<c>--deps-of WebApp, --with-services</c>), or null without any.</summary>
     internal static string? Filters(BuildConfigOptions options)

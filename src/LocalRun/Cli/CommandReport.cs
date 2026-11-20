@@ -1,5 +1,6 @@
 namespace LocalRun.Cli;
 
+using LocalRun.Core.Graph;
 using LocalRun.Core.Model;
 using LocalRun.Core.Modules;
 using LocalRun.Core.Processing;
@@ -251,8 +252,7 @@ internal sealed record ListResult(
         int executables = selection.Projects.Count(proj => proj.Type == "executable");
         return new(root, filters, selection.Summary.Scanned,
             new ProjectCounts(selection.Projects.Count, selection.Projects.Count - executables, executables),
-            [.. selection.Projects.Select(proj => new ListedProject(proj.Name, proj.PackageIdOrName, proj.Type,
-                selection.Depths[proj.Name], proj.Version.AsVersionString(), proj.Path, proj.SolutionPath, proj.Dependencies))],
+            [.. selection.Projects.Select(proj => ListedProject.Of(proj, selection.Depths[proj.Name]))],
             selection.Summary.LeftOut, selection.Summary.GitChanges);
     }
 }
@@ -261,8 +261,59 @@ internal sealed record ListResult(
 /// <param name="Path">The csproj, relative to the root.</param>
 /// <param name="Solution">Full path of the first solution referencing it, or null.</param>
 /// <param name="Dependencies">As in the config: projects and packages it references, kept or not.</param>
+/// <param name="LatestVersion">The highest version <c>build</c> found on the NuGet sources (<c>status</c>); null in <c>list</c>, which never queries them.</param>
+/// <param name="Test">A test project, kept with <c>--tests</c>.</param>
 internal sealed record ListedProject(string Name, string PackageId, string Type, int Depth, string Version, string Path,
-    string? Solution, IReadOnlyList<string> Dependencies);
+    string? Solution, IReadOnlyList<string> Dependencies, string? LatestVersion, bool Test)
+{
+    public static ListedProject Of(ProjectNode proj, int depth) =>
+        new(proj.Name, proj.PackageIdOrName, proj.Type, depth, proj.Version.AsVersionString(), proj.Path, proj.SolutionPath,
+            proj.Dependencies, proj.LatestVersion?.AsVersionString(), proj.Test);
+}
+
+/// <summary>The result of <c>status</c>: what a config holds and the plan made from it, read from the files alone.</summary>
+/// <param name="Written">When the config file was last written, a hand edit included.</param>
+/// <param name="Build">How <c>build</c> made it, or null for a config written before 0.6.0.</param>
+/// <param name="Projects">In dependency order (depth, then name), with the latest versions <c>build</c> found.</param>
+/// <param name="Plan">The repack plan, or null when there is none.</param>
+internal sealed record StatusResult(
+    string Config,
+    DateTimeOffset Written,
+    string Root,
+    string LocalNuget,
+    BuildRecord? Build,
+    ProjectCounts Counts,
+    IReadOnlyList<ListedProject> Projects,
+    StatusPlan? Plan)
+{
+    public static StatusResult Of(string configPath, DateTimeOffset written, LocalRunConfig config,
+        (string Path, DateTimeOffset Written, RepackConfig Plan)? plan)
+    {
+        var depths = DependencyGraph.FromConfig(config).ComputeNameToDepth();
+        var projects = config.Projects
+            .Select(proj => ListedProject.Of(proj, depths.GetValueOrDefault(proj.Name)))
+            .OrderBy(proj => proj.Depth).ThenBy(proj => proj.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        int executables = projects.Count(proj => proj.Type == "executable");
+        return new(configPath, written, config.RootPath, config.LocalNugetPath, config.Build,
+            new ProjectCounts(projects.Count, projects.Count - executables, executables), projects,
+            plan is { } found ? StatusPlan.Of(found.Path, found.Written, found.Written < written, found.Plan) : null);
+    }
+}
+
+/// <param name="OlderThanConfig">Written before the config: planned from an earlier one (warning <c>plan-older-than-config</c>).</param>
+/// <param name="Clean">Whether go cleans the projects before restoring them (<c>pack --clean</c>).</param>
+/// <param name="Packages">In the order go packs them: by depth, then by name.</param>
+internal sealed record StatusPlan(string Path, DateTimeOffset Written, bool OlderThanConfig, bool Clean, IReadOnlyList<PlannedPackage> Packages)
+{
+    public static StatusPlan Of(string path, DateTimeOffset written, bool olderThanConfig, RepackConfig plan) =>
+        new(path, written, olderThanConfig, plan.Clean, [.. RepackExecutor.Depths(plan).SelectMany(depth => depth)
+            .Select(proj => new PlannedPackage(proj.Name, proj.PackageIdOrName, proj.Depth, proj.FromVersion.AsVersionString(),
+                proj.ToVersion.AsVersionString()))]);
+}
+
+/// <param name="Depth">From 0, as in <c>pack</c>'s result.</param>
+internal sealed record PlannedPackage(string Project, string PackageId, int Depth, string From, string To);
 
 internal sealed record PlotResult(string Plot);
 

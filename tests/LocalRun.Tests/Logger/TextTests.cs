@@ -22,6 +22,17 @@ public class TextTests
         Assert.Equal(expected, Text.Duration(TimeSpan.FromMilliseconds(milliseconds)));
     }
 
+    [Theory]
+    [InlineData(20, "just now")]
+    [InlineData(5 * 60, "5 min ago")]
+    [InlineData(60 * 60, "1 hour ago")]
+    [InlineData(3 * 3600 + 1800, "3 hours ago")]
+    [InlineData(2 * 86400 + 3600, "2 days ago")]
+    public void Age_IsShort(int seconds, string expected)
+    {
+        Assert.Equal(expected, Text.Age(TimeSpan.FromSeconds(seconds)));
+    }
+
     [Fact]
     public void Count_AgreesWithTheNumber()
     {
