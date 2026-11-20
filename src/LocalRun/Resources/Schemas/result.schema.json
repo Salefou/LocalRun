@@ -255,9 +255,38 @@
           "description": "The command's error lines, or its last lines when it printed none (at most 20).",
           "type": "array",
           "items": { "type": "string" }
+        },
+        "errors": {
+          "description": "The error lines in MSBuild's format, as data, each once (at most 50). Empty when none parses: read output.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/BuildError" }
+        },
+        "errorCount": {
+          "description": "How many distinct errors there were: more than errors holds when the cap cut it.",
+          "type": "integer",
+          "minimum": 0
         }
       },
-      "required": ["step", "exitCode", "output"],
+      "required": ["step", "exitCode", "output", "errors", "errorCount"],
+      "additionalProperties": false
+    },
+    "BuildError": {
+      "type": "object",
+      "properties": {
+        "code": { "description": "CS1002, NU1101, MSB4019..., or null when the line has none.", "type": ["string", "null"] },
+        "message": { "type": "string" },
+        "file": {
+          "description": "The file as MSBuild printed it, or null when the origin is a tool (MSBUILD, CSC) or absent.",
+          "type": ["string", "null"]
+        },
+        "line": { "type": ["integer", "null"] },
+        "column": { "type": ["integer", "null"] },
+        "project": {
+          "description": "The project being built when it failed, without its target framework: may be one the failing project references.",
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["code", "message", "file", "line", "column", "project"],
       "additionalProperties": false
     },
     "UpResult": {

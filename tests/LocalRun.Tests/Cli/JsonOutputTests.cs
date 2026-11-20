@@ -377,8 +377,37 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal("restore", failure.GetProperty("step").GetString());
         Assert.NotEqual(0, failure.GetProperty("exitCode").GetInt32());
         Assert.NotEqual(0, failure.GetProperty("output").GetArrayLength());
+        Assert.Contains(failure.GetProperty("errors").EnumerateArray(), error => error.GetProperty("code").GetString()?.StartsWith("NETSDK") == true);
         Assert.Equal("skipped", packages["Top"].GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, packages["Top"].GetProperty("durationMs").ValueKind);
+    }
+
+    [Fact]
+    public async Task Go_GivesACompileError_AsData()
+    {
+        string root = Path.Combine(workDir, "repos");
+        WriteCsproj(root, "Lib", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        string source = Path.Combine(root, "Lib", "Broken.cs");
+        File.WriteAllText(source, "class Broken\n{\n    void M() { Undefined(); }\n}\n");
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", root, "--local-nuget", Path.Combine(workDir, "feed"), "--include-external", "--csproj", "--json")).ExitCode);
+        Assert.Equal(LocalRunCli.ExitSuccess, (await LrunAsync("pack", "--dry-run", "--json")).ExitCode);
+
+        var go = await LrunAsync("go", "--json");
+
+        Assert.Equal(LocalRunCli.ExitDotnetFailed, go.ExitCode);
+        var failure = go.Json.GetProperty("result").GetProperty("packages")[0].GetProperty("failure");
+        Assert.Equal(1, failure.GetProperty("errorCount").GetInt32()); // MSBuild prints it twice
+        var error = failure.GetProperty("errors").EnumerateArray().Single();
+        Assert.Equal("CS0103", error.GetProperty("code").GetString());
+        Assert.Equal(source, error.GetProperty("file").GetString());
+        Assert.Equal((3, 16), (error.GetProperty("line").GetInt32(), error.GetProperty("column").GetInt32()));
+        Assert.Equal(Path.Combine(root, "Lib", "Lib.csproj"), error.GetProperty("project").GetString());
+        Assert.Contains("Undefined", error.GetProperty("message").GetString());
     }
 
     private string WriteLibAndApp()
