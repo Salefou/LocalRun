@@ -13,6 +13,12 @@ bumps the minor version, anything else the patch.
   after Ctrl+C before killing the processes still running (default `10`, as before).
 - `pack` warns (`planned-below-base`) when, without a bump flag, a prerelease base gets a lower label on the same
   version (`1.0.1-q.2` → `1.0.1-local.1`): a restore of the latest wouldn't pick it. `--next` plans above it.
+- `--log-level <level>` on every command (before or after its name), and `logLevel` in the settings for your default.
+
+### Removed
+
+- **Breaking:** the `LOCALRUN_LOG_LEVEL` environment variable, now ignored: use `--log-level` (e.g. in CI scripts) or
+  `logLevel` in the settings.
 
 ## [0.5.1] - 2026-11-12
 

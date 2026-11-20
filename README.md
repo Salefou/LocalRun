@@ -246,8 +246,8 @@ General form: `lrun <command> [options]`.
 - **Relative paths are resolved against the current directory** — not against the location of the
   tool or of the config file.
 - Values containing spaces must be quoted by your shell: `--root "C:\My Repos"`.
-- Every command also takes `--json` and `--strict`, before or after the command name: see
-  [Machine output](#machine-output---json) and [Diagnostic codes](#diagnostic-codes).
+- Every command also takes `--json`, `--strict` and `--log-level <level>`, before or after the command name: see
+  [Machine output](#machine-output---json), [Diagnostic codes](#diagnostic-codes) and [Logging](#logging).
 
 ### `build`
 
@@ -606,14 +606,17 @@ it on every command:
   // Prerelease label 'pack' gives the planned versions (default: local)
   "suffix": "local",
   // Seconds 'up' waits after Ctrl+C before killing the processes still running (default: 10)
-  "stopTimeout": 10
+  "stopTimeout": 10,
+  // Least important logs every command prints: Trace, Debug, Information, Warning, Error, Critical or None (default: Information)
+  "logLevel": "Information"
 }
 ```
 
 The file is created with all of it commented out, and never overwritten. Comments and trailing commas are allowed;
-an unknown key or a bad value fails the command that reads it (`build`, `pack`, `up`) with the file's path. Paths are
+an unknown key or a bad value fails the command that reads it (`build`, `pack`, `up`) with the file's path; the
+others then log at `Information`, and `lrun doctor` points at the file. Paths are
 absolute or start with `~`; a relative one would depend on where you run `lrun` from. An option on the command
-line (`--local-nuget`, `--root`, `--suffix`, `--stop-timeout`) always wins.
+line (`--local-nuget`, `--root`, `--suffix`, `--stop-timeout`, `--log-level`) always wins.
 
 | Option | Description |
 |---|---|
@@ -960,8 +963,7 @@ $plan.RepackTrees.Projects | Format-Table Name, Depth
 
 ```sh
 set -e                                   # any non-zero exit code stops the job
-export LOCALRUN_LOG_LEVEL=Debug          # full stack traces on failure
-lrun build --strict --root "$WORKSPACE/repos" --config "$WORKSPACE/out/localrun.config.json"
+lrun build --strict --log-level Debug --root "$WORKSPACE/repos" --config "$WORKSPACE/out/localrun.config.json"
 lrun plot --config "$WORKSPACE/out/localrun.config.json" --output "$WORKSPACE/out/dependencies"
 ```
 
@@ -982,12 +984,13 @@ went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` fa
 output is redirected (a pipe, a file, CI), the output is plain: no colours, `[DBG]` / `[WRN]` / `[ERR]` prefixes,
 and the marks become `>`, `+`, `ok`, `FAILED`, `-` and `->`. `NO_COLOR` turns the colours off on a terminal too (the prefixes come back).
 
-The minimum level is `Information`. Override it with the `LOCALRUN_LOG_LEVEL` environment variable
-(`Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`, `None`). `Debug` adds timings and the
-full stack trace of a failing command.
+The minimum level is `Information`. Every command takes `--log-level <level>` (`Trace`, `Debug`, `Information`,
+`Warning`, `Error`, `Critical`, `None`, in any case), and `logLevel` in your [settings](#settings) sets your default.
+`Debug` adds timings and the full stack trace of a failing command. The `LOCALRUN_LOG_LEVEL` environment variable is
+gone since 0.6.0: it is ignored.
 
 ```powershell
-$env:LOCALRUN_LOG_LEVEL = "Debug"; lrun build
+lrun build --log-level Debug
 ```
 
 ---

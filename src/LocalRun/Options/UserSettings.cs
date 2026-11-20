@@ -15,7 +15,9 @@ public sealed class SettingsInvalidException(string message) : Exception(message
 /// <param name="Root">Default of <c>build --root</c>. Absolute, or starting with <c>~</c>.</param>
 /// <param name="Suffix">Default of <c>pack --suffix</c>.</param>
 /// <param name="StopTimeout">Default of <c>up --stop-timeout</c>: seconds <c>up</c> waits after Ctrl+C before killing what still runs; 0 or more.</param>
-public sealed record UserSettings(string? LocalNuget = null, string? Root = null, string? Suffix = null, int? StopTimeout = null)
+/// <param name="LogLevel">Default of <c>--log-level</c>, for every command: one of <see cref="Logger.Log.LevelNames"/>.</param>
+public sealed record UserSettings(string? LocalNuget = null, string? Root = null, string? Suffix = null, int? StopTimeout = null,
+    string? LogLevel = null)
 {
     /// <summary>Overrides <see cref="DefaultPath"/>; also how tests and hand testing keep clear of the real file.</summary>
     internal const string PathVariable = "LOCALRUN_SETTINGS";
@@ -53,7 +55,11 @@ public sealed record UserSettings(string? LocalNuget = null, string? Root = null
           // "suffix": "local",
 
           // Seconds 'up' waits after Ctrl+C before killing the processes still running (default: 10)
-          // "stopTimeout": 10
+          // "stopTimeout": 10,
+
+          // Least important logs every command prints: Trace, Debug, Information, Warning, Error, Critical or None.
+          // Debug adds timings and the stack trace of a failure (default: Information)
+          // "logLevel": "Information"
         }
         """;
 
@@ -80,6 +86,8 @@ public sealed record UserSettings(string? LocalNuget = null, string? Root = null
                 RepackOptionsParser.EnsureValidSuffix(settings.Suffix, "suffix");
             if (settings.StopTimeout < 0)
                 throw new UsageException($"'stopTimeout' must be a number of seconds, 0 or more (got {settings.StopTimeout}).");
+            if (settings.LogLevel != null && Logger.Log.ParseLevel(settings.LogLevel) == null)
+                throw new UsageException($"'logLevel' must be one of {string.Join(", ", Logger.Log.LevelNames)} (got '{settings.LogLevel}').");
             return settings with
             {
                 LocalNuget = ResolvePath(settings.LocalNuget, "localNuget"),

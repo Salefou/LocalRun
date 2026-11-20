@@ -5,17 +5,23 @@ using Microsoft.Extensions.Logging.Console;
 using System;
 
 /// <summary>
-/// Logging entry point. The minimum level defaults to Information and can be overridden
-/// with the LOCALRUN_LOG_LEVEL environment variable (Trace, Debug, Information, Warning, Error, Critical, None).
+/// Logging entry point. The minimum level is <see cref="MinimumLevel"/>, set by <c>Main</c> from <c>--log-level</c> or the
+/// settings (<see cref="LevelNames"/>).
 /// Warnings and errors are also collected (<see cref="Diagnostics"/>). In JSON mode (<see cref="OutputMode"/>), every log goes to stderr.
 /// </summary>
 public static class Log
 {
-    private const string MinimumLevelVariable = "LOCALRUN_LOG_LEVEL";
+    public const string LevelOption = "--log-level";
+
+    /// <summary>The level names <see cref="LevelOption"/> and the <c>logLevel</c> setting accept, in any case.</summary>
+    public static readonly string[] LevelNames = Enum.GetNames<LogLevel>();
 
     private static readonly DiagnosticsCollector collector = new();
 
-    // Created on first use, not by the type initializer, so that Main has set the output mode by then
+    /// <summary>Read once, when the first logger is created: set it before anything logs.</summary>
+    public static LogLevel MinimumLevel { get; set; } = LogLevel.Information;
+
+    // Created on first use, not by the type initializer, so that Main has set the output mode and level by then
     private static readonly Lazy<ILoggerFactory> Factory = new(CreateFactory);
 
     public static ILogger<T> For<T>() => Factory.Value.CreateLogger<T>();
@@ -38,7 +44,7 @@ public static class Log
     private static ILoggerFactory CreateFactory() => LoggerFactory.Create(builder =>
     {
         builder
-            .SetMinimumLevel(ReadMinimumLevel())
+            .SetMinimumLevel(MinimumLevel)
             .AddConsole(options =>
             {
                 options.FormatterName = LocalRunConsoleFormatter.FormatterName;
@@ -50,10 +56,28 @@ public static class Log
         builder.AddProvider(collector);
     });
 
-    private static LogLevel ReadMinimumLevel()
+    /// <summary>The level of a name of <see cref="LevelNames"/>, in any case; null for anything else (numbers included).</summary>
+    public static LogLevel? ParseLevel(string? name) =>
+        LevelNames.FirstOrDefault(level => level.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } match
+            ? Enum.Parse<LogLevel>(match)
+            : null;
+
+    /// <summary>
+    /// The level a command line asks for (<see cref="LevelOption"/>, anywhere), else the settings', else Information.
+    /// A bad value is ignored here: the command reports it (usage error, invalid settings) once logging works.
+    /// </summary>
+    public static LogLevel ChooseLevel(string[] args, Func<string?> settingsLevel)
     {
-        return Enum.TryParse(Environment.GetEnvironmentVariable(MinimumLevelVariable), ignoreCase: true, out LogLevel level)
-            ? level
-            : LogLevel.Information;
+        int index = Array.IndexOf(args, LevelOption);
+        if (index >= 0)
+            return ParseLevel(index + 1 < args.Length ? args[index + 1] : null) ?? LogLevel.Information;
+        try
+        {
+            return ParseLevel(settingsLevel()) ?? LogLevel.Information;
+        }
+        catch (Exception)
+        {
+            return LogLevel.Information;
+        }
     }
 }
