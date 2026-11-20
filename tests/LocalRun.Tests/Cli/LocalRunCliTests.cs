@@ -1,4 +1,4 @@
-namespace LocalRun.Tests.Cli;
+﻿namespace LocalRun.Tests.Cli;
 
 using LocalRun.Cli;
 
@@ -40,6 +40,13 @@ public class LocalRunCliTests
     [InlineData("version", "--nope")]
     [InlineData("settings", "--nope")]
     [InlineData("settings", "--path", "yes")]
+    [InlineData("help", "--nope")]
+    [InlineData("help", "build")]
+    [InlineData("version", "stray")]
+    [InlineData("schema")]
+    [InlineData("schema", "nope")]
+    [InlineData("schema", "config", "repack")]
+    [InlineData("schema", "--nope", "config")]
     public async Task Commands_RejectBadOptionsBeforeDoingAnyWork(params string[] args)
     {
         Assert.Equal(LocalRunCli.ExitUsage, await LocalRunCli.RunAsync(args));

@@ -124,6 +124,21 @@ internal static class ErrorCodes
     /// <summary>Any other failure (exit code 1).</summary>
     public const string CommandFailed = "command-failed";
 
+    /// <summary>Every code with its exit code and meaning, as <c>help --json</c> lists them.</summary>
+    public static IReadOnlyList<ErrorCode> All { get; } =
+    [
+        new(Usage, LocalRunCli.ExitUsage, "Invalid command line: an unknown command or option, a missing or malformed value."),
+        new(ConfigNotFound, LocalRunCli.ExitInput, "A config file to read is missing: run the command that writes it first."),
+        new(ConfigInvalid, LocalRunCli.ExitInput, "A config file to read is empty, not valid JSON, or written by a newer lrun."),
+        new(RootNotFound, LocalRunCli.ExitInput, "The directory to scan doesn't exist."),
+        new(SettingsInvalid, LocalRunCli.ExitInput, "The settings file can't be read or holds an invalid value."),
+        new(DotnetFailed, LocalRunCli.ExitDotnetFailed, "A dotnet command failed: fix the code or the project, retrying won't help."),
+        new(Strict, LocalRunCli.ExitStrict, "--strict: the command completed, but its result left something out or may be wrong."),
+        new(VerifyFailed, LocalRunCli.ExitVerifyFailed, "verify: a library's package is missing from the local feed, or stale."),
+        new(DoctorFailed, LocalRunCli.ExitFailure, "doctor: a setup check failed."),
+        new(CommandFailed, LocalRunCli.ExitFailure, "Any other failure."),
+    ];
+
     public static (string Code, int ExitCode) Of(Exception exception) => exception switch
     {
         VerifyFailedException => (VerifyFailed, LocalRunCli.ExitVerifyFailed),
@@ -137,6 +152,9 @@ internal static class ErrorCodes
         _ => (CommandFailed, LocalRunCli.ExitFailure),
     };
 }
+
+/// <param name="ExitCode">The process exit code that goes with it: several codes share one.</param>
+internal sealed record ErrorCode(string Code, int ExitCode, string Meaning);
 
 internal sealed class ConfigNotFoundException(string message) : FileNotFoundException(message);
 
@@ -166,7 +184,12 @@ internal sealed record DoctorResult(string Root, string LocalNuget, int Ok, int 
     }
 }
 
-internal sealed record HelpResult(string Help);
+/// <param name="Help">The help text, as <c>lrun help</c> prints it; the other fields hold the same as data.</param>
+internal sealed record HelpResult(string Help, IReadOnlyList<OptionInfo> GlobalOptions, IReadOnlyList<CommandInfo> Commands,
+    IReadOnlyList<ExitCodeInfo> ExitCodes, IReadOnlyList<ErrorCode> ErrorCodes, IReadOnlyList<DiagnosticCode> DiagnosticCodes);
+
+/// <param name="Name">One of <see cref="Schemas.Names"/>.</param>
+internal sealed record SchemaResult(string Name, JsonElement Schema);
 
 internal sealed record VersionResult(string Version);
 

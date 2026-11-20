@@ -1,4 +1,4 @@
-namespace LocalRun.Tests.Cli;
+﻿namespace LocalRun.Tests.Cli;
 
 using LocalRun.Cli;
 using System.Diagnostics;
@@ -41,7 +41,27 @@ public sealed class JsonOutputTests : IDisposable
         var stderr = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
         await copy;
-        return new(process.ExitCode, stdout.ToArray(), await stderr);
+        var run = new Run(process.ExitCode, stdout.ToArray(), await stderr);
+        if (args.Contains("--json"))
+            AssertMatchesTheResultSchema(run.Stdout);
+        return run;
+    }
+
+    /// <summary>Every document, and every event of <c>up</c>, has only the fields <c>lrun schema result</c> declares.</summary>
+    private static void AssertMatchesTheResultSchema(byte[] stdout)
+    {
+        var schema = Schemas.Of(Schemas.Result);
+        var lines = Encoding.UTF8.GetString(stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        bool streamed = lines.Length > 1 && lines.All(line => line.TrimStart().StartsWith('{') && line.TrimEnd().EndsWith('}'));
+        if (!streamed)
+        {
+            Assert.Empty(Schemas.UnknownFields(schema, JsonDocument.Parse(stdout).RootElement));
+            return;
+        }
+        var upEvent = schema.GetProperty("$defs").GetProperty("UpEvent");
+        foreach (var line in lines[..^1])
+            Assert.Empty(Schemas.UnknownFields(upEvent, JsonDocument.Parse(line).RootElement));
+        Assert.Empty(Schemas.UnknownFields(schema, JsonDocument.Parse(lines[^1]).RootElement));
     }
 
     private static void AssertPlain(Run run)
@@ -164,12 +184,58 @@ public sealed class JsonOutputTests : IDisposable
     }
 
     [Fact]
-    public async Task Help_IsTheResult()
+    public async Task Help_IsTheResult_AsTextAndAsData()
     {
         var run = await LrunAsync("help", "--json");
 
         Assert.Equal(LocalRunCli.ExitSuccess, run.ExitCode);
-        Assert.Contains("--json", run.Json.GetProperty("result").GetProperty("help").GetString());
+        var help = run.Json.GetProperty("result");
+        Assert.Contains("--json", help.GetProperty("help").GetString());
+        var build = help.GetProperty("commands").EnumerateArray().Single(command => command.GetProperty("name").GetString() == "build");
+        var usersOf = build.GetProperty("options").EnumerateArray().Single(option => option.GetProperty("name").GetString() == "--users-of");
+        Assert.Equal(("values", "<names>"), (usersOf.GetProperty("kind").GetString(), usersOf.GetProperty("value").GetString()));
+        Assert.Contains(help.GetProperty("globalOptions").EnumerateArray(), option => option.GetProperty("name").GetString() == "--strict");
+        Assert.Contains(help.GetProperty("exitCodes").EnumerateArray(), exit => exit.GetProperty("code").GetInt32() == LocalRunCli.ExitVerifyFailed);
+        var usage = help.GetProperty("errorCodes").EnumerateArray().Single(code => code.GetProperty("code").GetString() == "usage");
+        Assert.Equal(LocalRunCli.ExitUsage, usage.GetProperty("exitCode").GetInt32());
+        var collision = help.GetProperty("diagnosticCodes").EnumerateArray().Single(code => code.GetProperty("code").GetString() == "name-collision");
+        Assert.True(collision.GetProperty("strict").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Schema_PrintsTheSchemaAsIs_OrAsTheResult()
+    {
+        var plain = await LrunAsync("schema", "config");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, plain.ExitCode);
+        Assert.Equal(Schemas.Text(Schemas.Config), Encoding.UTF8.GetString(plain.Stdout));
+
+        var json = await LrunAsync("--json", "schema", "result");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, json.ExitCode);
+        var result = json.Json.GetProperty("result");
+        Assert.Equal("result", result.GetProperty("name").GetString());
+        Assert.Equal("lrun --json document", result.GetProperty("schema").GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task UnknownConfigFields_AreIgnoredWithAWarning_ThatStrictRefuses()
+    {
+        Directory.CreateDirectory(Path.Combine(workDir, ".lrun"));
+        File.WriteAllText(Path.Combine(workDir, ".lrun", "localrun.config.json"), """
+            { "RootPath": "r", "LocalNugetPath": "f", "Projects": [], "SkipRun": [] }
+            """);
+
+        var run = await LrunAsync("plot", "--json", "--output", Path.Combine(workDir, "graph"));
+
+        Assert.Equal(LocalRunCli.ExitSuccess, run.ExitCode);
+        var warning = Assert.Single(run.Json.GetProperty("diagnostics").EnumerateArray());
+        Assert.Equal("unknown-config-field", warning.GetProperty("code").GetString());
+        Assert.Contains("$.SkipRun", warning.GetProperty("message").GetString());
+
+        var strict = await LrunAsync("plot", "--json", "--strict", "--output", Path.Combine(workDir, "graph"));
+
+        Assert.Equal(LocalRunCli.ExitStrict, strict.ExitCode);
     }
 
     [Fact]

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "settings.json",
+  "description": "Per-user defaults of lrun (~/.lrun/settings.json, or LOCALRUN_SETTINGS), created by 'lrun settings'. Comments and trailing commas are allowed, key case is ignored, an unknown key fails. An option given on the command line always wins.",
+  "type": "object",
+  "properties": {
+    "localNuget": {
+      "description": "Default of build --local-nuget (default: ~/.localnuget). Absolute, or starting with ~.",
+      "type": ["string", "null"]
+    },
+    "root": {
+      "description": "Default of build --root (default: the current directory). Absolute, or starting with ~.",
+      "type": ["string", "null"]
+    },
+    "suffix": {
+      "description": "Default of pack --suffix (default: local).",
+      "type": ["string", "null"],
+      "pattern": "^[0-9A-Za-z][0-9A-Za-z-]*(\\.[0-9A-Za-z-]+)*$"
+    },
+    "stopTimeout": {
+      "description": "Default of up --stop-timeout: seconds up waits after Ctrl+C before killing what still runs (default: 10).",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "logLevel": {
+      "description": "Default of --log-level, for every command (default: Information). lrun ignores the case; these are the canonical names.",
+      "type": ["string", "null"],
+      "enum": ["Trace", "Debug", "Information", "Warning", "Error", "Critical", "None", null]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,4 +1,4 @@
-# Roadmap
+﻿# Roadmap
 
 Feature requests and candidate tasks for LocalRun, so that none lives only in a chat. Nothing here is decided or
 started unless it says so: propose it, don't build it silently (see "Known issues / candidate tasks" in `CLAUDE.md`).
@@ -17,7 +17,7 @@ parse, failures it can classify, queries that don't write anything, and services
    `verify` shipped (unreleased); `status` waits for its goal to be confirmed.
 3. **`--since`** (4): extends `GitChangeDetector`, independent of the rest. Postponed (see 4).
 4. The agent-oriented additions (A1–A8) once 1–2 exist; A1 (queries) and A4 (service logs on disk) first, they are cheap.
-   A1 shipped as `lrun list`, A4's plain logs in 0.5.0.
+   A1 shipped as `lrun list`, A4's plain logs in 0.5.0, A6 as `help --json` and `lrun schema` (unreleased).
 
 ## Breaking for 1.0?
 
@@ -35,8 +35,8 @@ is accepted. Decide these before 1.0, or commit to their additive form:
 - **6, cycles**: decided not fixed; revisiting it ("leave out what reaches a cycle") shrinks `build`'s selection.
 - **A4, levels as NDJSON**: `.lrun/logs/<name>.log` is documented and the `started` event points to it. Additive as a
   second file or a flag, breaking if it replaces the plain file.
-- **A6, validating configs on read**: configs that load today (unknown fields, old `SkipRepack`) would be rejected.
-  Additive if it warns with a diagnostic code instead.
+- **A6, validating configs on read**: decided additive (user feedback, 2026-11-20): unknown fields warn
+  `unknown-config-field`, which `--strict` refuses; configs that loaded still load.
 
 Not on this roadmap yet, and breaking whichever way they are decided, so they are the real 1.0 blockers:
 
@@ -50,8 +50,7 @@ with `config-invalid`. Migrating an older one when the shape changes is left to 
 
 Everything else is additive: 3 (`status`, and the config recording its build flags, time and
 HEADs as optional fields), 4's flags, 5's `--fix` and source commit, A1's `--config`, A2 (new `--json` fields, no
-`schemaVersion` bump), A3 (as long as `up` stays in the foreground by default), A5, A6's `help --json` / `schema`,
-A7, A8, the MCP server.
+`schemaVersion` bump), A3 (as long as `up` stays in the foreground by default), A5, A7, A8, the MCP server.
 
 ---
 
@@ -199,11 +198,31 @@ e.g. as NDJSON with service, level and time, to filter by level or diff two runs
 projects in the config, or of the affected ones, in dependency order, with a parsed summary (A2): the loop "I changed
 library X → repack → run what depends on it" closes without a CI.
 
-### A6. Self-description **(claude)**
-`lrun help --json` (commands, options, exit codes, error codes) and `lrun schema config|repack|result` printing the JSON
-Schemas of the files. An agent can then use the tool without reading the README, and the hand-editable config files
-(the contract between steps) get validated on read with a message that names the bad field. A short `AGENTS.md` /
-skill in the repo telling an agent the loop (`build` → `pack` → `go` → `up`, read `status` first) would complement it.
+### A6. Self-description **(claude)**: shipped (unreleased)
+`help --json` returns the commands, options, exit, error and diagnostic codes as data; `lrun schema
+config|repack|result|settings` prints hand-written JSON Schemas; unknown config fields warn `unknown-config-field`.
+Decisions (user feedback, 2026-11-20):
+- Unknown fields warn (strict) rather than fail, so configs that load today keep loading. Wrong types already failed
+  (`config-invalid`, the message naming the path); missing fields are not checked.
+- Schemas written by hand as resources, tested against the serialized types: .NET 8 has no schema exporter
+  (`JsonSchemaExporter` is .NET 9), and a package for it wasn't worth the dependency.
+- One description of the commands (`CommandCatalog`) renders the text help and fills `help --json`; a test checks it
+  against the options each command reads.
+- No `AGENTS.md` in this repository: there it would read as instructions for working *on* LocalRun. README "From an
+  agent" gives a snippet for users to paste into their own workspace's instructions instead.
+
+Next, not started (user feedback, 2026-11-20): let an agent update its own instructions about `lrun` from the install
+alone, offline, when asked. Both reached through commands, not files in the package: a file packed into the nupkg lands
+in the tool store (`~/.dotnet/tools/.store/...`, a path that changes with the version and the install mode), where no
+agent looks. PACKAGE.md was ruled out too: same place, and it is the nuget.org page.
+- `lrun changelog [--since <version>]`, its own command (not a `help` flag: a different question, a result of its own
+  shape): CHANGELOG.md embedded in the tool, printing the sections after that version; `--json` gives them as data
+  (version, date, entries by kind). A local build shows `[Unreleased]` too, labelled as such.
+- The agent snippet as one embedded text: `lrun help --agent` prints it as markdown, `help --json` carries it in a new
+  field (additive). It starts with a stamp (`<!-- written for lrun 0.6.0 -->`); a test keeps README "From an agent"
+  word for word equal to it. Kept short, pointing to `help --json` for details, so a release asks for a small rewrite.
+- The loop it enables: read the stamp in the user's file, compare with `lrun version`, read
+  `lrun changelog --since <stamp>`, rewrite from `lrun help --agent` keeping the user's own additions.
 
 ### A7. `lrun doctor` **(claude)**: shipped (unreleased)
 Setup checks with `ok|warn|fail` and a hint each: SDK (as the root's `global.json` pins it), settings, root, local feed

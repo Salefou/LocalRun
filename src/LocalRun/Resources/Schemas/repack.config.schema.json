@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "repack.config.json",
+  "description": "The plan written by 'lrun pack', read by go: what to pack, in which order, to which version. Useful hand edits: change a ToVersion, or delete a project before go.",
+  "type": "object",
+  "properties": {
+    "SchemaVersion": {
+      "description": "Shape of the file. Absent in files written before 0.5.1, which read as 1. A version newer than the lrun reading it is refused (config-invalid).",
+      "type": "integer",
+      "minimum": 1
+    },
+    "LocalNugetPath": {
+      "description": "The local NuGet feed to pack into, absolute.",
+      "type": "string"
+    },
+    "RepackTrees": {
+      "description": "One per connected part of the graph; go packs them depth by depth together.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/RepackTree" }
+    },
+    "Clean": {
+      "description": "Whether each project is cleaned before its restore (pack --clean).",
+      "type": "boolean"
+    }
+  },
+  "required": ["LocalNugetPath", "RepackTrees", "Clean"],
+  "additionalProperties": false,
+  "$defs": {
+    "RepackTree": {
+      "type": "object",
+      "properties": {
+        "Projects": {
+          "description": "Sorted by depth, then path.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/ProjectRepack" }
+        }
+      },
+      "required": ["Projects"],
+      "additionalProperties": false
+    },
+    "ProjectRepack": {
+      "type": "object",
+      "properties": {
+        "PathToCsproj": {
+          "description": "The csproj, absolute.",
+          "type": "string"
+        },
+        "Name": { "type": "string" },
+        "PackageId": {
+          "description": "The id it is packed under, only when it isn't the name.",
+          "type": "string"
+        },
+        "SolutionPath": {
+          "description": "The project's solution, whose $(SolutionDir) its dotnet commands get; null when none references it.",
+          "type": ["string", "null"]
+        },
+        "Depth": {
+          "description": "From 0: a depth is packed once the previous one is.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "FromVersion": {
+          "description": "The base version the plan started from.",
+          "$ref": "#/$defs/ProjectVersion"
+        },
+        "ToVersion": {
+          "description": "The version it is packed as.",
+          "$ref": "#/$defs/ProjectVersion"
+        }
+      },
+      "required": ["PathToCsproj", "Name", "Depth", "FromVersion", "ToVersion"],
+      "additionalProperties": false
+    },
+    "ProjectVersion": {
+      "description": "A version split as Major.Minor.PatchAndSuffix: 1.4.3-dev.2 is 1, 4, \"3-dev.2\".",
+      "type": "object",
+      "properties": {
+        "Major": { "type": "integer", "minimum": 0 },
+        "Minor": { "type": "integer", "minimum": 0 },
+        "PatchAndSuffix": {
+          "description": "The patch number, then the prerelease label and build metadata if any.",
+          "type": "string"
+        }
+      },
+      "required": ["Major", "Minor", "PatchAndSuffix"],
+      "additionalProperties": false
+    }
+  }
+}

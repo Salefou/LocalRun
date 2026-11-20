@@ -36,6 +36,7 @@ branch) instead of naming them.
 
 For scripts, pipelines and agents: every command takes `--json` (one JSON document on stdout, logs on stderr; `up`
 streams one event per line) and `--strict` (fail with exit code 5 when the result left something out). Exit codes
-tell a missing input (3) from a build error (4).
+tell a missing input (3) from a build error (4). `lrun help --json` describes every command, option and code as data,
+and `lrun schema config|repack|result|settings` prints the JSON Schema of each file.
 
 Full documentation, versioning rules and known limitations: https://github.com/Salefou/LocalRun#readme
