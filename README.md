@@ -531,7 +531,7 @@ the services, as `docker compose up` does for containers:
    or after, to see what one service said.
 3. **Wait** until they have all exited. One-shot jobs simply finish; services run until you press
    **Ctrl+C**. They all receive it (they share the console). Whatever is still running 10 seconds later
-   is killed, with its child processes. Ctrl+C during the builds stops `up` before anything starts.
+   (`stopTimeout` in your [settings](#settings)) is killed, with its child processes. Ctrl+C during the builds stops `up` before anything starts.
 
 A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
@@ -603,14 +603,17 @@ it on every command:
   // Directory 'build' scans for projects (default: the current directory)
   "root": "~/source/repos",
   // Prerelease label 'pack' gives the planned versions (default: local)
-  "suffix": "local"
+  "suffix": "local",
+  // Seconds 'up' waits after Ctrl+C before killing the processes still running (default: 10)
+  "stopTimeout": 10
 }
 ```
 
 The file is created with all of it commented out, and never overwritten. Comments and trailing commas are allowed;
-an unknown key or a bad value fails the command that reads it (`build`, `pack`) with the file's path. Paths are
+an unknown key or a bad value fails the command that reads it (`build`, `pack`, `up`) with the file's path. Paths are
 absolute or start with `~`; a relative one would depend on where you run `lrun` from. An option on the command
-line (`--local-nuget`, `--root`, `--suffix`) always wins.
+line (`--local-nuget`, `--root`, `--suffix`) always wins. `stopTimeout` is a whole number of seconds, `0` or more
+(`0` kills right away); it has no command-line option.
 
 | Option | Description |
 |---|---|

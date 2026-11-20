@@ -437,12 +437,15 @@ public static class LocalRunCli
         string logsFolder = Path.GetFullPath(args.Value("--logs") ?? DefaultLogsFolder);
         args.EnsureAllConsumed();
 
+        int? stopTimeout = UserSettings.Load().StopTimeout;
+
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
         // Creates the folder, and the work folder's .gitignore when the logs are in it
         PrepareFolderOf(Path.Combine(logsFolder, "_"));
         // With --json, events stream on stdout as they happen: an agent sees the services start without waiting for the end
         var events = OutputMode.Json ? new EventStream(Console.Out) : null;
-        var processor = new RunProcessor(logsFolder, events == null ? null : events.Write);
+        var processor = new RunProcessor(logsFolder, events == null ? null : events.Write,
+            stopTimeout == null ? null : TimeSpan.FromSeconds(stopTimeout.Value));
         try
         {
             await processor.RunAsync(config, exclude, only);
@@ -680,7 +683,8 @@ public static class LocalRunCli
         writer.WriteLine();
 
         writer.WriteLine("  up [options]");
-        writer.WriteLine("      Build the executables of a config file, then run them side by side; Ctrl+C stops them all.");
+        writer.WriteLine("      Build the executables of a config file, then run them side by side; Ctrl+C stops them all,");
+        writer.WriteLine("      killing what still runs after 10 seconds (stopTimeout in your settings).");
         writer.WriteLine("      Each one's output also goes to <logs>/<name>.log. With --json, stdout gets one line per event");
         writer.WriteLine("      (building, started, running, stopping, exited), then the result on one line.");
         writer.WriteLine("      Options:");
@@ -692,7 +696,8 @@ public static class LocalRunCli
 
         writer.WriteLine("  settings [options]");
         writer.WriteLine("      Create your settings file if missing (all commented out), then open it. It holds what differs");
-        writer.WriteLine("      from one user to the next: the local NuGet feed, the root to scan, the default suffix.");
+        writer.WriteLine("      from one user to the next: the local NuGet feed, the root to scan, the default suffix,");
+        writer.WriteLine("      how long up waits after Ctrl+C before killing the processes.");
         writer.WriteLine("      An option given on the command line always wins over it.");
         writer.WriteLine("      Options:");
         writer.WriteLine($"        --path                  Only print where the file is (default: ~/.lrun/settings.json, or ${UserSettings.PathVariable})");

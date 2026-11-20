@@ -36,6 +36,7 @@ public class UserSettingsTests : IDisposable
               // my feed
               "LocalNuget": {{System.Text.Json.JsonSerializer.Serialize(feed)}},
               "suffix": "dev.2",
+              "stopTimeout": 30,
             }
             """);
 
@@ -43,6 +44,7 @@ public class UserSettingsTests : IDisposable
 
         Assert.Equal(feed, settings.LocalNuget);
         Assert.Equal("dev.2", settings.Suffix);
+        Assert.Equal(30, settings.StopTimeout);
         Assert.Null(settings.Root);
     }
 
@@ -59,6 +61,8 @@ public class UserSettingsTests : IDisposable
     [InlineData("""{ "localNuget": "feed" }""")]
     [InlineData("""{ "root": "..\\repos" }""")]
     [InlineData("""{ "suffix": "-dev" }""")]
+    [InlineData("""{ "stopTimeout": -1 }""")]
+    [InlineData("""{ "stopTimeout": "10s" }""")]
     [InlineData("""{ "localnuget2": "~" }""")]
     [InlineData("{ not json")]
     public void BadSettings_Fail_NamingTheFile(string content)
