@@ -100,6 +100,12 @@ public static class DiagnosticEvents
     /// <summary><c>doctor</c>: a check that will make a command fail (no SDK, a source unreachable, the feed not writable).</summary>
     public static readonly EventId DoctorFailure = new(151, "doctor-failure");
 
+    /// <summary>
+    /// <c>pack</c>: a planned version sorts below its prerelease base on the same version, its label being lower
+    /// (<c>1.0.1-q.2</c> → <c>1.0.1-local.1</c>): what you asked for, but a restore of the latest won't pick it.
+    /// </summary>
+    public static readonly EventId PlannedBelowBase = new(160, "planned-below-base");
+
     /// <summary>The codes <c>--strict</c> turns into a failure (exit code 5): the result left something out, or may be wrong.</summary>
     public static readonly IReadOnlySet<string> Strict = new HashSet<string>(StringComparer.Ordinal)
     {

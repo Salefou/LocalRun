@@ -58,6 +58,14 @@ internal class RepackConfigBuilder
                 toVersions[name] = toVersions[name] with { PatchAndSuffix = $"{toVersions[name].PatchAndSuffix}.{iteration}" };
         }
 
+        var below = toVersions.Keys.Where(name => SortsBelowItsPrereleaseBase(fromVersions[name], toVersions[name])).ToList();
+        if (below.Count != 0)
+        {
+            string example = $"{fromVersions[below[0]].AsVersionString()} {Terminal.Arrow} {toVersions[below[0]].AsVersionString()}";
+            logger.LogWarning(DiagnosticEvents.PlannedBelowBase, "The planned version sorts below the latest for {Count} project(s) ({Example}): its label is lower, so a restore of the latest version won't pick it. --next plans above it. {Projects}",
+                below.Count, example, Text.Abbreviate(below, shown: 5));
+        }
+
         List<RepackTree> repackTrees = [];
         Dictionary<string, int> nameToDepth = dependencyGraph.ComputeNameToDepth();
         foreach (var projTree in dependencyGraph.ConnectedComponents)
@@ -136,6 +144,18 @@ internal class RepackConfigBuilder
             && csproj.Version > found.Version;
         return csprojAhead ? (project.Version, true) : (latest, false);
     }
+
+    /// <summary>
+    /// Whether <paramref name="to"/> is the prerelease base <paramref name="from"/>'s version with a label sorting below
+    /// (<c>1.0.1-q.2</c> → <c>1.0.1-local.1</c>). A release getting a prerelease of itself (<c>1.4.2</c> →
+    /// <c>1.4.2-local.1</c>, the default <c>pack</c>) sorts below it too, but is expected: not reported.
+    /// </summary>
+    internal static bool SortsBelowItsPrereleaseBase(ProjectVersion from, ProjectVersion to) =>
+        NuGetVersion.TryParse(from.AsVersionString(), out var fromVersion)
+        && NuGetVersion.TryParse(to.AsVersionString(), out var toVersion)
+        && fromVersion.IsPrerelease
+        && toVersion.Version == fromVersion.Version
+        && toVersion < fromVersion;
 
     /// <summary>
     /// Whether the csproj sets <c>PackageVersion</c> itself: its body is evaluated after the props giving the planned

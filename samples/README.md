@@ -175,6 +175,10 @@ Every version ends in `.1`: nothing is packed yet.
 | `lrun pack --remote` | rejected, exit code 2: `'--remote' is gone: 'lrun build' now records the latest versions…` | | | |
 | `lrun pack --go` | rejected, exit code 2: `'--go' was removed in 0.4.0: 'lrun pack' now packs…` | | | |
 
+`lrun pack` and `lrun pack --suffix dev` also print `[WRN] The planned version sorts below the latest for 1 project(s)
+(0.9.0-rc.1 -> 0.9.0-local.1): …` (`planned-below-base`, with `dev.1` for the second): `local` and `dev` sort below
+RiskService's `rc`, while Logging's `beta` sorts below both. `--next` patch-bumps RiskService instead, so it doesn't warn.
+
 `repack.config.json` has 3 trees (main graph, island, Orphan alone) and these depths:
 0 Island.Core, Orphan, Primitives · 1 Island.App, Logging, Pricing.Models · 2 Pricing, Reports, RiskService · 3 OrderGateway, ReportCli.
 The dry run prints them as above, the three trees together.

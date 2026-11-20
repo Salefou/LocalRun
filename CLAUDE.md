@@ -173,7 +173,9 @@ shell escaping.
   of the planned versions known as a base or found in the local feed and the global packages folders,
   **shared by the whole plan**, no counter file. `--next` (`--alpha` = `--next --suffix alpha`, like npm's
   `prerelease`) keeps a prerelease base's version and patch-bumps a release, so after a rebuild
-  `pack --alpha` turns the latest `1.5.0-alpha.9` into `.10`. The csproj is never written (it would show
+  `pack --alpha` turns the latest `1.5.0-alpha.9` into `.10`. Without a bump, a lower label on a prerelease base's version
+  (`1.0.1-q.2` → `1.0.1-local.6`) warns `planned-below-base`, not strict; a release getting a prerelease of itself (the
+  default `pack`) doesn't (user feedback, 2026-11-20). The csproj is never written (it would show
   up in `--git-changes` and in diffs).
 
 ## Conventions

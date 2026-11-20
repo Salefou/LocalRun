@@ -757,8 +757,9 @@ absent; short versions are completed with zeros, `1.4` → `1.4.0`). `build --cs
 The rules: **a bump resets the lower components**; without one, the version is kept. **`--next` continues
 a prerelease**: it keeps the version of a prerelease on the same line (`alpha.9` → `alpha.10`) or whose label
 sorts below the new one (`alpha` → `beta`), and patch-bumps anything else, so it never plans below its base
-(a prerelease of a released version, or `1.4.2-alpha` after `1.4.2-beta`, would sort below it). **The prerelease label is always replaced** by `--suffix`, which defaults to
-**`local`**: `pack` never plans a stable version. **An iteration number ends the label**, starting at `.1`.
+(a prerelease of a released version, or `1.4.2-alpha` after `1.4.2-beta`, would sort below it).
+Without a bump flag, `pack` warns about the second case (`planned-below-base`). **The prerelease label is always
+replaced** by `--suffix`, which defaults to **`local`**: `pack` never plans a stable version. **An iteration number ends the label**, starting at `.1`.
 
 | Options | `1.4.2` becomes | `1.4.2-beta` becomes | `1.4.2.7` becomes | `1.5.0-alpha.9` becomes |
 |---|---|---|---|---|
@@ -898,6 +899,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `empty-selection` | Nothing to do: no project kept, nothing to pack, no executable to run. The command succeeds. | — |
 | `no-solution` | A project no solution references: its commands get no `$(SolutionDir)`. | — |
 | `csproj-ahead-of-latest` | The csproj version is ahead of the latest on the sources: `pack` starts from it. | — |
+| `planned-below-base` | `pack` without a bump flag gave a prerelease base a lower label on the same version (`1.0.1-q.2` → `1.0.1-local.1`): a restore of the latest won't pick it. `--next` plans above it. | — |
 | `not-in-git`, `no-git-base`, `no-common-history`, `repo-unreadable` | `--git-changes` could not tell what changed, so it kept more (`no-git-base`: run `git fetch`). | — |
 | `dotnet-warning`, `dotnet-error`, `dotnet-output` | A line of a `dotnet` command, verbatim (`dotnet-output`: a failed command that printed no error line). | — |
 | `open-failed` | A file or page could not be opened. | — |

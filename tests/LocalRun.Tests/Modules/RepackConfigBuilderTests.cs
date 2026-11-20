@@ -72,6 +72,18 @@ public sealed class RepackConfigBuilderTests : IDisposable
         Assert.Equal(ahead, csprojAhead);
     }
 
+    [Theory]
+    [InlineData("1.0.1-q.2", "1.0.1-local.6", true)]      // a lower label on the same version
+    [InlineData("1.4.2-beta", "1.4.2-alpha.1", true)]
+    [InlineData("1.4.2", "1.4.2-local.1", false)]         // a release getting a prerelease of itself: the default pack
+    [InlineData("1.5.0-alpha.9", "1.5.0-alpha.10", false)]
+    [InlineData("1.4.2-beta", "1.4.2-local.1", false)]    // a higher label
+    [InlineData("1.0.1-q.2", "1.0.2-local.1", false)]     // --next: patch-bumped
+    public void SortsBelowItsPrereleaseBase_OnlyForALowerLabelOnTheSameVersion(string from, string to, bool below)
+    {
+        Assert.Equal(below, RepackConfigBuilder.SortsBelowItsPrereleaseBase(ProjectVersion.Parse(from), ProjectVersion.Parse(to)));
+    }
+
     [Fact]
     public async Task PackingAgain_TakesTheNextIteration_ForTheWholePlan()
     {
