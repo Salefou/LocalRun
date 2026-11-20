@@ -11,6 +11,8 @@ bumps the minor version, anything else the patch.
 
 - `up --stop-timeout <seconds>`, and `stopTimeout` in the settings (`lrun settings`): how many seconds `up` waits
   after Ctrl+C before killing the processes still running (default `10`, as before).
+- `pack` warns (`planned-below-base`) when, without a bump flag, a prerelease base gets a lower label on the same
+  version (`1.0.1-q.2` → `1.0.1-local.1`): a restore of the latest wouldn't pick it. `--next` plans above it.
 
 ## [0.5.1] - 2026-11-12
 
