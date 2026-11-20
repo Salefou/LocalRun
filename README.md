@@ -1,5 +1,7 @@
 # LocalRun
 
+[![NuGet](https://img.shields.io/nuget/v/LocalRun)](https://www.nuget.org/packages/LocalRun)
+
 **Rebuild and run only what matters locally.**
 
 LocalRun is a .NET command-line tool for working across many repositories whose projects depend on
