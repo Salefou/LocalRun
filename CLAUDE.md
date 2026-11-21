@@ -16,9 +16,10 @@ public and permanent. Keep personal and work details out, and never describe the
 - `src/LocalRun/` — the non-interactive `lrun` CLI, packed as a .NET tool. It also contains the whole
   engine (`Core/`, `Options/`, `Logger/`).
 - `tests/LocalRun.Tests/` — xUnit, references `src/LocalRun`; folders mirror it.
+- `docs/agents/` — the full contracts of each area, summarised under "Contracts to preserve" below, and the history.
 
 The repository root holds only repo-wide files (solution, docs, `.github/`, git config) and the
-`src/`, `tests/`, `scripts/`, `samples/` folders. Keep it that way: new projects go under `src/` or
+`src/`, `tests/`, `scripts/`, `samples/`, `docs/` folders. Keep it that way: new projects go under `src/` or
 `tests/` and into `LocalRun.sln`.
 
 Pipeline: `build` → `localrun.config.json` → `pack` → `repack.config.json` →
@@ -56,71 +57,13 @@ shell escaping.
 
 ## Contracts to preserve
 
-- **Filter semantics** (`DependencyGraph.Retain`): names within `--users-of` / `--deps-of` are OR'ed;
-  the two flags are AND'ed (the projects between X and Y, what to repack to try X in Y), or OR'ed
-  with `--union`. Both cones are computed on the full graph before pruning. Unknown names → exit 2;
-  an empty intersection only warns. Chosen deliberately (user feedback, 2026-10-24).
-  `--with-services` then adds S's affected executables *with the libraries in between*:
-  S ∪ (users-of(S) ∩ deps-of(executables among users-of(S))). The in-between libraries are on purpose
-  (user feedback): without them, a service consuming a library as a package keeps the old build.
-- **`list`** (ROADMAP A1, user feedback, 2026-11-06): prints what `build` would keep with the same flags, through the same
-  `ConfigBuilder.SelectProjects`, so the two can't drift; it writes nothing and never queries NuGet. It scans the tree
-  rather than reading a config (usually filtered, maybe stale). A new `build` filter applies to both.
-- **`verify`** (`FeedVerifier`, ROADMAP item 5, user feedback, 2026-11-07): libraries only (`up` builds executables from
-  source). Stale = csproj version ahead of the feed's newest by the number alone (as `BaseVersion`), or a file of the
-  project's folder (without `bin`, `obj`, dot-folders, nested projects) newer than that package. `verify` reads the config,
-  `build --verify` checks the one just written; same result object. `package-missing` / `package-stale` are not strict:
-  `verify` fails on them itself.
-- **`status`** (`StatusText`, `StatusResult`, ROADMAP item 3, user feedback, 2026-11-21): reads the config and the plan
-  only, never scans, queries NuGet or calls git. Its header comes from `LocalRunConfig.Build` (`BuildRecord`, written by
-  `build` through `ConfigBuilder.Record`); a config without it still shows. Recorded HEADs are shown, not compared (that
-  is ROADMAP 4/5). A plan older than the config warns `plan-older-than-config`, not strict. A new `build` flag goes into
-  `BuildRecord` too.
-- **`doctor`** (`Doctor`, ROADMAP A7, user feedback, 2026-11-12): read-only setup checks on `build`'s root and feed (not
-  a config, so it works before the first `build`), the only write being a probe file created and deleted in the feed.
-  Check names (`dotnet`, `settings`, `root`, `local-feed`, `source`, `git-base`, `git-fetch`) are a contract like codes.
-  `fail` = a command will fail (exit 1, `doctor-failed`); `warn` = works but may surprise (exit 0). Never fixes anything.
-- **`--git-changes`** (`GitChangeDetector`, user feedback, 2026-10-24): changed projects are added to the
-  `--users-of` names. Changed = uncommitted/untracked files, or commits on HEAD not on origin's default
-  branch (`origin/HEAD` → `origin/main` → `origin/master`); being behind is not a change. Per project
-  (deepest folder owning the file); a file outside every project folder marks the whole repo. Guiding
-  rule: **when unsure, keep more** (no base, unreadable repo, not in git → changed, with a warning),
-  since extra projects are easy to delete from the config/plot. The tool never fetches (the README tells
-  users to run `git fetch` themselves). This rule is about `GitChangeDetector`, not you: fetching while you
-  work is expected.
+Cross-cutting contracts are written here in full: any change can break them. Each area's contract is summarised here
+and written in full in `docs/agents/`, with the edge cases and the user feedback behind it. **Read an area's file
+before changing the code it lists**: the summary is what must never break, not the whole rule. When a contract
+changes, update its file and its summary here together.
 
-- **Planned versions reach referenced projects**: `RepackExecutor` sets each project's `PackageVersion`
-  through a generated props file (`CustomBeforeMicrosoftCommonProps`, matched by
-  `MSBuildProjectFullPath`). Never go back to `-p:PackageVersion`: as a global property it flows into
-  project references, and packages then declare their own version for every project they reference
-  (NU1107 in consumers). `samples/` reproduces this: Logging project-references Primitives.
-- **Solution properties**: every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments` (`SolutionDir`
-  etc. of the project's solution, `ProjectRepack.SolutionPath` / `ProjectNode.SolutionPath`), since projects are built
-  alone: an `OutputPath` of `$(SolutionDir)\bin\…` otherwise lands at the drive root (`C:\bin`). Reported 2026-10-26.
-- **`up` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
-  references would collide), start all with `dotnet run --no-build` without awaiting, Ctrl+C →
-  `e.Cancel = true` + children get Ctrl+C themselves (same console) + kill the process tree after
-  the stop grace period (10 s, `--stop-timeout`, else `stopTimeout` in the settings). On Windows the `dotnet run`
-  processes (not the builds: MSBuild nodes outlive them) go into a kill-on-close `ProcessJob`, so they die with `lrun` even when it is killed from outside; failing
-  to create/assign it only warns. No readiness checks, by design (user feedback, 2026-10-24): services are
-  expected to wait for/retry their dependencies. Exit code 1 only for processes that failed before a stop was requested. To test
-  Ctrl+C from automation, start `lrun up` in its own console and send a real `CTRL_C_EVENT`
-  (AttachConsole + GenerateConsoleCtrlEvent from a separate process); a `cmd` wrapper reporting the exit
-  code needs `/v:on` and `!ERRORLEVEL!`. Poll its redirected output with `FileShare.ReadWrite` (`Get-Content` can't
-  read it while `cmd` writes), or just send after a delay. The Ctrl+C handler is registered before the builds, so a
-  stop during them still ends with the result (services `not-started`, exit 0). Each service's output also goes to
-  `--logs` (`.lrun/logs/<name>.log`); with `--json`, `UpEvent`s stream through `EventStream`, closed before the
-  one-line document so a late `exited` can't follow it.
-- **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
-  rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
-- **User settings** (`UserSettings`, user feedback, 2026-10-28): `~/.lrun/settings.json` (or `LOCALRUN_SETTINGS`) holds
-  per-user defaults (`localNuget`, `root`, `suffix`, `stopTimeout`, `logLevel`), created by `lrun settings` with
-  everything commented out and opened right away (the command itself is the flag that allows opening a window).
-  Precedence: command-line option > settings > built-in default. Paths are absolute or `~`-prefixed (relative would
-  depend on the cwd: keep rejecting them), unknown keys fail. Tests and hand testing set `LOCALRUN_SETTINGS`; never touch
-  the real file. `Main` reads `logLevel` for every command; otherwise `plot`/`go` don't read the settings (they only use
-  the configs) and `up` reads only `stopTimeout` (user feedback, 2026-11-20). A new setting = a property there + the
-  template + README `settings` + a test.
+### Cross-cutting
+
 - **`--json`** (ROADMAP item 1, 2026-11-05): stdout holds exactly one document (`CommandReport`, `schemaVersion` 1) for
   every run, failures and usage errors included; logs go to stderr, plain. `Main` sets `OutputMode.Json` before anything
   logs (`Log` creates its factory lazily and reads it once; `Terminal.IsAttached` is false in this mode). A command
@@ -154,11 +97,6 @@ shell escaping.
   `**Breaking:**` first in a breaking entry); `ChangelogTests` parses the real file. `Resources/AgentInstructions.md` is
   what `help --agent` prints, after a stamp with `LocalRunCli.ReleaseVersion`; README "From an agent" must equal it (a
   test, the stamp's version aside). Change both together, and keep it short: details belong in `help --json`.
-- **Build errors as data** (ROADMAP A2, user feedback, 2026-11-20): `PackFailure.Errors` comes from
-  `DotnetOutput.Errors`, errors only, and keeps one entry per (code, message, file, line, column, project), the project
-  without `::TargetFramework=…`: MSBuild's summary and the per-framework copies merge, the same code at another place or
-  in another project doesn't. Capped at 50 (`RepackExecutor.FailureErrors`), `ErrorCount` before the cap; `Output` stays.
-  Telling per-target errors apart is a ROADMAP item, not a bug.
 - **No machine-specific paths**: every path is an option, defaulting to a file in the current
   directory's `.lrun` folder (`localrun.config.json`, `repack.config.json`, `plots/dependencies-<date-time>`;
   `.lrun` ignores itself with a `.gitignore` of `*`) or
@@ -168,38 +106,51 @@ shell escaping.
   unless asked by a flag (`plot --open`; `build --plot` opens the page on a terminal only). There is no interactive front end any more (the REPL
   was removed on 2026-10-24); don't add one without asking.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
-- Dependency graph semantics (layered Kahn, depth = longest path from a root, name-sorted layers,
-  cycles throw) are covered by `tests/LocalRun.Tests/Graph/DependencyGraphTests.cs`. `build` calls
-  `RemoveCycles()` (Tarjan SCC) after the filters, so cycles are left out with a warning instead of
-  failing; the throw in `TopologicalClassOrder` stays as the safety net for hand-edited configs.
-- **Name collisions** (user feedback, 2026-10-24): projects are keyed by file name, so the
-  `DependencyGraph` constructor leaves out *every* project of a shared name (`Collisions`); `build` logs
-  an error with their paths, a warning for the dependents kept without the edge, still writes the
-  config (exit 0), and rejects the name in filters as ambiguous (exit 2). Never keep one of them silently.
-- Version bump rules (a bump resets lower components and replaces the prerelease label; no bump
-  keeps the version and only `--suffix` replaces the label) are mirrored case by case in
-  `tests/LocalRun.Tests/Options/BumpOptionsTests.cs` (BumpOptions level, null suffix = drop the label).
-  The CLI never passes a null suffix: `RepackOptionsParser` defaults it to `local`, so `pack` never
-  plans a stable version (cache trap: a local 1.4.3 in ~/.nuget/packages shadows the official one).
-  The README "Versioning rules" table shows the CLI-level result; change it with either.
-- **Base and iteration** (user feedback, 2026-10-25): the base version lives in the config, so the plot shows
-  what `pack` starts from and `pack` is a pure function of (config, flags). By default `build` records
-  `LatestVersion` from **all** the sources a restore from the project's folder would use, plus the config's local
-  feed even when no NuGet.Config lists it (`go` restores with it as an additional source; `samples/NuGet.config`
-  clears the user sources). Users disable sources in NuGet.Config to narrow it; `--csproj` opts out. When the csproj version
-  is higher than that latest (ABP: `11.0.0-preview` in development, `10.7.0` released), `pack` starts from the csproj, ignores
-  the bump flag for it (only the suffix applies: `11.0.0-local.1`, a bump would skip the release in development) and warns once
-  (`RepackConfigBuilder.BaseVersion`; user feedback, 2026-10-29, after "keep the feed one, warn" and "higher only without a
-  bump flag"). "Higher" is the number alone, so `1.5.0` vs `1.5.0-alpha.9` keeps the alpha iterations going. The warning is
-  at `pack` only, not at `build`. Otherwise `pack` uses the latest over the
-  csproj `Version`. A suffix gets one iteration number `.N` appended (`PackageIterations`): 1 + the highest N
-  of the planned versions known as a base or found in the local feed and the global packages folders,
-  **shared by the whole plan**, no counter file. `--next` (`--alpha` = `--next --suffix alpha`, like npm's
-  `prerelease`) keeps a prerelease base's version and patch-bumps a release, so after a rebuild
-  `pack --alpha` turns the latest `1.5.0-alpha.9` into `.10`. Without a bump, a lower label on a prerelease base's version
-  (`1.0.1-q.2` → `1.0.1-local.6`) warns `planned-below-base`, not strict; a release getting a prerelease of itself (the
-  default `pack`) doesn't (user feedback, 2026-11-20). The csproj is never written (it would show
-  up in `--git-changes` and in diffs).
+- **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
+  rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
+
+### By area
+
+- **Selection** (`docs/agents/selection.md`): before changing `DependencyGraph`, `ConfigBuilder`, `GitChangeDetector`,
+  or a `build` / `list` filter.
+  - `--users-of` / `--deps-of`: OR within a flag, AND between them (OR with `--union`), both cones on the full graph.
+    Unknown names exit 2; an empty intersection only warns. `--with-services` adds the libraries in between, on purpose.
+  - `list` and `build` select through the same `ConfigBuilder.SelectProjects`: a new filter applies to both.
+  - `--git-changes`: **when unsure, keep more**; the tool never fetches.
+  - Name collisions: every project of a shared name is left out, with an error. Never keep one of them silently.
+  - Cycles: `build` removes them with a warning; the throw in `TopologicalClassOrder` stays as the safety net.
+- **Versioning** (`docs/agents/versioning.md`): before changing `BumpOptions`, `RepackOptionsParser`,
+  `RepackConfigBuilder`, `PackageIterations`, how `build` records `LatestVersion`, or README "Versioning rules".
+  - The csproj is never written. `pack` never plans a stable version (the CLI's suffix defaults to `local`).
+  - The base is the latest over all the restore sources plus the local feed, or the csproj version when higher (by the
+    number alone, then the bump flag is ignored). One iteration number `.N` for the whole plan, no counter file.
+- **Execution** (`docs/agents/execution.md`): before changing `RepackExecutor`, `SolutionProperties`, `DotnetOutput`,
+  `RunProcessor`, `ProcessJob`, or a `dotnet` command line of `go` / `up`.
+  - Never `-p:PackageVersion` (a global property reaches project references: NU1107); a generated props file sets it.
+  - Every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments`.
+  - `up`: builds sequentially, runs side by side, no readiness checks by design, `dotnet run` processes in a
+    kill-on-close job. The Ctrl+C rules and how to test them from automation are in the file.
+  - `failure.errors`: one entry per (code, message, file, line, column, project), capped at 50.
+- **Inspection** (`docs/agents/inspection.md`): before changing `status`, `doctor` or `verify`.
+  - `status` reads the config and the plan only: never scans, queries NuGet or calls git.
+  - `doctor` never fixes anything; its check names are a contract like codes.
+  - `verify` covers libraries only; `package-missing` / `package-stale` are not strict, `verify` fails itself (exit 6).
+- **User settings** (`docs/agents/settings.md`): before changing `UserSettings` or which command reads a setting.
+  - Command line > settings > built-in default. Paths absolute or `~`-prefixed, unknown keys fail.
+  - Tests and hand testing set `LOCALRUN_SETTINGS`: never touch the real file.
+
+### Ripple checklists
+
+What a change of each kind must also touch (each line restates rules above or in `docs/agents/`):
+
+- **A new `build` flag**: `list` too (same selection), `BuildRecord` (shown by `status`) and its schema,
+  `CommandCatalog`, README, CHANGELOG.
+- **A new command**: README "Adding a command", `CommandCatalog`, CHANGELOG.
+- **A new field** in a config, a result or the settings: its schema in `Resources/Schemas/`. Renaming or removing one
+  bumps `schemaVersion` (results) or `IConfigFile.CurrentSchemaVersion` (configs).
+- **A new warning or error**: a `DiagnosticEvents` code, and a decision on `DiagnosticEvents.Strict`.
+- **A new setting**: the `UserSettings` property, the template, its schema, README `settings`, a test.
+- **A behaviour change**: CHANGELOG `[Unreleased]`, and rerun the `samples/` walkthrough.
 
 ## Conventions
 
@@ -243,65 +194,9 @@ shell escaping.
 
 ## History
 
-- Originally a single REPL executable with hard-coded paths (`~/source/repos`, `..\..\..\Output`,
-  `..\..\..\Visuals`) and an auto-opening SVG.
-- 2026-10-23, branch `claude/cli-entrypoint`: turned it into a non-interactive CLI
-  (`CommandLineArgs`, exit codes, path options, .NET tool packaging), fixed `visualize` writing into a
-  stray directory and `run` resolving project paths against the cwd; then moved the REPL into
-  `LocalRun.Repl/` on top of `LocalRunCli`, and wrote README/CLAUDE.md; then packed the REPL as a
-  tool too and added `scripts/install-tools.ps1` so running LocalRun no longer locks `bin/`.
-- 2026-10-24: shortened the CLI. Tool `localrun` → `lrun` (`LocalRunCli.CommandName`), `localrun-repl` →
-  `lrun-repl`; commands `build-config` / `repack-preview` / `repack-go` → `build` / `pack` / `go`, with
-  `pack --go` doing both steps. `build` filters `--retain-depends-on` / `--retain-is-dependency-of` →
-  `--users-of` / `--deps-of`. Old names were dropped, not aliased. Package ids (`LocalRun`,
-  `LocalRun.Repl`), assembly names and config file names are unchanged.
-- 2026-10-24: moved the code out of the repository root: `src/LocalRun`, `src/LocalRun.Repl`,
-  `tests/LocalRun.Tests` (with `git mv`, so `git log --follow` keeps history), dropped the CLI's glob
-  exclusions, and renamed `RepackExecutor .cs` (stray space) to `RepackExecutor.cs`.
-- 2026-10-24, branch `claude/remove-repl`: removed `src/LocalRun.Repl` (`lrun-repl`). With the short
-  `lrun` commands it only saved typing the prefix, while hiding exit codes and duplicating the shell
-  (`cd`, quoting). The install script uninstalls it.
-- 2026-10-24, branch `claude/plot`: `visualize` → `plot` (dropped, not aliased), and `build --plot`
-  plots the config it just wrote with `plot`'s defaults. `GraphVisualizer` and `lrun-visuals/` keep their names.
-- 2026-10-24, branch `claude/git-changes`: re-shipped the `plot` commit (#18 had merged into the
-  already-merged `claude/remove-repl`), name collisions left out with an error, `--git-changes` implemented,
-  `run` → `up` (`lrun run` read oddly; `start` was rejected as ambiguous; dropped, not aliased).
-  `RunProcessor` keeps its name. Then removed the `SkipRepack` / `SkipRun` config fields (user feedback):
-  `build` rewrites the config, so they never survived a rebuild, and `up --exclude` / deleting from
-  `repack.config.json` do the same job. Old configs holding them still load (unknown JSON fields are ignored).
-- 2026-10-24, branch `claude/job-object`: `up` puts its processes in a Windows job object, so a forced kill of
-  `lrun` no longer leaves services running. Separate console windows per service were then considered and
-  dropped (user feedback): graceful stop, one-shot output and failure rules would each need a host process per window.
-- 2026-10-24, branch `claude/release`: MIT licence, third-party notices, SemVer from 0.1.0, `lrun version`,
-  CHANGELOG, nuget.org package metadata and readme (`src/LocalRun/PACKAGE.md`), `release.yml`.
-- 2026-10-25, branch `claude/remote-build-counter` (0.2.0): versions on the NuGet sources read by `build`
-  (`pack --remote` rejected with a pointer), iteration number on the prerelease label, `--next`. Drafts on the
-  same PR: `build --remote` excluding the local feed, then `--all-sources`; user feedback replaced both with
-  "all sources by default, `--csproj` to opt out". Writing the csproj or reading the sources at pack time were
-  the rejected alternatives; other developers pushing odd versions to a shared feed were judged rare (custom suffixes handle them).
-- 2026-10-27, branch `claude/interactive-plot` (0.3.0): `plot` writes an interactive HTML page instead of the Graphviz
-  DOT/SVG (dropped, not kept behind a flag: plotting goes through `build --plot`). Motivation: users build
-  per solution (often one per repo), so projects are framed by solution, collapsible down to the solution graph.
-  `GraphPage` fills `Resources/GraphPage.html` with the config's data and inlines the vendored elkjs (offline, e.g.
-  behind a corporate proxy; a CDN was the POC). Grouping is a view only: filters and `go` stay per project.
-  Default layout (user feedback): one full-width band per solution, columns = project depth (no ELK); ELK's free
-  layout stays as an option, its connected components laid out apart (it packed unrelated solutions inside cycle loops).
-- 2026-10-28, branch `claude/lrun-folder` (0.3.0): default outputs moved into `.lrun/` (user feedback: one folder to
-  ignore in git), `lrun-visuals/` → `.lrun/plots/`. `.lrun` writes its own `.gitignore` (`*`). No fallback to the old
-  files, only a hint in the not-found error.
-- 2026-10-28, branch `claude/user-settings` (0.3.1): `lrun settings` and `~/.lrun/settings.json` for per-user defaults.
-  The command was first asked for as `config`, renamed to `settings` (user feedback) because `config` already means the
-  generated files (`--config`, `localrun.config.json`). Git-style `settings <key> [value]` floated, not built.
-- 2026-10-29, branch `claude/msbuild-fallback` (0.3.2): `build` asks MSBuild for versions and package ids only where the
-  csproj XML cannot tell (`MsBuildEvaluator`; ~1 s per project, 73 s for ABP's 512 flagged projects); an in-process
-  `Microsoft.Build` was judged not worth a dependency for now (revisit if large real-world repos are slow). Found on the ABP
-  clone (a test bed, kept out of context: `AGENTS.md` there): csproj `11.0.0-preview` against `10.7.0` released, hence the
-  "higher of the two" base. The rule was settled over four messages; the final one is in "Base and iteration".
-- 2026-11-04, branch `claude/output-redesign` (0.4.0): ROADMAP item 0. `pack` packs (`--dry-run` plans only, `--go`
-  rejected with a pointer, not aliased), output reduced to results and diagnostics (see "Output"), `build --plot` opens
-  the page on a terminal. `go` now runs every tree depth by depth together, so each depth gets one line (trees used to
-  run independently in parallel). The `Written:` footer and OSC 8 links were dropped.
-- Earlier work (see git log): layered topological sort, Microsoft.Extensions.Logging, embedded Graphviz (until 0.3.0).
+`docs/agents/history.md`: how the tool got its shape (renames, removed features, the alternatives rejected and why).
+Read it before proposing a rename, bringing back something removed, or a design that may already have been turned
+down. Renamed commands and flags were dropped, never aliased.
 
 ## Known issues / candidate tasks
 

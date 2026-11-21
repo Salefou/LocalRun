@@ -1175,6 +1175,7 @@ scripts/                         install-tools.ps1 (build, pack, install/update 
 samples/                         Dummy multi-repo workspace for hand testing (see samples/README.md)
 .github/workflows/ci.yml         CI: build, test, install-script check on every PR
 CLAUDE.md                        Context for AI coding assistants working on this repo
+docs/agents/                     Its full per-area contracts and the project history
 artifacts/                       (ignored) build output of the install script
 ```
 

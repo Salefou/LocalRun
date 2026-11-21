@@ -56,7 +56,7 @@ is accepted. Decide these before 1.0, or commit to their additive form:
 
 Not on this roadmap yet, and breaking whichever way they are decided, so they are the real 1.0 blockers:
 
-- **Project identity**: projects are keyed by file name (collisions left out, see `CLAUDE.md`). Keying by path or
+- **Project identity**: projects are keyed by file name (collisions left out, see `docs/agents/selection.md`). Keying by path or
   `PackageId` changes filter names, config keys and collision behaviour.
 - **Solution filters**: additive as a new flag (`--solution`), breaking if `--users-of` / `--deps-of` start accepting
   solution names (a project and a solution can share a name).
@@ -305,7 +305,7 @@ Costs, to weigh when it comes back:
   only what the build copies to the output, unless the copy runs with the project folder as working directory.
 - Time and disk: a copy of each service's output on every `up`.
 - Not a shortcut: building straight into a separate `OutputPath` (`-p:`) would keep `dotnet run`, but a global
-  property flows into project references (the trap `PackageVersion` hit, see `CLAUDE.md`).
+  property flows into project references (the trap `PackageVersion` hit, see `docs/agents/execution.md`).
 
 Postponed (user feedback, 2026-11-21): it came up with a user and an agent each using `lrun` on the same working tree,
 which raises more than this (separate clones or worktrees are the usual answer, outside LocalRun's scope). Revisit when
