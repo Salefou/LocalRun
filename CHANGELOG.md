@@ -7,6 +7,12 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-21
+
+`lrun` describes itself to programs and agents (`help --json`, `schema`, `changelog`, `help --agent`), `status` shows
+what a config holds, and `up` can run in the background (`down`, `up.json`) and reports every build failure as data.
+Breaking: the `LOCALRUN_LOG_LEVEL` environment variable is gone, use `--log-level` or `logLevel` in the settings.
+
 ### Added
 
 - `up --stop-timeout <seconds>`, and `stopTimeout` in the settings (`lrun settings`): how many seconds `up` waits
@@ -306,7 +312,8 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Salefou/LocalRun/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Salefou/LocalRun/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Salefou/LocalRun/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Salefou/LocalRun/compare/v0.3.2...v0.4.0

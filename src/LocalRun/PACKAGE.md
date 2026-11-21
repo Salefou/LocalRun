@@ -29,7 +29,8 @@ lrun up                                                                        #
 
 When something doesn't work, `lrun doctor` checks the setup (SDK, local feed, NuGet sources, git) and says what to fix.
 `lrun list --users-of X` shows what uses X without writing anything, and `lrun verify` whether the local feed holds an
-up-to-date package of every library.
+up-to-date package of every library. `lrun status` shows what the config holds and whether `up` is running; `lrun down`
+stops it from another shell.
 
 `lrun build --git-changes` picks the projects you changed (uncommitted, or commits not on origin's default
 branch) instead of naming them.
@@ -37,6 +38,8 @@ branch) instead of naming them.
 For scripts, pipelines and agents: every command takes `--json` (one JSON document on stdout, logs on stderr; `up`
 streams one event per line) and `--strict` (fail with exit code 5 when the result left something out). Exit codes
 tell a missing input (3) from a build error (4). `lrun help --json` describes every command, option and code as data,
-and `lrun schema config|repack|result|settings` prints the JSON Schema of each file.
+and `lrun schema config|repack|result|settings` prints the JSON Schema of each file. `lrun help --agent` prints
+instructions to paste into an agent's `AGENTS.md` or `CLAUDE.md`; after an upgrade, `lrun changelog --since` says what
+changed.
 
 Full documentation, versioning rules and known limitations: https://github.com/Salefou/LocalRun#readme

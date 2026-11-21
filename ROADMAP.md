@@ -62,7 +62,7 @@ Not on this roadmap yet, and breaking whichever way they are decided, so they ar
 - **Solution filters**: additive as a new flag (`--solution`), breaking if `--users-of` / `--deps-of` start accepting
   solution names (a project and a solution can share a name).
 
-Config file versioning, the third blocker, shipped (unreleased): both configs carry a `SchemaVersion`, a newer one fails
+Config file versioning, the third blocker, shipped in 0.5.1: both configs carry a `SchemaVersion`, a newer one fails
 with `config-invalid`. Migrating an older one when the shape changes is left to that change.
 
 Everything else is additive: 3 (`status`, and the config recording its build flags, time and
@@ -95,7 +95,7 @@ and README "Diagnostic codes". Decisions (user feedback, 2026-11-05: "you know b
 - `--strict` fails on "left out or possibly wrong" (collisions, cycles, MSBuild/NuGet fallbacks, PackageVersion override,
   unknown packages folder), not on the git fallbacks, which keep more.
 
-### 3. `lrun status` **(user)**: shipped (unreleased)
+### 3. `lrun status` **(user)**: shipped in 0.6.0
 
 `lrun status` prints what a config holds and the plan made from it, from the files alone; `--json` makes it the
 read-only entry point for agents. `build` records in the config how it made it (`Build`: time, `lrun` version, flags,
@@ -140,7 +140,7 @@ Ideas:
   affecting just the test project.
 - Explain, don't only select: `--explain` prints why each project is in (which file, which commit), also as `--json`.
 
-### 5. `build --verify` **(user)**: shipped as `lrun verify` and `build --verify` (unreleased)
+### 5. `build --verify` **(user)**: shipped as `lrun verify` and `build --verify` in 0.5.1
 
 Each library of the config is `ok`, `missing` or `stale`; exit code `6` (`verify-failed`) otherwise. See the CHANGELOG and
 README `verify`. Decisions (user feedback, 2026-11-07):
@@ -192,14 +192,14 @@ same `lrun pack` would plan different versions on two machines).
 
 ## Suggested (agents on a big platform)
 
-### A1. Read-only graph queries **(claude)**: shipped as `lrun list` (unreleased)
+### A1. Read-only graph queries **(claude)**: shipped as `lrun list` in 0.5.1
 `lrun list` takes `build`'s filters and prints what `build` would keep, writing nothing; `--json` gives each project with
 its depth and dependencies. Decisions (user feedback, 2026-11-06): one command with `build`'s flags rather than
 `impact` / `deps` commands or `build --dry-run`; it scans the tree (always current, unfiltered) rather than reading a
 config, which is usually filtered and may be stale. Left: reading an existing config (`--config`) as a fast path, if a
 large platform makes the scan slow.
 
-### A2. Parsed build and pack failures **(claude)**: shipped (unreleased)
+### A2. Parsed build and pack failures **(claude)**: shipped in 0.6.0
 When `pack` / `go` fails, `result.packages[].failure.errors` holds MSBuild's error lines as data (`code`, `message`,
 `file`, `line`, `column`, `project`), so a failure becomes a fixable task. Decisions (user feedback, 2026-11-20):
 - Next to `output`, which stays: it is all there is when no line parses (a crash, a timeout). Errors only; warnings stay
@@ -208,7 +208,7 @@ When `pack` / `go` fails, `result.packages[].failure.errors` holds MSBuild's err
   project being built, which may be one the failing project references, where the fix goes.
 - Each error once: MSBuild's summary repeats it, and a multi-targeted project reports it once per target framework.
   The same code at another place, or in another project, stays. Capped at 50, with `errorCount` before the cap.
-- Then `up` (unreleased): a service whose build failed carries the same `failure` (step `build`) and stays
+- Then `up` (0.6.0): a service whose build failed carries the same `failure` (step `build`) and stays
   `not-started`, as all do: no new status, the result only gains a field.
 
 Left, not started:
@@ -219,7 +219,7 @@ Left, not started:
   target when they differ); a `frameworks` field alone was turned down as noise for single-target projects.
 - `go --dry-run` printing the order and versions without running.
 
-### A3. `up` an agent can use **(claude)**: shipped as `lrun down` (unreleased)
+### A3. `up` an agent can use **(claude)**: shipped as `lrun down` in 0.6.0
 Running `up` in the background is already possible: the caller starts it as a background job (an agent's background
 command, `Start-Process`, `&`), and the agent instructions say so. What was missing is around it: a clean stop (a
 background `up` has no console to get Ctrl+C, so it could only be killed, without the grace period), and finding the
@@ -248,7 +248,7 @@ Decided while building it (user feedback, 2026-11-21, taking the proposed plan):
 Left out on purpose: `up --detach` (a hidden host process outliving the shell that started `up`: not needed while the
 caller keeps its background job), and `lrun logs` (the `.lrun/logs` files suffice; it waits for A4's levels). Readiness
 stays out by design (user feedback, 2026-10-24): if wanted, make it opt-in (`--wait <service>=<url>` or a log pattern),
-never the default. `up --only <names>` shipped (unreleased).
+never the default. `up --only <names>` shipped in 0.5.1.
 
 ### A4. Service logs on disk, with levels **(claude)**: plain logs shipped (0.5.0)
 `up` writes each service's lines to `.lrun/logs/<service>.log` (`--logs`), plain text without colors, rewritten on each
@@ -260,7 +260,7 @@ e.g. as NDJSON with service, level and time, to filter by level or diff two runs
 projects in the config, or of the affected ones, in dependency order, with a parsed summary (A2): the loop "I changed
 library X → repack → run what depends on it" closes without a CI.
 
-### A6. Self-description **(claude)**: shipped (unreleased)
+### A6. Self-description **(claude)**: shipped in 0.6.0
 `help --json` returns the commands, options, exit, error and diagnostic codes as data; `lrun schema
 config|repack|result|settings` prints hand-written JSON Schemas; unknown config fields warn `unknown-config-field`.
 Decisions (user feedback, 2026-11-20):
@@ -273,7 +273,7 @@ Decisions (user feedback, 2026-11-20):
 - No `AGENTS.md` in this repository: there it would read as instructions for working *on* LocalRun. README "From an
   agent" gives a snippet for users to paste into their own workspace's instructions instead.
 
-Then shipped (unreleased): an agent updates its own instructions about `lrun` from the install alone, offline, when
+Then shipped in 0.6.0: an agent updates its own instructions about `lrun` from the install alone, offline, when
 asked: `lrun changelog [--since <version>]` and `lrun help --agent`. Decisions (user feedback, 2026-11-20):
 - Reached through commands, not files in the package: a file packed into the nupkg lands in the tool store
   (`~/.dotnet/tools/.store/...`, a path that changes with the version and the install mode), where no agent looks.
@@ -289,7 +289,7 @@ asked: `lrun changelog [--since <version>]` and `lrun help --agent`. Decisions (
 - The loop, written into the snippet itself: when `lrun version` is newer than the stamp, read
   `lrun changelog --since <stamp> --json`, rewrite from `lrun help --agent` keeping the user's own additions.
 
-### A7. `lrun doctor` **(claude)**: shipped (unreleased)
+### A7. `lrun doctor` **(claude)**: shipped in 0.5.1
 Setup checks with `ok|warn|fail` and a hint each: SDK (as the root's `global.json` pins it), settings, root, local feed
 writable, NuGet sources reachable, and per repository origin's default branch and the last fetch's age. Decisions (user
 feedback, 2026-11-12): it scans `build`'s root rather than reading a config (works before the first `build`); a failed
