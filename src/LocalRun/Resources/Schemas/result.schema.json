@@ -441,9 +441,10 @@
       "properties": {
         "project": { "type": "string" },
         "pid": { "description": "The dotnet run process.", "type": "integer" },
-        "log": { "type": ["string", "null"] }
+        "log": { "type": ["string", "null"] },
+        "exitCode": { "description": "Set once it exited (a one-shot job, or a service that failed); null while it runs.", "type": ["integer", "null"] }
       },
-      "required": ["project", "pid", "log"],
+      "required": ["project", "pid", "log", "exitCode"],
       "additionalProperties": false
     },
     "ServiceReport": {

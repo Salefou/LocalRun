@@ -35,6 +35,9 @@ public class RunProcessor : IRunProcessor
 
     private readonly ConcurrentDictionary<string, ServiceOutcome> services = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The names of <see cref="services"/> in run order, which the dictionary doesn't keep.</summary>
+    private List<string> order = [];
+
     private readonly CancellationTokenSource stopping = new();
 
     /// <summary>Every process started, builds included: a stop sends Ctrl+C to those still running.</summary>
@@ -50,8 +53,8 @@ public class RunProcessor : IRunProcessor
         this.stopGracePeriod = stopGracePeriod ?? DefaultStopGracePeriod;
     }
 
-    /// <summary>Each executable of the last run, by name; complete after a failure too.</summary>
-    public IReadOnlyDictionary<string, ServiceOutcome> Services => services;
+    /// <summary>Each executable of the last run, by name, dependencies first; complete after a failure too.</summary>
+    public IReadOnlyList<KeyValuePair<string, ServiceOutcome>> Services => [.. order.Select(name => KeyValuePair.Create(name, services[name]))];
 
     private void Emit(UpEvent upEvent) => onEvent?.Invoke(upEvent with { Time = DateTimeOffset.UtcNow });
 
@@ -69,6 +72,7 @@ public class RunProcessor : IRunProcessor
             return;
         }
         services.Clear();
+        order = [.. executables.Select(exe => exe.Name)];
         foreach (var exe in executables)
             services[exe.Name] = new ServiceOutcome { Log = logsFolder == null ? null : Path.Combine(logsFolder, $"{exe.Name}.log") };
 
@@ -94,8 +98,10 @@ public class RunProcessor : IRunProcessor
         try
         {
             // One at a time, dependencies first: executables sharing a project reference would otherwise
-            // build it concurrently and collide on its output files
+            // build it concurrently and collide on its output files. After a failure the others are still built, so that
+            // one run reports every service a change breaks; then nothing is started.
             string feedSource = LocalFeedRestoreArgument(config);
+            List<string> buildFailures = [];
             foreach (var exe in executables)
             {
                 if (stopping.IsCancellationRequested)
@@ -104,16 +110,23 @@ public class RunProcessor : IRunProcessor
                 Emit(new(UpEvents.Building) { Project = exe.Name });
                 try
                 {
-                    await RunToCompletionAsync("build", $"build \"{FullPath(config, exe)}\" --nologo --verbosity quiet{feedSource}{SolutionProperties.Arguments(exe.SolutionPath)}",
-                        services[exe.Name]);
+                    // --force: a no-op restore would keep floating *-* references on the iteration of the last restore,
+                    // not the latest in the feed (a pack that failed or skipped this project, a pack of another config)
+                    await BuildAsync(exe, $"build \"{FullPath(config, exe)}\" --force --nologo --verbosity quiet{RepackExecutor.NoSummary}{feedSource}{SolutionProperties.Arguments(exe.SolutionPath)}");
                 }
                 catch (OperationCanceledException)
                 {
                     return; // the build got the Ctrl+C too
                 }
+                catch (DotnetFailedException)
+                {
+                    buildFailures.Add(exe.Name);
+                }
             }
             if (stopping.IsCancellationRequested)
                 return;
+            if (buildFailures.Count != 0)
+                throw new DotnetFailedException($"dotnet build failed on {string.Join(", ", buildFailures)}: nothing was started.");
 
             foreach (var exe in executables)
             {
@@ -240,15 +253,14 @@ public class RunProcessor : IRunProcessor
     private static string FullPath(LocalRunConfig config, ProjectNode project) => Path.Combine(config.RootPath, project.Path);
 
     /// <summary>
-    /// Runs a <c>dotnet</c> command silently; its output is only printed if it fails, and the failure goes into
-    /// <paramref name="outcome"/>. Once a stop was requested, a failure is the Ctrl+C the command got: cancelled, not reported.
+    /// Builds an executable silently. If it fails, its warning and error lines are printed as <c>pack</c> prints them (or
+    /// all of its output when it printed no error line), and the failure goes into its <see cref="Services"/> outcome.
+    /// Once a stop was requested, a failure is the Ctrl+C the build got: cancelled, not reported.
     /// </summary>
-    /// <param name="step">The command (<c>build</c>), as <see cref="DotnetFailure.Step"/>.</param>
-    private async Task RunToCompletionAsync(string step, string args, ServiceOutcome outcome)
+    private async Task BuildAsync(ProjectNode exe, string args)
     {
-        const string fileName = "dotnet";
         var output = new ConcurrentQueue<string>();
-        var process = RunningProcess.Start(prefix: null, fileName, args, output.Enqueue);
+        var process = RunningProcess.Start(prefix: null, "dotnet", args, output.Enqueue);
         started.Enqueue(process);
         // Requested while it was starting: the stop's Ctrl+C may have missed it
         if (stopping.IsCancellationRequested && OperatingSystem.IsWindows())
@@ -257,10 +269,29 @@ public class RunProcessor : IRunProcessor
         if (exitCode != 0)
         {
             stopping.Token.ThrowIfCancellationRequested();
-            foreach (var line in output)
-                logger.LogWarning(DiagnosticEvents.DotnetOutput, "{Line}", line);
-            outcome.Failure = DotnetFailure.Of(step, exitCode, [.. output]);
-            throw new DotnetFailedException($"Command `{fileName} {args}` failed with exit code {exitCode}");
+            var failure = DotnetFailure.Of("build", exitCode, [.. output]);
+            if (!output.Any(line => DotnetOutput.DiagnosticLevel(line) == LogLevel.Error))
+            {
+                foreach (var line in output)
+                    logger.LogWarning(DiagnosticEvents.DotnetOutput, "{Line}", line);
+            }
+            else
+            {
+                foreach (var line in output)
+                {
+                    switch (DotnetOutput.DiagnosticLevel(line))
+                    {
+                        case LogLevel.Error:
+                            logger.LogError(DiagnosticEvents.DotnetError, "{Line}", line);
+                            break;
+                        case LogLevel.Warning:
+                            logger.LogWarning(DiagnosticEvents.DotnetWarning, "{Line}", line);
+                            break;
+                    }
+                }
+            }
+            services[exe.Name].Failure = failure;
+            throw new DotnetFailedException($"dotnet build failed on {exe.Name} with exit code {exitCode}");
         }
     }
 

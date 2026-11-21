@@ -571,8 +571,11 @@ Run every project of type `executable` in the config **side by side**, like a lo
 the services, as `docker compose up` does for containers:
 
 1. **Build** each executable with `dotnet build`, one at a time, in dependency order. Executables
-   sharing a project reference would otherwise build it concurrently and collide on its output. A
-   build failure stops `up` before anything starts, and only then is the build output shown. As with
+   sharing a project reference would otherwise build it concurrently and collide on its output. After a
+   build failure the others are still built, so one run shows every service a change breaks; then `up`
+   stops before anything starts (exit code `4`), and only then are the failed builds' warning and error lines
+   shown. Each build restores again (`--force`), so floating versions (`*-*`) take the latest in the feed,
+   not what the last restore picked. As with
    `go`, the config's local feed is added to the restore sources, so the packages `go` produced are
    found even if your `NuGet.config` doesn't list that feed. Builds and runs get the `Solution*`
    properties of the project's solution, as in `go`.
@@ -595,10 +598,11 @@ A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
 has stopped. Processes stopped by Ctrl+C or `down` never count as failures.
 
-While it runs, `up` records itself in `up.json` next to the config (its process id, each service's process id and log),
-deleted when it exits: [`down`](#down) finds it there, and [`status`](#status) shows it. One `up` runs per config folder:
-starting a second one fails (exit code `1`, `up-running`) until the first is stopped. A file left behind by an `up` that
-was killed is ignored.
+While it runs, `up` records itself in `up.json` next to the config (its process id, each service's process id and log,
+and exit code once it exited), deleted when it exits: [`down`](#down) finds it there, and [`status`](#status) shows it.
+One `up` runs per config folder: starting a second one fails (exit code `1`, `up-running`) until the first is stopped.
+A file left behind by an `up` that was killed is ignored, and `down` deletes it. A killed `up` writes no result either:
+with `--json`, its stdout ends at the last event.
 
 **In the background.** `up` doesn't detach itself: start it as a background job of your shell or agent, read
 `.lrun/logs/<service>.log` (or `lrun status`) to see how it goes, and stop it with `lrun down`.
@@ -669,7 +673,8 @@ until `up` has exited (at most its grace period plus 30 seconds, else exit code 
 ok Stopped lrun up (pid 20024)
 ```
 
-Without an `up` running for that config, there is nothing to stop: it says so and exits `0`. It finds the `up` through
+Without an `up` running for that config, there is nothing to stop: it says so and exits `0` (and deletes the `up.json`
+of an `up` that was killed, if any). It finds the `up` through
 `up.json` next to the config, so pass the same `--config` as to `up` if it wasn't the default. Windows only, as `up`
 listens for the request through a named event; elsewhere, stop `up` with Ctrl+C or a signal.
 
@@ -1028,7 +1033,7 @@ Results:
 | `help` | `help`: the help text; `globalOptions`, `commands`, `exitCodes`, `errorCodes`, `diagnosticCodes`: the same as data (see [`help`](#help)). |
 | `schema` | `name`, `schema`: the JSON Schema as an object. |
 | `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C or `down`, `killed` after the grace period), `exitCode`, `log`, and `failure` when its build failed (as `pack`'s, step `build`). |
-| `down` | `state` (the `up.json` looked at), `stopped`, `up` (`null` when none was running): `pid`, `started`, `config`, `logs`, `stopTimeout` (seconds), `services` started so far (`project`, `pid` of `dotnet run`, `log`). |
+| `down` | `state` (the `up.json` looked at), `stopped`, `up` (`null` when none was running): `pid`, `started`, `config`, `logs`, `stopTimeout` (seconds), `services` started so far (`project`, `pid` of `dotnet run`, `log`, `exitCode` once it exited). |
 
 `leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" |
 "name-collision" | "cycle", "projects": [...], "paths": [...], "dependents": [...] }`. `paths` (relative to the root) is
@@ -1136,9 +1141,11 @@ your workspace (`AGENTS.md`, `CLAUDE.md`, ...). For this version:
 - Then: `lrun build --users-of <Library> --with-services --json`, `lrun pack --json`, and before starting services,
   `lrun verify --json` (exit code 6: pack again).
 - Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
-  4 a dotnet build failed (fix the code: `failure.errors` in `result.packages[]`, or `result.services[]` for `up`,
-  has each file, line and code),
-  5 refused by `--strict`.
+  4 a dotnet command failed: `failure.errors` in `result.packages[]` (`pack`, `go`) or `result.services[]` (`up`)
+  has each file, line and code. A `CS` code is in the code; `NU1101` (package not found) means a dependency is
+  neither in the config nor on a source: add it with `--deps-of`. 5 refused by `--strict`.
+- After a failed `pack`, don't start `up`: the feed holds part of the change. Options taking several names
+  (`--users-of`, `--only`, ...) take them separated by spaces.
 - `lrun up` stays in the foreground: run it in the background, read `.lrun/logs/<service>.log` (or
   `lrun status --json`: `result.running`), and stop it with `lrun down --json`. A second `up` is refused (`up-running`).
 - When a command fails for no visible reason: `lrun doctor --json`.

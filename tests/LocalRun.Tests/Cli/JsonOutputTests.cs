@@ -412,22 +412,36 @@ public sealed class JsonOutputTests : IDisposable
     }
 
     [Fact]
-    public async Task Up_GivesABuildError_AsData()
+    public async Task Up_BuildsEveryService_AndGivesEachBuildError_AsData()
     {
         string root = Path.Combine(workDir, "repos");
         WriteApp(root, "Broken", "Undefined();");
         WriteApp(root, "Hello", """System.Console.WriteLine("hello");""");
+        WriteApp(root, "Worse", "AlsoUndefined();");
         Assert.Equal(LocalRunCli.ExitSuccess,
             (await LrunAsync("build", "--root", root, "--include-external", "--csproj", "--json")).ExitCode);
 
         var up = await LrunAsync("up", "--json");
 
         Assert.Equal(LocalRunCli.ExitDotnetFailed, up.ExitCode);
-        var report = JsonDocument.Parse(Encoding.UTF8.GetString(up.Stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries)[^1]).RootElement;
+        var lines = Encoding.UTF8.GetString(up.Stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonDocument.Parse(line).RootElement).ToArray();
+        // Built after the first failure, so that one run reports every broken service; nothing started
+        Assert.Equal(["Broken", "Hello", "Worse"], lines[..^1].Select(line => line.GetProperty("project").GetString()));
+        Assert.All(lines[..^1], line => Assert.Equal("building", line.GetProperty("event").GetString()));
+        var report = lines[^1];
+        string message = report.GetProperty("error").GetProperty("message").GetString()!;
+        Assert.Contains("Broken, Worse", message);
+        Assert.DoesNotContain("--nologo", message);
+        // The error lines as pack gives them, without MSBuild's summary
+        var codes = report.GetProperty("diagnostics").EnumerateArray().Select(diagnostic => diagnostic.GetProperty("code").GetString()).ToList();
+        Assert.Contains("dotnet-error", codes);
+        Assert.DoesNotContain("dotnet-output", codes);
         var services = report.GetProperty("result").GetProperty("services").EnumerateArray()
             .ToDictionary(service => service.GetProperty("project").GetString()!);
         Assert.All(services.Values, service => Assert.Equal("not-started", service.GetProperty("status").GetString()));
         Assert.Equal(JsonValueKind.Null, services["Hello"].GetProperty("failure").ValueKind);
+        Assert.Equal("CS0103", services["Worse"].GetProperty("failure").GetProperty("errors")[0].GetProperty("code").GetString());
         var failure = services["Broken"].GetProperty("failure");
         Assert.Equal("build", failure.GetProperty("step").GetString());
         Assert.NotEqual(0, failure.GetProperty("exitCode").GetInt32());
@@ -815,6 +829,8 @@ public sealed class JsonOutputTests : IDisposable
         string logs = Path.Combine(workDir, ".lrun", "logs");
         var result = report.GetProperty("result");
         Assert.Equal(logs, result.GetProperty("logs").GetString());
+        // Dependencies first, as built
+        Assert.Equal(["Broken", "Hello"], result.GetProperty("services").EnumerateArray().Select(service => service.GetProperty("project").GetString()));
         var services = result.GetProperty("services").EnumerateArray().ToDictionary(service => service.GetProperty("project").GetString()!);
         Assert.Equal("failed", services["Broken"].GetProperty("status").GetString());
         Assert.Equal(3, services["Broken"].GetProperty("exitCode").GetInt32());
@@ -861,6 +877,20 @@ public sealed class JsonOutputTests : IDisposable
     }
 
     [Fact]
+    public async Task Down_DeletesTheFileOfAKilledUp()
+    {
+        // The id is alive, but a process started at another time holds it now: the up that wrote it is gone
+        string statePath = Path.Combine(Directory.CreateDirectory(Path.Combine(workDir, ".lrun")).FullName, UpState.FileName);
+        new UpState(Environment.ProcessId, UpState.CurrentProcessStarted().AddMinutes(-5), "config", "logs", 10, []).Write(statePath);
+
+        var down = await LrunAsync("down", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, down.ExitCode);
+        Assert.False(down.Json.GetProperty("result").GetProperty("stopped").GetBoolean());
+        Assert.False(File.Exists(statePath));
+    }
+
+    [Fact]
     public async Task Up_WhileAnotherRuns_IsRefused()
     {
         FakeRunningUp();
@@ -901,6 +931,7 @@ public sealed class JsonOutputTests : IDisposable
             stop.Wait();
             System.Console.WriteLine("graceful");
             """);
+        WriteApp(root, "Job", """System.Console.WriteLine("done");""");
         Assert.Equal(LocalRunCli.ExitSuccess,
             (await LrunAsync("build", "--root", root, "--include-external", "--csproj", "--json")).ExitCode);
 
@@ -913,9 +944,16 @@ public sealed class JsonOutputTests : IDisposable
             Assert.True(DateTime.UtcNow < deadline, "the service never got ready");
             await Task.Delay(200);
         }
-        var state = UpState.ReadRunning(Path.Combine(workDir, ".lrun", UpState.FileName));
-        Assert.NotNull(state);
-        Assert.Equal("Waiter", Assert.Single(state.Services).Project);
+        // The one-shot job's exit is recorded, so that status doesn't show it as running
+        UpState? state = null;
+        while (state?.Services.SingleOrDefault(service => service.Project == "Job")?.ExitCode == null)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "the job's exit was never recorded");
+            await Task.Delay(200);
+            state = UpState.ReadRunning(Path.Combine(workDir, ".lrun", UpState.FileName));
+        }
+        Assert.Equal(0, state.Services.Single(service => service.Project == "Job").ExitCode);
+        Assert.Null(state.Services.Single(service => service.Project == "Waiter").ExitCode);
 
         var down = await LrunAsync("down", "--json");
         var up = await upRun.WaitAsync(TimeSpan.FromSeconds(30));
@@ -926,7 +964,8 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal(LocalRunCli.ExitSuccess, up.ExitCode);
         var lines = Encoding.UTF8.GetString(up.Stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => JsonDocument.Parse(line).RootElement).ToArray();
         Assert.Contains(lines, line => line.TryGetProperty("event", out var e) && e.GetString() == "stopping");
-        var service = Assert.Single(lines[^1].GetProperty("result").GetProperty("services").EnumerateArray());
+        var service = lines[^1].GetProperty("result").GetProperty("services").EnumerateArray()
+            .Single(service => service.GetProperty("project").GetString() == "Waiter");
         // Stopped by its own Ctrl+C handler, not killed
         Assert.Equal("stopped", service.GetProperty("status").GetString());
         Assert.Equal(0, service.GetProperty("exitCode").GetInt32());
