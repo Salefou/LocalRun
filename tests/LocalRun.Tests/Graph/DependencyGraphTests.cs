@@ -439,6 +439,29 @@ public class DependencyGraphTests
         Assert.Equal(expected, DependencyGraph.IsExecutable(XDocument.Parse(csproj)));
     }
 
+    [Fact]
+    public void References_KeepIncludes_LessTheRemovedOnes_IgnoringUpdates()
+    {
+        var csproj = XDocument.Parse("""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <ProjectReference Include="..\..\src\Kept\Kept.csproj" />
+                <ProjectReference Include="..\..\src\Gone\Gone.csproj" />
+                <ProjectReference Remove="$(RepoRoot)\src\Gone\Gone.csproj" />
+                <ProjectReference Remove="$(RepoRoot)\src\FromProps\FromProps.csproj" />
+                <PackageReference Include="Kept.Package" />
+                <PackageReference Include="gone.package" />
+                <PackageReference Remove="Gone.Package" />
+                <PackageReference Update="Kept.Package" PrivateAssets="all" />
+                <PackageReference Update="OnlyUpdated" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        Assert.Equal(["Kept"], DependencyGraph.References(csproj, "ProjectReference", path => Path.GetFileNameWithoutExtension(path)));
+        Assert.Equal(["Kept.Package"], DependencyGraph.References(csproj, "PackageReference", id => id));
+    }
+
     [Theory]
     [InlineData(false, new[] { "Lib" })]
     [InlineData(true, new[] { "Lib", "Lib.Tests" })]

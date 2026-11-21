@@ -22,6 +22,9 @@ bumps the minor version, anything else the patch.
   with `--users-of` / `--deps-of`.
 - `build` no longer fails when git can't be loaded (its native library, e.g. with the tool installed under a path longer
   than Windows allows): it warns `git-unavailable` and records no repository HEAD for `status`.
+- `build` no longer crashes (`Object reference not set to an instance of an object`) on a csproj holding a
+  `<PackageReference Remove="…" />` or `<ProjectReference Remove="…" />` (to drop a reference a shared props file adds),
+  or an `Update`. A `Remove` now takes out the matching reference of the same csproj; an `Update` adds none.
 
 ## [0.6.0] - 2026-11-21
 

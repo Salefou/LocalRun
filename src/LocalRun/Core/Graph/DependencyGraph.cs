@@ -135,9 +135,8 @@ public class DependencyGraph
                 Type = type,
                 Test = test,
                 Version = version,
-                Dependencies = [.. doc.Descendants(ns + "ProjectReference")
-                    .Select(e => Path.GetFileNameWithoutExtension(e.Attribute("Include")!.Value))],
-            }, [.. doc.Descendants(ns + "PackageReference").Select(e => e.Attribute("Include")!.Value)]));
+                Dependencies = References(doc, "ProjectReference", path => Path.GetFileNameWithoutExtension(path)),
+            }, References(doc, "PackageReference", id => id)));
         }
 
         // A package reference names a package id: the project packed under that id, when it isn't the project's name
@@ -219,6 +218,27 @@ public class DependencyGraph
             return null;
         }
         return id;
+    }
+
+    /// <summary>
+    /// The references of a kind the csproj includes, in order, as <paramref name="key"/> gives them (a project's name from
+    /// its path, a package id as is): the <c>Include</c> items, less those a <c>Remove</c> of the same csproj takes out,
+    /// matched by key (case-insensitive), so <c>$(RepoRoot)\src\X.csproj</c> removes <c>..\..\src\X.csproj</c>. An
+    /// <c>Update</c> changes metadata only and adds no reference. A <c>Remove</c> of an item added elsewhere (a
+    /// <c>Directory.Build.props</c>) has nothing to take out: those are not read.
+    /// </summary>
+    internal static List<string> References(XDocument doc, string kind, Func<string, string> key)
+    {
+        var ns = doc.Root!.Name.Namespace;
+        var items = doc.Descendants(ns + kind).ToList();
+        var removed = items.Select(item => item.Attribute("Remove")?.Value)
+            .OfType<string>()
+            .Select(key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return [.. items.Select(item => item.Attribute("Include")?.Value)
+            .OfType<string>()
+            .Select(key)
+            .Where(reference => !removed.Contains(reference))];
     }
 
     /// <summary>The project SDKs whose default <c>OutputType</c> is <c>Exe</c> (ASP.NET Core services, worker services).</summary>
