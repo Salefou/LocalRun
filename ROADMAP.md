@@ -34,6 +34,7 @@ everyone is "Before 1.0".
 | A10, Agent test run follow-ups | What an agent tripped on, driving `lrun` from `help --agent` alone | Related: A1, A2, 3, 5 |
 | 8, Project identity | Projects sharing a file name (samples in open-source repos): kept, named by path | Decided, additive form |
 | 9, Failures suggest the way out | Getting past a project that can't build: `up` / `go` hints, `build --exclude` | Decided. Related: `up --exclude`, A2 |
+| 10, Packed under another version | Repositories versioned from git tags (MinVer): the plan's version kept, or the real one reported | Decided. Related: 5 (`verify`) |
 | Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
 | MCP server | Agents calling `lrun` as tools | Builds on 3 and A1–A4; conflicts with "Non-interactive CLI": ask first |
 
@@ -70,7 +71,7 @@ with `config-invalid`. Migrating an older one when the shape changes is left to 
 Everything else is additive: 3 (`status`, and the config recording its build flags, time and
 HEADs as optional fields), 4's flags, 5's `--fix` and source commit, A1's `--config`, A2 (new `--json` fields, no
 `schemaVersion` bump), A3 (as long as `up` stays in the foreground by default), A5, A7, A8, 8 (project identity),
-9 (hints, `build --exclude`), the MCP server.
+9 (hints, `build --exclude`), 10 (a new warning and the actual version written back), the MCP server.
 
 ---
 
@@ -246,6 +247,30 @@ To decide when building it: the users of an excluded library are kept without th
 published package), as for collisions and cycles. Is `kept-without-dependency` then still strict, though the user asked
 for the exclusion? And `go` stops at the first failing depth (finding of the same run): keep packing what doesn't depend
 on the failure, then fail, as `up` builds every service before reporting?
+
+### 10. Packages packed under another version than planned **(user, 2026-11-21)**
+
+What happens: on OpenTelemetry, which takes its versions from git tags with MinVer, `pack` planned `1.21.1-dev.1` and
+`go` packed `1.21.1-alpha.0.38`, silently. `go` passes the planned version through a props file read early; MinVer sets
+`Version` / `PackageVersion` in a target, later, and the last one wins. `package-version-override` reads the csproj XML
+only, so it can't see it, and consumers of the package don't get the version the plan promised. Same for any tool
+setting the version in a target (Nerdbank.GitVersioning, GitVersion).
+
+Decided (user feedback, 2026-11-21):
+- **After each pack, compare the package produced with the plan.** When they differ, a warning with a new code, not
+  strict: an override may be intended (packing an older version to benchmark it against the current one). The
+  version actually packed is written back into `repack.config.json` and reported in `to`, so `verify` and `status`
+  see the truth. Covers every tool, known or not.
+- **MinVer obeys the plan**: the generated props file also sets `MinVerVersionOverride` (MinVer's own override) to
+  the planned version, per project. Other tools rely on the check above: Nerdbank.GitVersioning has no clean override.
+
+Open:
+- The SDK default `1.0.0` is all the evaluation sees of such a project's version (set in a target). Where the latest
+  published version is lower (`0.11.0-alpha.1`), that fake `1.0.0` counts as a csproj ahead of it and wins the base.
+  Detect the git-versioning tool at `build` (a `PackageReference` to it, often in `Directory.Build.props` or central
+  package management) and ignore the csproj version then?
+- `package-version-override` (a `<PackageVersion>` in the csproj, seen before packing) is strict; this check isn't, for
+  the reason above. Keep both, or make the first one non-strict too?
 
 ---
 
