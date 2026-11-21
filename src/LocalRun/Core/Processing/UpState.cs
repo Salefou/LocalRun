@@ -76,6 +76,25 @@ public sealed record UpState(int Pid, DateTimeOffset Started, string Config, str
         File.Move(temporary, path, overwrite: true);
     }
 
+    /// <summary>
+    /// Deletes a file left by an <c>up</c> that was killed (its process gone); returns whether there was one. A file a
+    /// running <c>up</c> wrote in the meantime is read as running and kept.
+    /// </summary>
+    public static bool DeleteIfLeftBehind(string path)
+    {
+        if (!File.Exists(path) || ReadRunning(path) != null)
+            return false;
+        try
+        {
+            File.Delete(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false; // ignored by the next up all the same
+        }
+    }
+
     /// <summary>Deletes the file if it is still this <c>up</c>'s.</summary>
     public void Delete(string path)
     {
@@ -94,4 +113,5 @@ public sealed record UpState(int Pid, DateTimeOffset Started, string Config, str
 
 /// <param name="Pid">The <c>dotnet run</c> process.</param>
 /// <param name="Log">The file its output goes to.</param>
-public sealed record UpStateService(string Project, int Pid, string? Log);
+/// <param name="ExitCode">Set once it exited (a one-shot job, or a service that failed); null while it runs.</param>
+public sealed record UpStateService(string Project, int Pid, string? Log, int? ExitCode = null);

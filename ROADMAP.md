@@ -31,6 +31,7 @@ everyone is "Before 1.0".
 | A7, `doctor` follow-ups | Per-repository `global.json`, fetch age as an option | Related: 7 |
 | A8, `clean-feed` | Local feeds piling up iterations | Related: 3 |
 | A9, Run from a copy | Rebuilding a service while `up` runs it (no file lock) | Postponed. Builds on A3 |
+| A10, Agent test run follow-ups | What an agent tripped on, driving `lrun` from `help --agent` alone | Related: A1, A2, 3, 5 |
 | Project identity | Projects sharing a file name (keyed by path or `PackageId`) | 1.0 blocker: breaking either way |
 | Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
 | MCP server | Agents calling `lrun` as tools | Builds on 3 and A1–A4; conflicts with "Non-interactive CLI": ask first |
@@ -321,6 +322,29 @@ Costs, to weigh when it comes back:
 Postponed (user feedback, 2026-11-21): it came up with a user and an agent each using `lrun` on the same working tree,
 which raises more than this (separate clones or worktrees are the usual answer, outside LocalRun's scope). Revisit when
 the lock gets in the way with A3 in use.
+
+### A10. Agent test run follow-ups **(claude)**
+A fresh agent, given only `lrun help --agent` and a sample workspace, made a library change, ran its consumers, then
+broke one on purpose (2026-11-21). Fixed before 0.6.0 (user feedback, 2026-11-21): `up` restoring stale packages,
+building every service after a failure, its build lines and messages, its service order, `up.json` exit codes and
+leftovers, `settings` checking the file, and the agent instructions. Left, each small unless said:
+- **A missing dependency reads as a code failure**: `--users-of X --with-services` leaves out X's own dependencies (by
+  design), and with an empty feed `pack` fails on `NU1101` (exit `4`). When a package not found is a project of the
+  scanned graph left out by the filter, say so and suggest `--deps-of` (related: A2). `doctor` could flag it too.
+- **A partial pack passes `verify`**: after a failed `pack`, the libraries packed before the failure are up to date,
+  so `verify` exits `0` while the feed holds half a change. `verify` (or `status`) could tell from the plan's outcome.
+  Related: 5, 3.
+- **`pack` stops at the first failed depth**: the deeper projects are `skipped`, so their own breakage stays unseen.
+  A keep-going mode, as `up` now has, would pack what it can; deeper projects need the failed ones, so it is less simple.
+- **`status` doesn't say whether the plan ran**, nor how it ended. Related: 3.
+- **Depth numbering**: `depth` is 0-based in JSON, the text says `Depth 1/3`, `status` says `d0`. Changing the JSON is
+  breaking: a 1.0 question.
+- **`planned-below-base` on executables**: they are packed too, so the warning fires on a service nobody consumes as a
+  package. Skip it for executables, or stop packing them (a bigger question).
+- **`--with-services added: nothing`** reads oddly when the services were kept already as users: reword.
+- **`result.projects` differs** between `build` (counts) and `list` (an array). Renaming is breaking: a 1.0 question.
+- **Which build of a package a service runs**: the version alone (`local.1`) can't prove a service loaded the new
+  build; the agent checked the dll by hand. A pack time or content hash per package, shown where `up` reports, would.
 
 ### Not now
 - An MCP server (`lrun mcp`) exposing the above: attractive once 1–3 and A1–A4 exist; it would be a long-running,

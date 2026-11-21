@@ -119,8 +119,8 @@ public class RepackExecutor
         return sb.ToString();
     }
 
-    // NoSummary: MSBuild would list every warning a second time at the end of each command
-    private const string NoSummary = " -clp:NoSummary";
+    // NoSummary: MSBuild would list every warning a second time at the end of each command (up's builds use it too)
+    internal const string NoSummary = " -clp:NoSummary";
 
     private async Task PackAllAsync(List<ProjectRepack> projects, string nugetRepoPath, string versionsPropsPath)
     {

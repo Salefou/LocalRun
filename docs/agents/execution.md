@@ -13,7 +13,13 @@ why.
   etc. of the project's solution, `ProjectRepack.SolutionPath` / `ProjectNode.SolutionPath`), since projects are built
   alone: an `OutputPath` of `$(SolutionDir)\bin\…` otherwise lands at the drive root (`C:\bin`). Reported 2026-10-26.
 - **`up` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
-  references would collide), start all with `dotnet run --no-build` without awaiting, Ctrl+C →
+  references would collide), all of them even after a failure, then fail before starting anything (user feedback,
+  2026-11-21: one run shows every broken service; agent test run). Each build restores with `--force`, for the reason
+  `go`'s restore does: a no-op restore keeps floating `*-*` versions on the last restore's iteration, so a service not
+  restored by the last pack (failed or skipped there, another config) ran stale packages. The failed builds' lines are
+  logged as `go` logs them (`dotnet-error` / `dotnet-warning`, `-clp:NoSummary`; `dotnet-output` only without an error
+  line); `error.message` names the projects, never the command line. `Services` keeps the run order.
+  Then start all with `dotnet run --no-build` without awaiting, Ctrl+C →
   `e.Cancel = true` + `RequestStop()`: the children get Ctrl+C (below) + kill the process tree after
   the stop grace period (10 s, `--stop-timeout`, else `stopTimeout` in the settings). On Windows the `dotnet run`
   processes (not the builds: MSBuild nodes outlive them) go into a kill-on-close `ProcessJob`, so they die with `lrun`
@@ -34,8 +40,9 @@ why.
   Process groups with Ctrl+Break were the rejected alternative (`Process` can't create them in .NET 8, and Ctrl+Break
   isn't Ctrl+C for non-.NET apps).
 - **`up.json` and `down`** (`UpState`, ROADMAP A3, user feedback, 2026-11-21): `up` writes `up.json` next to its config
-  (pid, start time, config, logs, grace period, the services started with their `dotnet run` pid), atomically (temp +
-  move), updated on each `started` event, deleted on exit if still its own. A file whose pid is gone, or whose process
+  (pid, start time, config, logs, grace period, the services started with their `dotnet run` pid, and exit code once
+  exited), atomically (temp + move), updated on each `started` and `exited` event (none after the delete), deleted on
+  exit if still its own; `down` deletes one left by a killed `up` (`status` only reads). A file whose pid is gone, or whose process
   started at another time (pid reuse), is ignored, so a killed `up` leaves nothing to clean. A second `up` with that
   file live fails `up-running` (exit 1) before reading the config. On Windows `up` waits on the named event
   `Local\lrun-up-stop-<pid>`; `down` sets it and waits for the process, at most the grace period + 30 s

@@ -128,7 +128,8 @@ changes, update its file and its summary here together.
   `RunProcessor`, `ProcessJob`, `ConsoleSignal`, `UpState`, `down`, or a `dotnet` command line of `go` / `up`.
   - Never `-p:PackageVersion` (a global property reaches project references: NU1107); a generated props file sets it.
   - Every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments`.
-  - `up`: builds sequentially, runs side by side, no readiness checks by design, `dotnet run` processes in a
+  - `up`: builds sequentially (every one even after a failure, each with `--force` so floating versions take the
+    feed's latest), runs side by side, no readiness checks by design, `dotnet run` processes in a
     kill-on-close job. The Ctrl+C rules and how to test them from automation are in the file.
   - `up`'s processes run on hidden consoles of their own (Windows): a stop (Ctrl+C or `lrun down`) is sent to them
     alone, through the helper, never as a Ctrl+C on `up`'s console (shared with the caller's shell).

@@ -37,11 +37,18 @@ bumps the minor version, anything else the patch.
 - `build` records how it made the config, in a new `Build` field of `localrun.config.json` (time, `lrun` version, flags,
   projects found changed, what it left out, each repository's HEAD), and marks test projects kept with `--tests`
   (`"Test": true`). Older configs still load. `list --json` gives each project's `test` too.
+- `lrun settings` checks the file each time (`--path` too) and warns `settings-invalid` when `build`, `pack` or `up`
+  would fail on it, so you see whether a fix holds without running them; `--json` gives `valid` and `problem`.
+- `up` builds every executable even after one fails, then stops before starting anything: one run reports every
+  service a change breaks, each with its `failure` in the result. The build lines are logged as `pack` logs them
+  (`dotnet-error` and `dotnet-warning` instead of `dotnet-output`, without MSBuild's summary), and the error message
+  names the projects instead of the whole command line.
 - `lrun down` stops a running `up` from another shell or process, as Ctrl+C in its console would (grace period, then
   kills), and waits until it has exited; with nothing running, it exits `0`. So `up` can run in the background (a shell
   job, an agent's background command) and still stop cleanly. Windows only.
-- While it runs, `up` records itself in `up.json` next to the config: `lrun status` shows it (`running` with `--json`),
-  and a second `up` with the same config fails with `up-running` (exit code `1`) instead of building over the first.
+- While it runs, `up` records itself in `up.json` next to the config: `lrun status` shows it (`running` with `--json`,
+  each service's `exitCode` once it exited), and a second `up` with the same config fails with `up-running` (exit code
+  `1`) instead of building over the first. `down` deletes the file of an `up` that was killed.
 
 ### Changed
 
@@ -55,6 +62,13 @@ bumps the minor version, anything else the patch.
 
 - **Breaking:** the `LOCALRUN_LOG_LEVEL` environment variable, now ignored: use `--log-level` (e.g. in CI scripts) or
   `logLevel` in the settings.
+
+### Fixed
+
+- `up` ran a service against the packages of its last restore instead of the latest in the local feed when that
+  service wasn't restored by the last pack (a pack that failed or didn't reach it, a pack of another config): each
+  build now restores again.
+- `up --json` lists the services in dependency order, as documented, instead of in no set order.
 
 ## [0.5.1] - 2026-11-12
 

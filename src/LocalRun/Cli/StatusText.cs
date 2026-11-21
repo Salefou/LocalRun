@@ -57,7 +57,9 @@ internal static class StatusText
         {
             logger.LogInformation("Running: {Command} up, pid {Pid}, started {Time} ({Age}): {Services}", LocalRunCli.CommandName, up.Pid,
                 Stamp(up.Started), Text.Age(now - up.Started),
-                up.Services.Count == 0 ? "building" : Text.Abbreviate(up.Services.Select(service => $"{service.Project} (pid {service.Pid})")));
+                up.Services.Count == 0 ? "building" : Text.Abbreviate(up.Services.Select(service => service.ExitCode is { } exitCode
+                    ? $"{service.Project} (exited, code {exitCode})"
+                    : $"{service.Project} (pid {service.Pid})")));
         }
     }
 

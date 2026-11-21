@@ -122,6 +122,11 @@ public static class DiagnosticEvents
     public static readonly EventId PlanOlderThanConfig = Code(161, "plan-older-than-config", strict: false,
         "status: the repack plan is older than the config, so planned from an earlier one: go would pack that. pack plans again.");
 
+    // The commands that read the settings fail on an invalid file (error code settings-invalid); settings itself warns
+
+    public static readonly EventId SettingsInvalid = Code(170, "settings-invalid", strict: false,
+        "settings: the settings file can't be read, or holds an unknown key or a bad value: build, pack and up would fail on it.");
+
     /// <summary>Every code, in id order, with its meaning; <see cref="DiagnosticsCollector.UnspecifiedCode"/> last.</summary>
     public static IReadOnlyList<DiagnosticCode> All { get; } =
         [.. all, new(DiagnosticsCollector.UnspecifiedCode, false, "A warning without a code yet.")];

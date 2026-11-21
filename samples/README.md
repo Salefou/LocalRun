@@ -260,8 +260,9 @@ lrun up
   prints `… stopped` and exits with code 0, and `up` exits with code 0. No `LrSample.*` process is
   left in Task Manager.
 - **From another terminal** (or with `up` started in the background), in `samples/`:
-  - `lrun status` ends with `Running: lrun up, pid …, started … (just now): LrSample.Island.App (pid …), …`, the four
-    executables with the pid of their `dotnet run`;
+  - `lrun status` ends with `Running: lrun up, pid …, started … (just now): LrSample.Island.App (exited, code 0),
+    LrSample.RiskService (pid …), LrSample.OrderGateway (pid …), LrSample.ReportCli (exited, code 0)`: the two services
+    with the pid of their `dotnet run`, the two jobs with their exit code;
   - a second `lrun up` fails at once: `FAILED up failed: lrun up is already running for this config (pid …, started …):
     run 'lrun down' to stop it first.`, exit code 1 (`up-running` with `--json`);
   - `lrun down` prints `> Stopping lrun up (pid …)` then `ok Stopped lrun up (pid …)`, exit code 0, while the `up`
@@ -270,7 +271,9 @@ lrun up
     `No lrun up running for …\samples\.lrun\localrun.config.json: nothing to stop.`, exit code 0.
 - **Killing `lrun` from outside**: while they run, `taskkill /F /IM lrun.exe` from another terminal.
   The services go with it (no `LrSample.*` process left, ports free), without printing `… stopped`:
-  Windows ends them through the job object.
+  Windows ends them through the job object. `.lrun/up.json` stays, and `lrun status` ignores it (no `Running:` line);
+  `lrun down` prints `Deleted …\samples\.lrun\up.json, left by an lrun up that was killed.`, then `nothing to stop`,
+  exit code 0, and the file is gone.
 
 Variations worth trying:
 

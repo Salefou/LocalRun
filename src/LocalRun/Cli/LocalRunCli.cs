@@ -547,17 +547,26 @@ public static class LocalRunCli
         var events = OutputMode.Json ? new EventStream(Console.Out) : null;
         var state = new UpState(Environment.ProcessId, UpState.CurrentProcessStarted(), Path.GetFullPath(configPath), logsFolder,
             (int)(stopTimeout == null ? RunProcessor.DefaultStopGracePeriod.TotalSeconds : stopTimeout.Value), []);
+        bool stateDeleted = false;
+        void Record(Func<IReadOnlyList<UpStateService>, IReadOnlyList<UpStateService>> change)
+        {
+            lock (statePath)
+            {
+                // A late exit, once up is done, must not write the file again
+                if (stateDeleted)
+                    return;
+                state = state with { Services = change(state.Services) };
+                state.Write(statePath);
+            }
+        }
         void OnEvent(UpEvent upEvent)
         {
             events?.Write(upEvent);
             if (upEvent is { Event: UpEvents.Started, Project: { } project, Pid: { } pid })
-            {
-                lock (statePath)
-                {
-                    state = state with { Services = [.. state.Services, new UpStateService(project, pid, upEvent.Log)] };
-                    state.Write(statePath);
-                }
-            }
+                Record(services => [.. services, new UpStateService(project, pid, upEvent.Log)]);
+            // So that status doesn't show a one-shot job, or a service that failed, as running
+            else if (upEvent is { Event: UpEvents.Exited, Project: { } exited, ExitCode: { } exitCode })
+                Record(services => [.. services.Select(service => service.Project == exited ? service with { ExitCode = exitCode } : service)]);
         }
         var processor = new RunProcessor(logsFolder, OnEvent, stopTimeout == null ? null : TimeSpan.FromSeconds(stopTimeout.Value));
         state.Write(statePath);
@@ -575,7 +584,10 @@ public static class LocalRunCli
         {
             stopWait?.Unregister(null);
             lock (statePath)
+            {
                 state.Delete(statePath);
+                stateDeleted = true;
+            }
             events?.Close();
             var services = processor.Services.Select(entry => new ServiceReport(entry.Key, entry.Value.Status, entry.Value.ExitCode,
                 entry.Value.Status == ServiceStatus.NotStarted ? null : entry.Value.Log, entry.Value.Failure)).ToList();
@@ -600,6 +612,8 @@ public static class LocalRunCli
         var state = UpState.ReadRunning(statePath);
         if (state == null)
         {
+            if (UpState.DeleteIfLeftBehind(statePath))
+                logger.LogInformation("Deleted {State}, left by an {Command} up that was killed.", statePath, CommandName);
             logger.LogInformation("No {Command} up running for {Config}: nothing to stop.", CommandName, Path.GetFullPath(configPath));
             output.Result = new DownResult(statePath, null, false);
             return;
@@ -658,15 +672,17 @@ public static class LocalRunCli
         string path = UserSettings.DefaultPath;
         if (pathOnly)
         {
+            string? pathProblem = SettingsProblem(path);
             if (OutputMode.Json)
-                output.Result = new SettingsResult(path, Created: false);
+                output.Result = new SettingsResult(path, Created: false, pathProblem == null, pathProblem);
             else
                 Console.WriteLine(path);
             return;
         }
 
         bool created = UserSettings.CreateIfMissing(path);
-        output.Result = new SettingsResult(path, created);
+        string? problem = SettingsProblem(path);
+        output.Result = new SettingsResult(path, created, problem == null, problem);
         if (created)
         {
             output.Written.Add(path);
@@ -682,6 +698,24 @@ public static class LocalRunCli
         {
             try { Process.Start("notepad.exe", $"\"{path}\""); }
             catch (Exception ex) { logger.LogWarning(DiagnosticEvents.OpenFailed, "Could not open notepad: {Error}", ex.Message); }
+        }
+    }
+
+    /// <summary>
+    /// Why the settings file can't be used, warned (<c>settings-invalid</c>), or null when it can or doesn't exist. The
+    /// commands that read it fail on it and send you to <c>settings</c>: that's where you see whether your fix holds.
+    /// </summary>
+    private static string? SettingsProblem(string path)
+    {
+        try
+        {
+            UserSettings.Load(path);
+            return null;
+        }
+        catch (SettingsInvalidException ex)
+        {
+            logger.LogWarning(DiagnosticEvents.SettingsInvalid, "{Problem}", ex.Message);
+            return ex.Message;
         }
     }
 
