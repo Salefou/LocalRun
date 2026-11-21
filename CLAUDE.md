@@ -125,14 +125,17 @@ changes, update its file and its summary here together.
   - The base is the latest over all the restore sources plus the local feed, or the csproj version when higher (by the
     number alone, then the bump flag is ignored). One iteration number `.N` for the whole plan, no counter file.
 - **Execution** (`docs/agents/execution.md`): before changing `RepackExecutor`, `SolutionProperties`, `DotnetOutput`,
-  `RunProcessor`, `ProcessJob`, or a `dotnet` command line of `go` / `up`.
+  `RunProcessor`, `ProcessJob`, `ConsoleSignal`, `UpState`, `down`, or a `dotnet` command line of `go` / `up`.
   - Never `-p:PackageVersion` (a global property reaches project references: NU1107); a generated props file sets it.
   - Every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments`.
   - `up`: builds sequentially, runs side by side, no readiness checks by design, `dotnet run` processes in a
     kill-on-close job. The Ctrl+C rules and how to test them from automation are in the file.
+  - `up`'s processes run on hidden consoles of their own (Windows): a stop (Ctrl+C or `lrun down`) is sent to them
+    alone, through the helper, never as a Ctrl+C on `up`'s console (shared with the caller's shell).
+  - One `up` per config folder (`up.json`, `up-running`); `down` is Windows only, a named event.
   - `failure.errors`: one entry per (code, message, file, line, column, project), capped at 50.
 - **Inspection** (`docs/agents/inspection.md`): before changing `status`, `doctor` or `verify`.
-  - `status` reads the config and the plan only: never scans, queries NuGet or calls git.
+  - `status` reads the config, the plan and `up.json` only: never scans, queries NuGet or calls git.
   - `doctor` never fixes anything; its check names are a contract like codes.
   - `verify` covers libraries only; `package-missing` / `package-stale` are not strict, `verify` fails itself (exit 6).
 - **User settings** (`docs/agents/settings.md`): before changing `UserSettings` or which command reads a setting.

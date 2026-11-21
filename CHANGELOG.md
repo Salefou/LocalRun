@@ -36,11 +36,19 @@ bumps the minor version, anything else the patch.
 - `build` records how it made the config, in a new `Build` field of `localrun.config.json` (time, `lrun` version, flags,
   projects found changed, what it left out, each repository's HEAD), and marks test projects kept with `--tests`
   (`"Test": true`). Older configs still load. `list --json` gives each project's `test` too.
+- `lrun down` stops a running `up` from another shell or process, as Ctrl+C in its console would (grace period, then
+  kills), and waits until it has exited; with nothing running, it exits `0`. So `up` can run in the background (a shell
+  job, an agent's background command) and still stop cleanly. Windows only.
+- While it runs, `up` records itself in `up.json` next to the config: `lrun status` shows it (`running` with `--json`),
+  and a second `up` with the same config fails with `up-running` (exit code `1`) instead of building over the first.
 
 ### Changed
 
 - `lrun help` rejects options, like every other command (`lrun help --nope` exits `2`). The help text is reflowed: the
   same content, rendered from the description `help --json` returns, and `list` spells out its options.
+- On Windows, the processes `up` starts each run on a hidden console of their own, and `up` passes Ctrl+C on to them:
+  the same stop as before from a terminal, and a stop that never reaches the shell `up` was started from in the
+  background. If it can't be passed on, `up` warns `stop-signal-failed` and kills them after the grace period.
 
 ### Removed
 

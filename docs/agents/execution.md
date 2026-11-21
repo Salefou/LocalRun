@@ -14,7 +14,7 @@ why.
   alone: an `OutputPath` of `$(SolutionDir)\bin\…` otherwise lands at the drive root (`C:\bin`). Reported 2026-10-26.
 - **`up` runs side by side** (`RunProcessor`): build each executable sequentially (shared project
   references would collide), start all with `dotnet run --no-build` without awaiting, Ctrl+C →
-  `e.Cancel = true` + children get Ctrl+C themselves (same console) + kill the process tree after
+  `e.Cancel = true` + `RequestStop()`: the children get Ctrl+C (below) + kill the process tree after
   the stop grace period (10 s, `--stop-timeout`, else `stopTimeout` in the settings). On Windows the `dotnet run`
   processes (not the builds: MSBuild nodes outlive them) go into a kill-on-close `ProcessJob`, so they die with `lrun`
   even when it is killed from outside; failing to create/assign it only warns. No readiness checks, by design (user
@@ -23,6 +23,23 @@ why.
   ends with the result (services `not-started`, exit 0). Each service's output also goes to `--logs`
   (`.lrun/logs/<name>.log`); with `--json`, `UpEvent`s stream through `EventStream`, closed before the one-line document
   so a late `exited` can't follow it.
+- **Hidden consoles and the stop signal** (ROADMAP A3, user feedback, 2026-11-21): every process `up` starts, builds
+  included, has `CreateNoWindow` (Windows: a hidden console of its own). A stop, whether Ctrl+C in `up`'s console or
+  `lrun down`, goes through `RunProcessor.RequestStop()`, which starts `lrun` itself again as a helper
+  (`ConsoleSignal.HelperFlag`, caught first thing in `Main`, not a command: no log, no JSON) that attaches to each
+  child's console in turn and sends `CTRL_C_EVENT` there. Never send Ctrl+C to `up`'s own console (group 0): when `up`
+  runs as a background job, that console is the caller's, and its shell would get it too (checked by a spike: the
+  shared-console control received it, the hidden one didn't). The helper failing only warns `stop-signal-failed`; the
+  grace period then kills. Outside Windows the children share the terminal's foreground group and get its signal.
+  Process groups with Ctrl+Break were the rejected alternative (`Process` can't create them in .NET 8, and Ctrl+Break
+  isn't Ctrl+C for non-.NET apps).
+- **`up.json` and `down`** (`UpState`, ROADMAP A3, user feedback, 2026-11-21): `up` writes `up.json` next to its config
+  (pid, start time, config, logs, grace period, the services started with their `dotnet run` pid), atomically (temp +
+  move), updated on each `started` event, deleted on exit if still its own. A file whose pid is gone, or whose process
+  started at another time (pid reuse), is ignored, so a killed `up` leaves nothing to clean. A second `up` with that
+  file live fails `up-running` (exit 1) before reading the config. On Windows `up` waits on the named event
+  `Local\lrun-up-stop-<pid>`; `down` sets it and waits for the process, at most the grace period + 30 s
+  (`command-failed` after). No `up` running = exit 0 with `stopped: false`. Left out on purpose: `--detach`, `ps`, `logs`.
 - **Testing Ctrl+C from automation**: start `lrun up` in its own console and send a real `CTRL_C_EVENT`
   (AttachConsole + GenerateConsoleCtrlEvent from a separate process); a `cmd` wrapper reporting the exit
   code needs `/v:on` and `!ERRORLEVEL!`. Poll its redirected output with `FileShare.ReadWrite` (`Get-Content` can't

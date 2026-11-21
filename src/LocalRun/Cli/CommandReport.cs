@@ -122,6 +122,9 @@ internal static class ErrorCodes
     /// <summary><c>doctor</c>: a check failed (exit code 1, as nothing a script would do differently from another failure).</summary>
     public const string DoctorFailed = "doctor-failed";
 
+    /// <summary><c>up</c>: another <c>up</c> runs with this config: <c>down</c> stops it (exit code 1).</summary>
+    public const string UpRunning = "up-running";
+
     /// <summary>Any other failure (exit code 1).</summary>
     public const string CommandFailed = "command-failed";
 
@@ -137,6 +140,7 @@ internal static class ErrorCodes
         new(Strict, LocalRunCli.ExitStrict, "--strict: the command completed, but its result left something out or may be wrong."),
         new(VerifyFailed, LocalRunCli.ExitVerifyFailed, "verify: a library's package is missing from the local feed, or stale."),
         new(DoctorFailed, LocalRunCli.ExitFailure, "doctor: a setup check failed."),
+        new(UpRunning, LocalRunCli.ExitFailure, "up: another up runs with this config; lrun down stops it."),
         new(CommandFailed, LocalRunCli.ExitFailure, "Any other failure."),
     ];
 
@@ -144,6 +148,7 @@ internal static class ErrorCodes
     {
         VerifyFailedException => (VerifyFailed, LocalRunCli.ExitVerifyFailed),
         DoctorFailedException => (DoctorFailed, LocalRunCli.ExitFailure),
+        UpRunningException => (UpRunning, LocalRunCli.ExitFailure),
         UsageException => (Usage, LocalRunCli.ExitUsage),
         ConfigNotFoundException => (ConfigNotFound, LocalRunCli.ExitInput),
         ConfigInvalidException => (ConfigInvalid, LocalRunCli.ExitInput),
@@ -166,6 +171,8 @@ internal sealed class RootNotFoundException(string message) : DirectoryNotFoundE
 internal sealed class VerifyFailedException(string message) : Exception(message);
 
 internal sealed class DoctorFailedException(string message) : Exception(message);
+
+internal sealed class UpRunningException(string message) : Exception(message);
 
 /// <summary>The result of <c>doctor</c>.</summary>
 /// <param name="Checks">Every finding, ok ones included, in the order they are printed: settings, dotnet, root, local
@@ -276,6 +283,7 @@ internal sealed record ListedProject(string Name, string PackageId, string Type,
 /// <param name="Build">How <c>build</c> made it, or null for a config written before 0.6.0.</param>
 /// <param name="Projects">In dependency order (depth, then name), with the latest versions <c>build</c> found.</param>
 /// <param name="Plan">The repack plan, or null when there is none.</param>
+/// <param name="Running">The <c>up</c> running with this config, as it records itself, or null.</param>
 internal sealed record StatusResult(
     string Config,
     DateTimeOffset Written,
@@ -284,10 +292,11 @@ internal sealed record StatusResult(
     BuildRecord? Build,
     ProjectCounts Counts,
     IReadOnlyList<ListedProject> Projects,
-    StatusPlan? Plan)
+    StatusPlan? Plan,
+    UpState? Running)
 {
     public static StatusResult Of(string configPath, DateTimeOffset written, LocalRunConfig config,
-        (string Path, DateTimeOffset Written, RepackConfig Plan)? plan)
+        (string Path, DateTimeOffset Written, RepackConfig Plan)? plan, UpState? running = null)
     {
         var depths = DependencyGraph.FromConfig(config).ComputeNameToDepth();
         var projects = config.Projects
@@ -297,7 +306,7 @@ internal sealed record StatusResult(
         int executables = projects.Count(proj => proj.Type == "executable");
         return new(configPath, written, config.RootPath, config.LocalNugetPath, config.Build,
             new ProjectCounts(projects.Count, projects.Count - executables, executables), projects,
-            plan is { } found ? StatusPlan.Of(found.Path, found.Written, found.Written < written, found.Plan) : null);
+            plan is { } found ? StatusPlan.Of(found.Path, found.Written, found.Written < written, found.Plan) : null, running);
     }
 }
 
@@ -342,6 +351,12 @@ internal sealed record SettingsResult(string Path, bool Created);
 /// <param name="Logs">The folder of the services' log files.</param>
 /// <param name="Services">The executables of the config, dependencies first, without the excluded ones.</param>
 internal sealed record UpResult(string Logs, IReadOnlyList<ServiceReport> Services);
+
+/// <summary>The result of <c>down</c>.</summary>
+/// <param name="State">The state file looked at, next to the config.</param>
+/// <param name="Up">The <c>up</c> stopped, as it recorded itself; null when none was running.</param>
+/// <param name="Stopped">Whether an <c>up</c> was stopped.</param>
+internal sealed record DownResult(string State, UpState? Up, bool Stopped);
 
 /// <param name="Status"><see cref="ServiceStatus"/>: <c>not-started</c>, <c>exited</c>, <c>failed</c>, <c>stopped</c> or <c>killed</c>.</param>
 /// <param name="ExitCode">Null when it never started, or was killed and didn't exit in time.</param>

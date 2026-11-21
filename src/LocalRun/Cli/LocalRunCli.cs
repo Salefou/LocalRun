@@ -204,6 +204,9 @@ public static class LocalRunCli
             case "up":
                 await RunExecutablesAsync(options, output);
                 break;
+            case "down":
+                await DownAsync(options, output);
+                break;
             case "settings":
                 Settings(options, output);
                 break;
@@ -337,7 +340,8 @@ public static class LocalRunCli
             ? await ReadFromFile<RepackConfig>(repackConfigPath, "--repack-config", "pack")
             : null;
         var result = StatusResult.Of(configPath, File.GetLastWriteTime(configPath), config,
-            plan == null ? null : (repackConfigPath, File.GetLastWriteTime(repackConfigPath), plan));
+            plan == null ? null : (repackConfigPath, File.GetLastWriteTime(repackConfigPath), plan),
+            UpState.ReadRunning(UpState.PathFor(configPath)));
         StatusText.Print(result);
         output.Result = result;
     }
@@ -529,25 +533,104 @@ public static class LocalRunCli
 
         stopTimeout ??= UserSettings.Load().StopTimeout;
 
+        // One up per config folder: a second would build over the running services and clash on their ports
+        string statePath = UpState.PathFor(configPath);
+        if (UpState.ReadRunning(statePath) is { } other)
+        {
+            throw new UpRunningException($"{CommandName} up is already running for this config (pid {other.Pid}, started " +
+                $"{other.Started.ToLocalTime():yyyy-MM-dd HH:mm:ss}): run '{CommandName} down' to stop it first.");
+        }
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
         // Creates the folder, and the work folder's .gitignore when the logs are in it
         PrepareFolderOf(Path.Combine(logsFolder, "_"));
         // With --json, events stream on stdout as they happen: an agent sees the services start without waiting for the end
         var events = OutputMode.Json ? new EventStream(Console.Out) : null;
-        var processor = new RunProcessor(logsFolder, events == null ? null : events.Write,
-            stopTimeout == null ? null : TimeSpan.FromSeconds(stopTimeout.Value));
+        var state = new UpState(Environment.ProcessId, UpState.CurrentProcessStarted(), Path.GetFullPath(configPath), logsFolder,
+            (int)(stopTimeout == null ? RunProcessor.DefaultStopGracePeriod.TotalSeconds : stopTimeout.Value), []);
+        void OnEvent(UpEvent upEvent)
+        {
+            events?.Write(upEvent);
+            if (upEvent is { Event: UpEvents.Started, Project: { } project, Pid: { } pid })
+            {
+                lock (statePath)
+                {
+                    state = state with { Services = [.. state.Services, new UpStateService(project, pid, upEvent.Log)] };
+                    state.Write(statePath);
+                }
+            }
+        }
+        var processor = new RunProcessor(logsFolder, OnEvent, stopTimeout == null ? null : TimeSpan.FromSeconds(stopTimeout.Value));
+        state.Write(statePath);
+        // lrun down sets it: the same stop as Ctrl+C
+        using var stopEvent = OperatingSystem.IsWindows()
+            ? new EventWaitHandle(false, EventResetMode.ManualReset, UpState.StopEventName(Environment.ProcessId))
+            : null;
+        var stopWait = stopEvent == null ? null
+            : ThreadPool.RegisterWaitForSingleObject(stopEvent, (_, _) => processor.RequestStop(), null, Timeout.Infinite, executeOnlyOnce: true);
         try
         {
             await processor.RunAsync(config, exclude, only);
         }
         finally
         {
+            stopWait?.Unregister(null);
+            lock (statePath)
+                state.Delete(statePath);
             events?.Close();
             var services = processor.Services.Select(entry => new ServiceReport(entry.Key, entry.Value.Status, entry.Value.ExitCode,
                 entry.Value.Status == ServiceStatus.NotStarted ? null : entry.Value.Log)).ToList();
             output.Result = new UpResult(logsFolder, services);
             output.Written.AddRange(services.Select(service => service.Log).OfType<string>());
         }
+    }
+
+    /// <summary>How long <c>down</c> waits beyond <c>up</c>'s grace period: the kills, the last output lines, the result.</summary>
+    private static readonly TimeSpan DownMargin = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Stops the <c>up</c> started with a config, as Ctrl+C in its console would, and waits until it has exited. Without one
+    /// running there is nothing to stop: a success. Windows only, as the stop request is a named event.
+    /// </summary>
+    private static async Task DownAsync(CommandLineArgs args, CommandOutput output)
+    {
+        string configPath = args.Value("--config") ?? DefaultConfigPath;
+        args.EnsureAllConsumed();
+
+        string statePath = UpState.PathFor(configPath);
+        var state = UpState.ReadRunning(statePath);
+        if (state == null)
+        {
+            logger.LogInformation("No {Command} up running for {Config}: nothing to stop.", CommandName, Path.GetFullPath(configPath));
+            output.Result = new DownResult(statePath, null, false);
+            return;
+        }
+        if (!OperatingSystem.IsWindows())
+            throw new InvalidOperationException($"down is Windows only: stop {CommandName} up (pid {state.Pid}) with Ctrl+C or a signal.");
+        if (!EventWaitHandle.TryOpenExisting(UpState.StopEventName(state.Pid), out var stopEvent))
+        {
+            throw new InvalidOperationException($"{CommandName} up (pid {state.Pid}) doesn't listen for a stop request " +
+                "(started by an older lrun?): stop it with Ctrl+C in its console.");
+        }
+
+        logger.LogInformation(LogEvents.Start, "Stopping {Command} up (pid {Pid})", CommandName, state.Pid);
+        var limit = TimeSpan.FromSeconds(state.StopTimeout) + DownMargin;
+        try
+        {
+            using var up = Process.GetProcessById(state.Pid);
+            using (stopEvent)
+                stopEvent.Set();
+            await up.WaitForExitAsync().WaitAsync(limit);
+        }
+        catch (ArgumentException)
+        {
+            // Exited in the meantime
+        }
+        catch (TimeoutException)
+        {
+            throw new InvalidOperationException($"{CommandName} up (pid {state.Pid}) did not exit within {limit.TotalSeconds:0} s.");
+        }
+        logger.LogInformation(LogEvents.Done, "Stopped {Command} up (pid {Pid})", CommandName, state.Pid);
+        output.Result = new DownResult(statePath, state, true);
     }
 
     /// <summary>Prints a JSON Schema as is, to save or pipe; with <c>--json</c>, the schema is the result's <c>schema</c>.</summary>

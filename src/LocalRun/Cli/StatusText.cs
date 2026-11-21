@@ -53,6 +53,12 @@ internal static class StatusText
         if (build != null)
             PrintLeftOut(build);
         PrintPlan(status.Plan, now);
+        if (status.Running is { } up)
+        {
+            logger.LogInformation("Running: {Command} up, pid {Pid}, started {Time} ({Age}): {Services}", LocalRunCli.CommandName, up.Pid,
+                Stamp(up.Started), Text.Age(now - up.Started),
+                up.Services.Count == 0 ? "building" : Text.Abbreviate(up.Services.Select(service => $"{service.Project} (pid {service.Pid})")));
+        }
     }
 
     private static void PrintProjects(StatusResult status)

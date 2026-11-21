@@ -242,7 +242,7 @@ lrun up
   ```
 
   ReportCli shows `Reports 1.1.0`: it uses Reports through a project reference, so it builds it from source.
-  Right after `ok 4 processes started. Press Ctrl+C to stop them all.`, a `Logs: …\samples\.lrun\logs` line:
+  Right after `ok 4 processes started. Press Ctrl+C (or run 'lrun down') to stop them all.`, a `Logs: …\samples\.lrun\logs` line:
   each executable's output is also in `.lrun/logs/<name>.log`, without the prefix (e.g. `LrSample.OrderGateway.log`
   starts with `LrSample.OrderGateway 3.0.0 started`, and ends with `OrderGateway stopped` after Ctrl+C).
 - `lrun up --json` prints only JSON on stdout, one line each: `building` ×4, `started` ×4 (pid and log file),
@@ -259,6 +259,15 @@ lrun up
 - **Ctrl+C** in the `lrun up` terminal stops both: `■ Stopping all processes`, each service
   prints `… stopped` and exits with code 0, and `up` exits with code 0. No `LrSample.*` process is
   left in Task Manager.
+- **From another terminal** (or with `up` started in the background), in `samples/`:
+  - `lrun status` ends with `Running: lrun up, pid …, started … (just now): LrSample.Island.App (pid …), …`, the four
+    executables with the pid of their `dotnet run`;
+  - a second `lrun up` fails at once: `FAILED up failed: lrun up is already running for this config (pid …, started …):
+    run 'lrun down' to stop it first.`, exit code 1 (`up-running` with `--json`);
+  - `lrun down` prints `> Stopping lrun up (pid …)` then `ok Stopped lrun up (pid …)`, exit code 0, while the `up`
+    terminal shows the same stop as Ctrl+C: `Stopping all processes`, `RiskService stopped`, `OrderGateway stopped`,
+    both exiting with code 0, and `up` exits with code 0. `.lrun/up.json` is gone; `lrun down` again prints
+    `No lrun up running for …\samples\.lrun\localrun.config.json: nothing to stop.`, exit code 0.
 - **Killing `lrun` from outside**: while they run, `taskkill /F /IM lrun.exe` from another terminal.
   The services go with it (no `LrSample.*` process left, ports free), without printing `… stopped`:
   Windows ends them through the job object.
@@ -282,7 +291,7 @@ Variations worth trying:
   Then `lrun up`: RiskService logs `cannot listen on http://localhost:5102/ … (port already in use?)`
   and exits with code 1, while the others keep running. After Ctrl+C, `up` fails with
   `LrSample.RiskService (exit code 1) failed` (exit code 1). Running `lrun up` twice doesn't show this:
-  the second one fails earlier, building executables the first one is running.
+  the second one is refused (`up-running`) before it builds anything.
 - **Another port**: `$env:LRSAMPLE_ORDERGATEWAY_PORT = 6101` (or `LRSAMPLE_RISKSERVICE_PORT`) before `lrun up`.
 - **Debugging one service**: `lrun up --exclude LrSample.RiskService` logs `Not running
   LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
