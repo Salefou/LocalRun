@@ -28,7 +28,8 @@ bumps the minor version, anything else the patch.
   `lrun changelog --since` that version and rewrites them from `lrun help --agent`.
 - When `pack` or `go` fails, `--json` gives the build errors as data in `failure.errors`: `code`, `message`, `file`,
   `line`, `column` and `project` each, at most 50, each error once (MSBuild's summary and multi-targeting repeat them),
-  with `errorCount` before that cap. `failure.output` still has the lines as printed.
+  with `errorCount` before that cap. `failure.output` still has the lines as printed. The same goes for `up` when an
+  executable doesn't build: its service in the result carries the `failure` (step `build`).
 - `lrun status` prints what a config holds, from the files alone (no scan, no NuGet source, no git): when and how
   `build` made it (its flags, the `lrun` version, each repository's branch and commit), the projects by solution and type
   with their csproj and latest versions, what was left out and why, and the plan `go` would run. It warns

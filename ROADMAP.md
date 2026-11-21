@@ -23,7 +23,7 @@ everyone is "Before 1.0".
 | 5, `verify` follow-ups | `--fix` (pack only the stale ones); staleness from outside the project folder | Shipped core; the second part is a 1.0 question |
 | 7, More settings | Machines behind a slow proxy (skip NuGet queries); `doctor`'s fetch age | Related: A7 |
 | A1, `list --config` | Fast queries on large platforms, from an existing config | Shipped core (`lrun list`) |
-| A2, Build failures follow-ups | Per-target errors told from duplicates; `up`'s build failures as data | Shipped core (`failure.errors`). Related: A3, A5 |
+| A2, Build failures follow-ups | Per-target errors told from duplicates | Shipped core (`failure.errors`). Related: A3, A5 |
 | A3, `lrun down` | Running `up` in the background and stopping it cleanly from another process | Shipped. Related: A4, A9 |
 | A4, Log levels on disk | Filtering service logs by level, diffing runs | Shipped plain logs; additive form only (1.0) |
 | A5, `lrun test` | Running the tests affected by a change, without a CI | Builds on A2 for its summary |
@@ -207,7 +207,8 @@ When `pack` / `go` fails, `result.packages[].failure.errors` holds MSBuild's err
   project being built, which may be one the failing project references, where the fix goes.
 - Each error once: MSBuild's summary repeats it, and a multi-targeted project reports it once per target framework.
   The same code at another place, or in another project, stays. Capped at 50, with `errorCount` before the cap.
-- `pack` / `go` only: `up`'s result has no place for a build failure yet (see A3).
+- Then `up` (unreleased): a service whose build failed carries the same `failure` (step `build`) and stays
+  `not-started`, as all do: no new status, the result only gains a field.
 
 Left, not started:
 - **Per-target errors** (user feedback, 2026-11-20): merging one error across target frameworks assumes the same fix,
@@ -215,7 +216,7 @@ Left, not started:
   two apart may need the context of what fails: which target framework (`::TargetFramework=` is dropped today), and
   maybe the build mode (configuration, conditional properties). Additive (a `frameworks` field, or one entry per
   target when they differ); a `frameworks` field alone was turned down as noise for single-target projects.
-- `up`'s build failures as data, with A3. Related: `go --dry-run` printing the order and versions without running.
+- `go --dry-run` printing the order and versions without running.
 
 ### A3. `up` an agent can use **(claude)**: shipped as `lrun down` (unreleased)
 Running `up` in the background is already possible: the caller starts it as a background job (an agent's background

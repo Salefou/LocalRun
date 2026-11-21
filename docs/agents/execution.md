@@ -44,8 +44,9 @@ why.
   (AttachConsole + GenerateConsoleCtrlEvent from a separate process); a `cmd` wrapper reporting the exit
   code needs `/v:on` and `!ERRORLEVEL!`. Poll its redirected output with `FileShare.ReadWrite` (`Get-Content` can't
   read it while `cmd` writes), or just send after a delay.
-- **Build errors as data** (ROADMAP A2, user feedback, 2026-11-20): `PackFailure.Errors` comes from
-  `DotnetOutput.Errors`, errors only, and keeps one entry per (code, message, file, line, column, project), the project
+- **Build errors as data** (ROADMAP A2, user feedback, 2026-11-20): `DotnetFailure.Of` builds the `failure` of
+  `pack` / `go` (`PackOutcome`) and of `up`'s builds (`ServiceOutcome`, step `build`, the service stays `not-started`).
+  Its `Errors` come from `DotnetOutput.Errors`, errors only, and keeps one entry per (code, message, file, line, column, project), the project
   without `::TargetFramework=…`: MSBuild's summary and the per-framework copies merge, the same code at another place or
-  in another project doesn't. Capped at 50 (`RepackExecutor.FailureErrors`), `ErrorCount` before the cap; `Output` stays.
+  in another project doesn't. Capped at 50 (`DotnetFailure.MaxErrors`), `ErrorCount` before the cap; `Output` stays.
   Telling per-target errors apart is a ROADMAP item, not a bug.

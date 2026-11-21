@@ -1026,7 +1026,7 @@ Results:
 | `version` | `version`. |
 | `help` | `help`: the help text; `globalOptions`, `commands`, `exitCodes`, `errorCodes`, `diagnosticCodes`: the same as data (see [`help`](#help)). |
 | `schema` | `name`, `schema`: the JSON Schema as an object. |
-| `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C or `down`, `killed` after the grace period), `exitCode`, `log`. |
+| `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C or `down`, `killed` after the grace period), `exitCode`, `log`, and `failure` when its build failed (as `pack`'s, step `build`). |
 | `down` | `state` (the `up.json` looked at), `stopped`, `up` (`null` when none was running): `pid`, `started`, `config`, `logs`, `stopTimeout` (seconds), `services` started so far (`project`, `pid` of `dotnet run`, `log`). |
 
 `leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" |
@@ -1134,7 +1134,8 @@ your workspace (`AGENTS.md`, `CLAUDE.md`, ...). For this version:
 - Then: `lrun build --users-of <Library> --with-services --json`, `lrun pack --json`, and before starting services,
   `lrun verify --json` (exit code 6: pack again).
 - Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
-  4 a dotnet build failed (fix the code: `result.packages[].failure.errors` has each file, line and code),
+  4 a dotnet build failed (fix the code: `failure.errors` in `result.packages[]`, or `result.services[]` for `up`,
+  has each file, line and code),
   5 refused by `--strict`.
 - `lrun up` stays in the foreground: run it in the background, read `.lrun/logs/<service>.log` (or
   `lrun status --json`: `result.running`), and stop it with `lrun down --json`. A second `up` is refused (`up-running`).

@@ -411,6 +411,33 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Contains("Undefined", error.GetProperty("message").GetString());
     }
 
+    [Fact]
+    public async Task Up_GivesABuildError_AsData()
+    {
+        string root = Path.Combine(workDir, "repos");
+        WriteApp(root, "Broken", "Undefined();");
+        WriteApp(root, "Hello", """System.Console.WriteLine("hello");""");
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", root, "--include-external", "--csproj", "--json")).ExitCode);
+
+        var up = await LrunAsync("up", "--json");
+
+        Assert.Equal(LocalRunCli.ExitDotnetFailed, up.ExitCode);
+        var report = JsonDocument.Parse(Encoding.UTF8.GetString(up.Stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries)[^1]).RootElement;
+        var services = report.GetProperty("result").GetProperty("services").EnumerateArray()
+            .ToDictionary(service => service.GetProperty("project").GetString()!);
+        Assert.All(services.Values, service => Assert.Equal("not-started", service.GetProperty("status").GetString()));
+        Assert.Equal(JsonValueKind.Null, services["Hello"].GetProperty("failure").ValueKind);
+        var failure = services["Broken"].GetProperty("failure");
+        Assert.Equal("build", failure.GetProperty("step").GetString());
+        Assert.NotEqual(0, failure.GetProperty("exitCode").GetInt32());
+        Assert.Equal(1, failure.GetProperty("errorCount").GetInt32());
+        var error = failure.GetProperty("errors").EnumerateArray().Single();
+        Assert.Equal("CS0103", error.GetProperty("code").GetString());
+        Assert.Equal(Path.Combine(root, "Broken", "Program.cs"), error.GetProperty("file").GetString());
+        Assert.Equal(Path.Combine(root, "Broken", "Broken.csproj"), error.GetProperty("project").GetString());
+    }
+
     private string WriteLibAndApp()
     {
         string root = Path.Combine(workDir, "repos");

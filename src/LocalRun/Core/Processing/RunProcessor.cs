@@ -104,7 +104,8 @@ public class RunProcessor : IRunProcessor
                 Emit(new(UpEvents.Building) { Project = exe.Name });
                 try
                 {
-                    await RunToCompletionAsync("dotnet", $"build \"{FullPath(config, exe)}\" --nologo --verbosity quiet{feedSource}{SolutionProperties.Arguments(exe.SolutionPath)}");
+                    await RunToCompletionAsync("build", $"build \"{FullPath(config, exe)}\" --nologo --verbosity quiet{feedSource}{SolutionProperties.Arguments(exe.SolutionPath)}",
+                        services[exe.Name]);
                 }
                 catch (OperationCanceledException)
                 {
@@ -239,11 +240,13 @@ public class RunProcessor : IRunProcessor
     private static string FullPath(LocalRunConfig config, ProjectNode project) => Path.Combine(config.RootPath, project.Path);
 
     /// <summary>
-    /// Runs a command silently; its output is only printed if it fails. Once a stop was requested, a failure is the
-    /// Ctrl+C the command got: cancelled, not reported.
+    /// Runs a <c>dotnet</c> command silently; its output is only printed if it fails, and the failure goes into
+    /// <paramref name="outcome"/>. Once a stop was requested, a failure is the Ctrl+C the command got: cancelled, not reported.
     /// </summary>
-    private async Task RunToCompletionAsync(string fileName, string args)
+    /// <param name="step">The command (<c>build</c>), as <see cref="DotnetFailure.Step"/>.</param>
+    private async Task RunToCompletionAsync(string step, string args, ServiceOutcome outcome)
     {
+        const string fileName = "dotnet";
         var output = new ConcurrentQueue<string>();
         var process = RunningProcess.Start(prefix: null, fileName, args, output.Enqueue);
         started.Enqueue(process);
@@ -256,6 +259,7 @@ public class RunProcessor : IRunProcessor
             stopping.Token.ThrowIfCancellationRequested();
             foreach (var line in output)
                 logger.LogWarning(DiagnosticEvents.DotnetOutput, "{Line}", line);
+            outcome.Failure = DotnetFailure.Of(step, exitCode, [.. output]);
             throw new DotnetFailedException($"Command `{fileName} {args}` failed with exit code {exitCode}");
         }
     }

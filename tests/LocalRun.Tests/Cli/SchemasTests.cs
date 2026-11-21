@@ -52,7 +52,7 @@ public class SchemasTests
         { Schemas.Result, "PlotResult", typeof(PlotResult) },
         { Schemas.Result, "PackResult", typeof(PackResult) },
         { Schemas.Result, "PackageReport", typeof(PackageReport) },
-        { Schemas.Result, "PackFailure", typeof(PackFailure) },
+        { Schemas.Result, "DotnetFailure", typeof(DotnetFailure) },
         { Schemas.Result, "BuildError", typeof(BuildError) },
         { Schemas.Result, "UpResult", typeof(UpResult) },
         { Schemas.Result, "DownResult", typeof(DownResult) },

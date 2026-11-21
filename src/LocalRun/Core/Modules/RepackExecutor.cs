@@ -19,7 +19,7 @@ public sealed class PackOutcome
     /// <summary>Time spent in this project's <c>dotnet</c> commands, or null before any ran.</summary>
     public long? DurationMs { get; internal set; }
 
-    public PackFailure? Failure { get; internal set; }
+    public DotnetFailure? Failure { get; internal set; }
 }
 
 public static class PackStatus
@@ -30,24 +30,12 @@ public static class PackStatus
     public const string Skipped = "skipped";
 }
 
-/// <param name="Step">The failing <c>dotnet</c> command: <c>clean</c>, <c>restore</c> or <c>pack</c>.</param>
-/// <param name="Output">Its error lines, or its last lines when it printed none.</param>
-/// <param name="Errors">Its error lines in MSBuild's format, as data, each once (at most <see cref="RepackExecutor.FailureErrors"/>).</param>
-/// <param name="ErrorCount">How many distinct errors there were, before that cap.</param>
-public sealed record PackFailure(string Step, int ExitCode, IReadOnlyList<string> Output, IReadOnlyList<BuildError> Errors, int ErrorCount);
-
 public class RepackExecutor
 {
     private static readonly ILogger<RepackExecutor> logger = Log.For<RepackExecutor>();
 
     /// <summary>Names printed on a depth line before "and N more".</summary>
     private const int ShownPerDepth = 8;
-
-    /// <summary>Lines of a failing command kept in its <see cref="PackFailure"/>.</summary>
-    private const int FailureLines = 20;
-
-    /// <summary>Parsed errors kept in a <see cref="PackFailure"/>: enough to fix a build, few enough to read.</summary>
-    internal const int FailureErrors = 50;
 
     private readonly ConcurrentDictionary<string, PackOutcome> outcomes = new(StringComparer.OrdinalIgnoreCase);
 
@@ -211,9 +199,7 @@ public class RepackExecutor
                     logger.LogWarning(DiagnosticEvents.DotnetOutput, "{Line}", line);
             }
             outcome.Status = PackStatus.Failed;
-            var parsed = DotnetOutput.Errors(errors);
-            outcome.Failure = new PackFailure(step, proc.ExitCode, [.. (errors.IsEmpty ? output : errors).TakeLast(FailureLines)],
-                [.. parsed.Take(FailureErrors)], parsed.Count);
+            outcome.Failure = DotnetFailure.Of(step, proc.ExitCode, [.. output]);
             throw new DotnetFailedException($"dotnet {step} failed on {proj.Name} with exit code {proc.ExitCode} ({proj.PathToCsproj})");
         }
     }
