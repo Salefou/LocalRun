@@ -62,7 +62,7 @@ so you can **inspect or hand-edit** the plan between steps.
                dependencies.html    dotnet run, executables in dependency order
 ```
 
-1. **`build`** finds every `*.csproj` under the root, reads its name, `OutputType`,
+1. **`build`** finds every `*.csproj` under the root, reads its name, type (executable for an `OutputType` of `Exe`/`WinExe`, or a Web/Worker SDK without one),
    version (`<Version>`, else `<VersionPrefix>`-`<VersionSuffix>`), `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
    that reference them. Optional filters keep only the part of the graph you care about. It also records
    each project's latest version on your NuGet sources and in the local feed (unless `--csproj`). The result
@@ -845,7 +845,7 @@ step that wrote it.
       "PackageId": "Acme.Pricing",              // <PackageId>, else <AssemblyName>; absent when it is the name
       "Path": "pricing\\src\\Shared.Pricing\\Shared.Pricing.csproj",
       "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // null if no solution references it
-      "Type": "library",                        // "executable" when <OutputType>Exe</OutputType>
+      "Type": "library",                        // "executable" for <OutputType>Exe</OutputType> (or WinExe), or a Web/Worker SDK without one
       "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // <Version>, else <VersionPrefix>[-<VersionSuffix>], else 1.0.0
       "LatestVersion": { "Major": 1, "Minor": 5, "PatchAndSuffix": "0" },   // on your NuGet sources; absent with --csproj or when not found
       "Dependencies": []                        // names of other projects in the graph

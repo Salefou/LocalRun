@@ -423,6 +423,23 @@ public class DependencyGraphTests
     }
 
     [Theory]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>WinExe</OutputType></PropertyGroup></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"></Project>""", false)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Library</OutputType></PropertyGroup></Project>""", false)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk.Web"></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk.Worker"></Project>""", true)]
+    [InlineData("""<Project Sdk="microsoft.net.sdk.web/8.0.0"></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk;Microsoft.NET.Sdk.Web"></Project>""", true)]
+    [InlineData("""<Project><Sdk Name="Microsoft.NET.Sdk.Web" /></Project>""", true)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><OutputType>Library</OutputType></PropertyGroup></Project>""", false)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk.Razor"></Project>""", false)]
+    public void IsExecutable_FollowsOutputType_ElseTheSdkDefault(string csproj, bool expected)
+    {
+        Assert.Equal(expected, DependencyGraph.IsExecutable(XDocument.Parse(csproj)));
+    }
+
+    [Theory]
     [InlineData(false, new[] { "Lib" })]
     [InlineData(true, new[] { "Lib", "Lib.Tests" })]
     public void FromSource_LeavesOutTestProjects_UnlessAsked(bool includeTests, string[] expected)

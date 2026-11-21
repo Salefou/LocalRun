@@ -114,7 +114,7 @@
           "type": ["string", "null"]
         },
         "Type": {
-          "description": "executable when <OutputType> is Exe, else library.",
+          "description": "executable when <OutputType> is Exe or WinExe, or, without an <OutputType>, the project SDK is Microsoft.NET.Sdk.Web or Microsoft.NET.Sdk.Worker; else library.",
           "enum": ["library", "executable"]
         },
         "Test": {
