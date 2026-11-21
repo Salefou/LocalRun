@@ -24,7 +24,7 @@ everyone is "Before 1.0".
 | 7, More settings | Machines behind a slow proxy (skip NuGet queries); `doctor`'s fetch age | Related: A7 |
 | A1, `list --config` | Fast queries on large platforms, from an existing config | Shipped core (`lrun list`) |
 | A2, Build failures follow-ups | Per-target errors told from duplicates; `up`'s build failures as data | Shipped core (`failure.errors`). Related: A3, A5 |
-| A3, `lrun down` | Running `up` in the background and stopping it cleanly from another process | Decided, minimal scope. Related: A4, A9 |
+| A3, `lrun down` | Running `up` in the background and stopping it cleanly from another process | Shipped. Related: A4, A9 |
 | A4, Log levels on disk | Filtering service logs by level, diffing runs | Shipped plain logs; additive form only (1.0) |
 | A5, `lrun test` | Running the tests affected by a change, without a CI | Builds on A2 for its summary |
 | A6, Self-description | Agents learning `lrun` and updating their own instructions about it, offline | Shipped |
@@ -217,11 +217,11 @@ Left, not started:
   target when they differ); a `frameworks` field alone was turned down as noise for single-target projects.
 - `up`'s build failures as data, with A3. Related: `go --dry-run` printing the order and versions without running.
 
-### A3. `up` an agent can use **(claude)**: decided, minimal scope
+### A3. `up` an agent can use **(claude)**: shipped as `lrun down` (unreleased)
 Running `up` in the background is already possible: the caller starts it as a background job (an agent's background
 command, `Start-Process`, `&`), and the agent instructions say so. What was missing is around it: a clean stop (a
 background `up` has no console to get Ctrl+C, so it could only be killed, without the grace period), and finding the
-running `up` again from another shell or session.
+running `up` again from another shell or session. See the CHANGELOG and README `down`.
 
 Scope (user feedback, 2026-11-21, "as simple as possible, and still allow async running"):
 - `up` writes a state file while it runs (`.lrun/up.json`: its pid, start time, each service's pid and log), deleted
@@ -232,6 +232,16 @@ Scope (user feedback, 2026-11-21, "as simple as possible, and still allow async 
 - `lrun status` shows the running `up` from the state file, so there is no `ps` command (it stays a read of files).
 - A second `up` while one runs (state file present, its process alive) is refused, pointing at `lrun down`.
 - Windows only for the stop request (a named event), as for the job object.
+
+Decided while building it (user feedback, 2026-11-21, taking the proposed plan):
+- The services get the stop as a real Ctrl+C on hidden consoles of their own: a named event only reaches `up`, and a
+  Ctrl+C on `up`'s console would reach whatever shares it, such as the shell or agent that started `up` in the
+  background. `up` passes every stop on through a short-lived helper, Ctrl+C from a terminal included. Tried first on a
+  spike; process groups with Ctrl+Break were the heavier alternative.
+- The state file is `up.json` next to the config (no new option); one left by a killed `up` is ignored.
+- A second `up` fails with a new error code, `up-running`, on the existing exit code `1`: a script acts on the name
+  (run `down`, then retry), not on a new number.
+- `down` waits at most the grace period plus 30 s, and fails with `command-failed` past it, or outside Windows.
 
 Left out on purpose: `up --detach` (a hidden host process outliving the shell that started `up`: not needed while the
 caller keeps its background job), and `lrun logs` (the `.lrun/logs` files suffice; it waits for A4's levels). Readiness

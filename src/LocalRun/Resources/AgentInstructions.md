@@ -10,7 +10,8 @@
 - Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
   4 a dotnet build failed (fix the code: `result.packages[].failure.errors` has each file, line and code),
   5 refused by `--strict`.
-- `lrun up` stays in the foreground until Ctrl+C: run it in the background and read `.lrun/logs/<service>.log`.
+- `lrun up` stays in the foreground: run it in the background, read `.lrun/logs/<service>.log` (or
+  `lrun status --json`: `result.running`), and stop it with `lrun down --json`. A second `up` is refused (`up-running`).
 - When a command fails for no visible reason: `lrun doctor --json`.
 - When `lrun version` is newer than the version in the comment above this section, read
   `lrun changelog --since <that version> --json` (`breaking` entries change what you do), then rewrite this section

@@ -101,7 +101,7 @@ internal static class CommandCatalog
         ]),
         Command("status", "Print what a config holds, from the files alone (no scan, no NuGet source, no git): when and how build " +
             "made it (flags, lrun version, each repository's commit), its projects by solution and type with their versions, what " +
-            "was left out and why, and the repack plan if any. Warns when the plan is older than the config.",
+            "was left out and why, the repack plan if any, and the up running with it. Warns when the plan is older than the config.",
         [
             ReadConfig,
             OptionInfo.One("--repack-config", "<file>", $"Repack config file to read, if there is one (default: {LocalRunCli.DefaultRepackConfigPath})."),
@@ -133,9 +133,10 @@ internal static class CommandCatalog
         [
             OptionInfo.One("--repack-config", "<file>", $"Repack config file to read (default: {LocalRunCli.DefaultRepackConfigPath})."),
         ]),
-        Command("up", "Build the executables of a config file, then run them side by side; Ctrl+C stops them all, killing what " +
-            "still runs after a grace period (--stop-timeout). Each one's output also goes to <logs>/<name>.log. With --json, " +
-            "stdout gets one line per event (building, started, running, stopping, exited), then the result on one line.",
+        Command("up", "Build the executables of a config file, then run them side by side; Ctrl+C (or 'down' from another shell) " +
+            "stops them all, killing what still runs after a grace period (--stop-timeout). Each one's output also goes to " +
+            "<logs>/<name>.log. One up per config folder: a second one is refused (up-running). With --json, stdout gets one line " +
+            "per event (building, started, running, stopping, exited), then the result on one line.",
         [
             ReadConfig,
             OptionInfo.Many("--exclude", "<names>", "Executables not to run, e.g. the one you debug from your IDE."),
@@ -143,6 +144,11 @@ internal static class CommandCatalog
             OptionInfo.One("--logs", "<dir>", $"Folder of the services' log files, overwritten each run (default: {LocalRunCli.DefaultLogsFolder})."),
             OptionInfo.One("--stop-timeout", "<s>", "Seconds to wait after Ctrl+C before killing what still runs, 0 or more (default: " +
                 "your settings, else 10)."),
+        ]),
+        Command("down", "Stop the up started with a config, from another shell or process, as Ctrl+C in its console would " +
+            "(grace period, then kills), and wait until it has exited. Without one running, there is nothing to stop. Windows only.",
+        [
+            OptionInfo.One("--config", "<file>", $"Config the up was started with: it records itself next to it (default: {LocalRunCli.DefaultConfigPath})."),
         ]),
         Command("settings", "Create your settings file if missing (all commented out), then open it. It holds what differs from " +
             "one user to the next: the local NuGet feed, the root to scan, the default suffix, how long up waits after Ctrl+C " +
@@ -190,6 +196,7 @@ internal static class CommandCatalog
         $"{LocalRunCli.CommandName} status                              (what the config holds, how it was built, the plan)",
         $"{LocalRunCli.CommandName} verify                              (exit code 6: something to pack before 'up')",
         $"{LocalRunCli.CommandName} up",
+        $"{LocalRunCli.CommandName} down                                (from another shell: stops that up as Ctrl+C would)",
         $"{LocalRunCli.CommandName} help --json                         (all of this as data, for a program or an agent)",
         $"{LocalRunCli.CommandName} changelog --since 0.5.1             (what changed since the version you knew)",
     ];

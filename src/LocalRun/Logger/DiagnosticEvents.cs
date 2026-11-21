@@ -96,6 +96,9 @@ public static class DiagnosticEvents
     public static readonly EventId ServiceOutput = Code(133, "service-output", strict: false,
         "up: a warning or error line of a service.");
 
+    public static readonly EventId StopSignalFailed = Code(134, "stop-signal-failed", strict: false,
+        "up: Ctrl+C could not be sent to its processes on a stop; those still running are killed after the grace period.");
+
     // Verification failures: verify fails on them itself (exit code 6), --strict adds nothing
 
     public static readonly EventId PackageMissing = Code(140, "package-missing", strict: false,

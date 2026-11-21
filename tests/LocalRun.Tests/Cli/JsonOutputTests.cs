@@ -1,6 +1,7 @@
 ﻿namespace LocalRun.Tests.Cli;
 
 using LocalRun.Cli;
+using LocalRun.Core.Processing;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -789,6 +790,105 @@ public sealed class JsonOutputTests : IDisposable
         var report = JsonDocument.Parse(line).RootElement;
         Assert.Equal(["empty-selection"], Codes(new Run(0, Encoding.UTF8.GetBytes(line), "")));
         Assert.Equal(0, report.GetProperty("result").GetProperty("services").GetArrayLength());
+    }
+
+    /// <summary>Records the test process as a running up in the work folder: alive, so taken as running.</summary>
+    private void FakeRunningUp() =>
+        new UpState(Environment.ProcessId, UpState.CurrentProcessStarted(), "config", "logs", 10, [new UpStateService("Api", 4242, null)])
+            .Write(Path.Combine(Directory.CreateDirectory(Path.Combine(workDir, ".lrun")).FullName, UpState.FileName));
+
+    [Fact]
+    public async Task Down_WithoutAnUpRunning_HasNothingToStop()
+    {
+        var down = await LrunAsync("down", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, down.ExitCode);
+        var result = down.Json.GetProperty("result");
+        Assert.False(result.GetProperty("stopped").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("up").ValueKind);
+        Assert.Equal(Path.Combine(workDir, ".lrun", UpState.FileName), result.GetProperty("state").GetString());
+    }
+
+    [Fact]
+    public async Task Up_WhileAnotherRuns_IsRefused()
+    {
+        FakeRunningUp();
+
+        var up = await LrunAsync("up", "--json");
+
+        Assert.Equal(LocalRunCli.ExitFailure, up.ExitCode);
+        var error = up.Json.GetProperty("error");
+        Assert.Equal("up-running", error.GetProperty("code").GetString());
+        Assert.Contains("lrun down", error.GetProperty("message").GetString());
+        // Still the other one's
+        Assert.NotNull(UpState.ReadRunning(Path.Combine(workDir, ".lrun", UpState.FileName)));
+    }
+
+    [Fact]
+    public async Task Status_ShowsTheRunningUp()
+    {
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", Directory.CreateDirectory(Path.Combine(workDir, "empty")).FullName, "--csproj", "--json")).ExitCode);
+        Assert.Equal(JsonValueKind.Null, (await LrunAsync("status", "--json")).Json.GetProperty("result").GetProperty("running").ValueKind);
+        FakeRunningUp();
+
+        var running = (await LrunAsync("status", "--json")).Json.GetProperty("result").GetProperty("running");
+
+        Assert.Equal(Environment.ProcessId, running.GetProperty("pid").GetInt32());
+        Assert.Equal("Api", running.GetProperty("services")[0].GetProperty("project").GetString());
+    }
+
+    [Fact]
+    public async Task Down_StopsAnUpInTheBackground_AsCtrlCWould()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        string root = Path.Combine(workDir, "repos");
+        WriteApp(root, "Waiter", """
+            var stop = new System.Threading.ManualResetEventSlim();
+            System.Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Set(); };
+            System.Console.WriteLine("ready");
+            stop.Wait();
+            System.Console.WriteLine("graceful");
+            """);
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", root, "--include-external", "--csproj", "--json")).ExitCode);
+
+        var upRun = LrunAsync("up", "--json");
+        string log = Path.Combine(workDir, ".lrun", "logs", "Waiter.log");
+        var deadline = DateTime.UtcNow.AddMinutes(2);
+        while (!ReadShared(log).Contains("ready"))
+        {
+            Assert.False(upRun.IsCompleted, "up exited before its service was ready");
+            Assert.True(DateTime.UtcNow < deadline, "the service never got ready");
+            await Task.Delay(200);
+        }
+        var state = UpState.ReadRunning(Path.Combine(workDir, ".lrun", UpState.FileName));
+        Assert.NotNull(state);
+        Assert.Equal("Waiter", Assert.Single(state.Services).Project);
+
+        var down = await LrunAsync("down", "--json");
+        var up = await upRun.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(LocalRunCli.ExitSuccess, down.ExitCode);
+        Assert.True(down.Json.GetProperty("result").GetProperty("stopped").GetBoolean());
+        Assert.Equal(state.Pid, down.Json.GetProperty("result").GetProperty("up").GetProperty("pid").GetInt32());
+        Assert.Equal(LocalRunCli.ExitSuccess, up.ExitCode);
+        var lines = Encoding.UTF8.GetString(up.Stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => JsonDocument.Parse(line).RootElement).ToArray();
+        Assert.Contains(lines, line => line.TryGetProperty("event", out var e) && e.GetString() == "stopping");
+        var service = Assert.Single(lines[^1].GetProperty("result").GetProperty("services").EnumerateArray());
+        // Stopped by its own Ctrl+C handler, not killed
+        Assert.Equal("stopped", service.GetProperty("status").GetString());
+        Assert.Equal(0, service.GetProperty("exitCode").GetInt32());
+        Assert.Contains("graceful", File.ReadAllText(log));
+        Assert.False(File.Exists(Path.Combine(workDir, ".lrun", UpState.FileName)));
+    }
+
+    /// <summary>A file another process is writing, or empty when it doesn't exist yet.</summary>
+    private static string ReadShared(string path)
+    {
+        if (!File.Exists(path)) return "";
+        using var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+        return reader.ReadToEnd();
     }
 
     private static void WriteCsproj(string root, string name, string content)

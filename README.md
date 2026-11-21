@@ -75,7 +75,7 @@ so you can **inspect or hand-edit** the plan between steps.
 4. **`go`** executes a plan: `dotnet restore` with the local feed added to your sources, then
    `dotnet pack --no-restore -o <feed>`, each project getting its planned version.
 5. **`up`** builds the executables of the config, then starts them all side by side, dependencies
-   first, until they exit or you press Ctrl+C.
+   first, until they exit or you press Ctrl+C (or run `lrun down` from another shell).
 
 ### The dependency graph
 
@@ -554,6 +554,9 @@ Plan: …\.lrun\repack.config.json, written 2026-11-21 10:45 (2 hours ago), 3 pa
   (`plan-older-than-config`; run `pack` again). With `--config` pointing elsewhere, give the matching `--repack-config`
   too: the default plan may come from another config.
 
+While an [`up`](#up) runs with the config, a last line says so: `Running: lrun up, pid 20024, started … : OrderGateway
+(pid 11484), …`.
+
 It exits `0`, or `3` (`config-not-found`) without a config. With `--json`, the result has all of the above as data (see
 [Machine output](#machine-output---json)).
 
@@ -583,12 +586,22 @@ the services, as `docker compose up` does for containers:
    `.lrun/logs/`), without colors and without the prefix, rewritten on each `up`: read it while it runs,
    or after, to see what one service said.
 3. **Wait** until they have all exited. One-shot jobs simply finish; services run until you press
-   **Ctrl+C**. They all receive it (they share the console). Whatever is still running 10 seconds later
-   (`--stop-timeout`) is killed, with its child processes. Ctrl+C during the builds stops `up` before anything starts.
+   **Ctrl+C**, or run [`lrun down`](#down) from another shell. `up` passes the Ctrl+C on to each process (on
+   Windows each runs on a hidden console of its own, so the signal reaches them and nothing else sharing `up`'s
+   console). Whatever is still running 10 seconds later (`--stop-timeout`) is killed, with its child processes.
+   Ctrl+C during the builds stops `up` before anything starts.
 
 A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
-has stopped. Processes stopped by Ctrl+C never count as failures.
+has stopped. Processes stopped by Ctrl+C or `down` never count as failures.
+
+While it runs, `up` records itself in `up.json` next to the config (its process id, each service's process id and log),
+deleted when it exits: [`down`](#down) finds it there, and [`status`](#status) shows it. One `up` runs per config folder:
+starting a second one fails (exit code `1`, `up-running`) until the first is stopped. A file left behind by an `up` that
+was killed is ignored.
+
+**In the background.** `up` doesn't detach itself: start it as a background job of your shell or agent, read
+`.lrun/logs/<service>.log` (or `lrun status`) to see how it goes, and stop it with `lrun down`.
 
 On Windows the started processes are also tied to `lrun` through a job object: if `lrun` is killed
 without a chance to stop them (Task Manager, `taskkill /F`, stopping a debugger attached to it),
@@ -597,7 +610,7 @@ Windows ends them too, so they don't keep holding their ports and build output.
 ```
 ▸ Starting LrSample.RiskService
 ▸ Starting LrSample.OrderGateway
-✓ 2 processes started. Press Ctrl+C to stop them all.
+✓ 2 processes started. Press Ctrl+C (or run 'lrun down') to stop them all.
 [LrSample.RiskService ] RiskService listening on http://localhost:5102/
 [LrSample.OrderGateway] OrderGateway listening on http://localhost:5101/
 ■ Stopping all processes
@@ -641,8 +654,28 @@ With `--json`, `up` writes one line of JSON per event on stdout as it happens, t
 | `building` | An executable is about to be built | `project` |
 | `started` | An executable was started | `project`, `pid` (of `dotnet run`), `log` |
 | `running` | All were started: `up` now waits | `count` |
-| `stopping` | Ctrl+C | — |
+| `stopping` | Ctrl+C, or `lrun down` | — |
 | `exited` | A process exited | `project`, `exitCode`, `status` (as in the result) |
+
+### `down`
+
+Stop the `up` started with a config, from another shell or process, as Ctrl+C in its console would: each service gets
+Ctrl+C, whatever still runs after the grace period is killed, and `up` ends with its result as usual. `down` waits
+until `up` has exited (at most its grace period plus 30 seconds, else exit code `1`).
+
+```
+> lrun down
+> Stopping lrun up (pid 20024)
+ok Stopped lrun up (pid 20024)
+```
+
+Without an `up` running for that config, there is nothing to stop: it says so and exits `0`. It finds the `up` through
+`up.json` next to the config, so pass the same `--config` as to `up` if it wasn't the default. Windows only, as `up`
+listens for the request through a named event; elsewhere, stop `up` with Ctrl+C or a signal.
+
+| Option | Default | Description |
+|---|---|---|
+| `--config <file>` | `.lrun/localrun.config.json` | Config the `up` was started with. |
 
 ### `settings`
 
@@ -937,7 +970,7 @@ The CLI is designed to be driven by scripts, CI jobs or other programs.
 
 | | |
 |---|---|
-| Invocation | `lrun <command> [options]` — one command per process, never prompts. (Executables started by `up` inherit the console.) |
+| Invocation | `lrun <command> [options]` — one command per process, never prompts. (On Windows, executables started by `up` each run on a hidden console of their own.) |
 | Exit codes | `0` success, also when there was nothing to do · `1` the command failed (anything below doesn't cover) · `2` invalid command line · `3` an input is missing or invalid (a config file, the root to scan, the settings) · `4` a `dotnet` command failed (fix the code; retrying won't help) · `5` refused by `--strict` (below) · `6` [`verify`](#verify) found a package missing or stale. |
 | Output | With `--json`, one JSON document on **stdout** and the logs on stderr (see below). Otherwise, human-readable log lines on **stdout**. Redirected, they are plain: warnings and errors prefixed `[WRN] ` / `[ERR] `, steps marked `>` (starting), `+` (process started), `ok`, `FAILED`, `-` (stopped), no colours, no progress lines. Of `go`'s child `dotnet` processes, only warning and error lines are forwarded; `up` forwards its services' output. |
 | Results | The JSON / HTML files at the paths you pass. Pass explicit paths rather than relying on the working directory. |
@@ -977,7 +1010,7 @@ no progress lines) even on a terminal, and `build --plot` doesn't open the page.
 | `result` | The command's own result (below), or `null`. |
 | `diagnostics` | Every warning and error logged, in order: `code` (see [Diagnostic codes](#diagnostic-codes)), `level` (`warning` / `error`), `message`. |
 | `written` | Full paths of the files written. |
-| `error` | `null`, or `code` and `message`. Codes, with their exit code: `usage` (`2`); `config-not-found` (run the command that writes it), `config-invalid`, `root-not-found`, `settings-invalid` (`3`); `dotnet-failed` (`4`); `strict` (`5`); `verify-failed` (`6`); `command-failed` (`1`, anything else). Branch on the code, not on the message. |
+| `error` | `null`, or `code` and `message`. Codes, with their exit code: `usage` (`2`); `config-not-found` (run the command that writes it), `config-invalid`, `root-not-found`, `settings-invalid` (`3`); `dotnet-failed` (`4`); `strict` (`5`); `verify-failed` (`6`); `doctor-failed`, `up-running` (another `up` runs with this config: `lrun down` stops it), `command-failed` (`1`, anything else). Branch on the code, not on the message. |
 
 Results:
 
@@ -985,7 +1018,7 @@ Results:
 |---|---|
 | `build` | `config`, `root`, `localNuget`, `filters` (as typed, or `null`), `scanned` (projects found, without tests and name collisions), `projects` (`total`, `libraries`, `executables`), `services`, `leftOut` (see below), `gitChanges` (the changed projects, with `--git-changes`), `plot` (with `--plot`). |
 | `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not), `latestVersion` (always `null`: `list` never queries the sources), `test` (a test project, with `--tests`); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
-| `status` | `config`, `written` (when the file was last written), `root`, `localNuget`, `build` (the config's `Build` in camelCase, or `null` for an older config), `counts`, `projects` as in `list` (with `latestVersion`), `plan` (`null` without one): `path`, `written`, `olderThanConfig`, `clean`, `packages` in packing order (`project`, `packageId`, `depth`, `from`, `to`). `written` (the envelope's) is empty. |
+| `status` | `config`, `written` (when the file was last written), `root`, `localNuget`, `build` (the config's `Build` in camelCase, or `null` for an older config), `counts`, `projects` as in `list` (with `latestVersion`), `plan` (`null` without one): `path`, `written`, `olderThanConfig`, `clean`, `packages` in packing order (`project`, `packageId`, `depth`, `from`, `to`); `running`: the `up` running with this config, as in `down`'s `up`, or `null`. `written` (the envelope's) is empty. |
 | `verify` | `config`, `feed`, `libraries`, `ok`, `missing`, `stale` (counts), `packages` in config order: `project`, `packageId`, `status` (`ok`, `missing`, `stale`), `reason` (for `stale`: `csproj-ahead` or `edited`), `csprojVersion`, `feedVersion` (the newest in the feed), `packedAt`, `editedFile` (relative to the project's folder) and `editedAt` (times in UTC). `build --verify` puts the same object under `verify` in its result. |
 | `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
 | `plot` | `plot`: the page's path. |
@@ -993,7 +1026,8 @@ Results:
 | `version` | `version`. |
 | `help` | `help`: the help text; `globalOptions`, `commands`, `exitCodes`, `errorCodes`, `diagnosticCodes`: the same as data (see [`help`](#help)). |
 | `schema` | `name`, `schema`: the JSON Schema as an object. |
-| `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C, `killed` after the grace period), `exitCode`, `log`. |
+| `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C or `down`, `killed` after the grace period), `exitCode`, `log`. |
+| `down` | `state` (the `up.json` looked at), `stopped`, `up` (`null` when none was running): `pid`, `started`, `config`, `logs`, `stopTimeout` (seconds), `services` started so far (`project`, `pid` of `dotnet run`, `log`). |
 
 `leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" |
 "name-collision" | "cycle", "projects": [...], "paths": [...], "dependents": [...] }`. `paths` (relative to the root) is
@@ -1029,6 +1063,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `open-failed` | A file or page could not be opened. | — |
 | `package-missing`, `package-stale` | `verify`: a library with no package in the local feed, or an outdated one. `verify` fails on them itself (exit code `6`). | — |
 | `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
+| `stop-signal-failed` | `up`: Ctrl+C could not be passed on to its processes on a stop; those still running are killed after the grace period. | — |
 | `plan-older-than-config` | `status`: the repack plan is older than the config, so made from an earlier one; `go` would pack that. `pack` plans again. | — |
 | `doctor-warning`, `doctor-failure` | `doctor`: a setup check that may surprise, or that will make a command fail (the result names the check). `doctor` fails on a failure itself (exit code `1`). | — |
 | `unspecified` | A warning without a code yet. | — |
@@ -1101,7 +1136,8 @@ your workspace (`AGENTS.md`, `CLAUDE.md`, ...). For this version:
 - Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
   4 a dotnet build failed (fix the code: `result.packages[].failure.errors` has each file, line and code),
   5 refused by `--strict`.
-- `lrun up` stays in the foreground until Ctrl+C: run it in the background and read `.lrun/logs/<service>.log`.
+- `lrun up` stays in the foreground: run it in the background, read `.lrun/logs/<service>.log` (or
+  `lrun status --json`: `result.running`), and stop it with `lrun down --json`. A second `up` is refused (`up-running`).
 - When a command fails for no visible reason: `lrun doctor --json`.
 - When `lrun version` is newer than the version in the comment above this section, read
   `lrun changelog --since <that version> --json` (`breaking` entries change what you do), then rewrite this section
@@ -1283,7 +1319,7 @@ Exit it and re-run the script.
 
 - **`up` doesn't wait for readiness**, by design: all processes start at once, and each service is
   expected to wait for (or retry) the ones it needs. Outside Windows, processes outlive an `lrun`
-  killed from outside; Ctrl+C or closing the terminal stops them.
+  killed from outside; Ctrl+C or closing the terminal stops them, and `down` isn't available.
 - **`--git-changes`** compares with your last fetch and only knows `origin`; files changed outside
   project folders mark the whole repository, even when only docs changed.
 - `build` queries the sources of 8 projects at a time; a source that can't be reached costs NuGet's retries (about

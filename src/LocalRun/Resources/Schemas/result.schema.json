@@ -26,6 +26,7 @@
         { "$ref": "#/$defs/PlotResult" },
         { "$ref": "#/$defs/PackResult" },
         { "$ref": "#/$defs/UpResult" },
+        { "$ref": "#/$defs/DownResult" },
         { "$ref": "#/$defs/SettingsResult" },
         { "$ref": "#/$defs/DoctorResult" },
         { "$ref": "#/$defs/SchemaResult" },
@@ -195,9 +196,13 @@
         "plan": {
           "description": "The repack plan, or null when there is none.",
           "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/StatusPlan" }]
+        },
+        "running": {
+          "description": "The up running with this config, as it records itself, or null.",
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/UpState" }]
         }
       },
-      "required": ["config", "written", "root", "localNuget", "build", "counts", "projects", "plan"],
+      "required": ["config", "written", "root", "localNuget", "build", "counts", "projects", "plan", "running"],
       "additionalProperties": false
     },
     "BuildRecord": {
@@ -399,12 +404,53 @@
       "required": ["logs", "services"],
       "additionalProperties": false
     },
+    "DownResult": {
+      "type": "object",
+      "properties": {
+        "state": { "description": "The state file looked at, next to the config.", "type": "string" },
+        "up": {
+          "description": "The up stopped, as it recorded itself; null when none was running.",
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/UpState" }]
+        },
+        "stopped": { "description": "Whether an up was stopped.", "type": "boolean" }
+      },
+      "required": ["state", "up", "stopped"],
+      "additionalProperties": false
+    },
+    "UpState": {
+      "description": "A running up, as it records itself in up.json next to its config while it runs.",
+      "type": "object",
+      "properties": {
+        "pid": { "description": "The lrun up process.", "type": "integer" },
+        "started": { "description": "When that process started.", "type": "string", "format": "date-time" },
+        "config": { "type": "string" },
+        "logs": { "description": "The folder of the services' log files.", "type": "string" },
+        "stopTimeout": { "description": "Its grace period in seconds, before the kills.", "type": "integer" },
+        "services": {
+          "description": "The executables started so far.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/UpStateService" }
+        }
+      },
+      "required": ["pid", "started", "config", "logs", "stopTimeout", "services"],
+      "additionalProperties": false
+    },
+    "UpStateService": {
+      "type": "object",
+      "properties": {
+        "project": { "type": "string" },
+        "pid": { "description": "The dotnet run process.", "type": "integer" },
+        "log": { "type": ["string", "null"] }
+      },
+      "required": ["project", "pid", "log"],
+      "additionalProperties": false
+    },
     "ServiceReport": {
       "type": "object",
       "properties": {
         "project": { "type": "string" },
         "status": {
-          "description": "exited: on its own with 0; failed: on its own otherwise; stopped: by Ctrl+C; killed: after the grace period.",
+          "description": "exited: on its own with 0; failed: on its own otherwise; stopped: by Ctrl+C or lrun down; killed: after the grace period.",
           "enum": ["not-started", "exited", "failed", "stopped", "killed"]
         },
         "exitCode": { "description": "Null when it never started, or was killed and didn't exit in time.", "type": ["integer", "null"] },
