@@ -25,6 +25,9 @@ filter. The summary in `CLAUDE.md` is what must never break; this file is the wh
   `DependencyGraph` constructor leaves out *every* project of a shared name (`Collisions`); `build` logs
   an error with their paths, a warning for the dependents kept without the edge, still writes the
   config (exit 0), and rejects the name in filters as ambiguous (exit 2). Never keep one of them silently.
+  Planned (ROADMAP item 8, user feedback, 2026-11-21): keep them, each named by its path relative to the root, and
+  resolve `ProjectReference`s by path; only two projects packing the same package id stay left out. Until it ships,
+  the rule above holds.
 - **Dependency graph semantics** (layered Kahn, depth = longest path from a root, name-sorted layers,
   cycles throw) are covered by `tests/LocalRun.Tests/Graph/DependencyGraphTests.cs`. `build` calls
   `RemoveCycles()` (Tarjan SCC) after the filters, so cycles are left out with a warning instead of
