@@ -185,6 +185,10 @@ What a change of each kind must also touch (each line restates rules above or in
   `release.yml` publishes on a `v*` tag only if the tag equals it (Trusted Publishing, secret `NUGET_USER`),
   and right after a release a PR bumps it to the next patch. Every user-visible change gets a line under
   `[Unreleased]` in `CHANGELOG.md`. Tags are pushed by the maintainer, never by an agent.
+  A green `release.yml` only means nuget.org accepted the package (user feedback, 2026-11-21): a release is reported as
+  available only once `dotnet tool install LocalRun --version <v> --tool-path <scratch dir> --no-http-cache` works and
+  the installed `lrun version` prints it. Wait for it in the background. The flat-container download answers first
+  (0.6.0: ~4 min), the registration `dotnet tool install` reads later (~12 min); checking the download alone is not enough.
 - Local tool packages need a new version per install: the script packs
   `<VersionPrefix>-local-<build>-<hash>[-dirty]`, with build = installed build + 1 (no counter file, by design:
   the tool store already holds the last version). Zero-padded to 4 digits because NuGet compares that
