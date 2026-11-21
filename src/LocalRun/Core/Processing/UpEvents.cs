@@ -1,5 +1,6 @@
 namespace LocalRun.Core.Processing;
 
+using LocalRun.Core.Modules;
 using System;
 
 /// <summary>Something <c>up</c> did or saw, as it happens: <c>--json</c> streams each one as a line of stdout.</summary>
@@ -76,4 +77,7 @@ public sealed class ServiceOutcome
 
     /// <summary>The file its output goes to, or null without a logs folder.</summary>
     public string? Log { get; internal init; }
+
+    /// <summary>Its build failed, so <c>up</c> started nothing: the failing step, its exit code and its errors.</summary>
+    public DotnetFailure? Failure { get; internal set; }
 }

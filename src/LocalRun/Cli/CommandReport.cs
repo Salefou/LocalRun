@@ -344,7 +344,7 @@ internal sealed record PackResult(string Plan, bool Packed, IReadOnlyList<Packag
 /// <param name="DurationMs">Time in its <c>dotnet</c> commands, or null when none ran.</param>
 /// <param name="Failure">For a failed project: the failing step, its exit code and its error lines.</param>
 internal sealed record PackageReport(string Project, string PackageId, int Depth, string From, string To,
-    string Status, long? DurationMs, PackFailure? Failure);
+    string Status, long? DurationMs, DotnetFailure? Failure);
 
 internal sealed record SettingsResult(string Path, bool Created);
 
@@ -360,4 +360,5 @@ internal sealed record DownResult(string State, UpState? Up, bool Stopped);
 
 /// <param name="Status"><see cref="ServiceStatus"/>: <c>not-started</c>, <c>exited</c>, <c>failed</c>, <c>stopped</c> or <c>killed</c>.</param>
 /// <param name="ExitCode">Null when it never started, or was killed and didn't exit in time.</param>
-internal sealed record ServiceReport(string Project, string Status, int? ExitCode, string? Log);
+/// <param name="Failure">When its build failed (it is then <c>not-started</c>, as all are): the step, its exit code and its errors.</param>
+internal sealed record ServiceReport(string Project, string Status, int? ExitCode, string? Log, DotnetFailure? Failure);

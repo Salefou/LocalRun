@@ -578,7 +578,7 @@ public static class LocalRunCli
                 state.Delete(statePath);
             events?.Close();
             var services = processor.Services.Select(entry => new ServiceReport(entry.Key, entry.Value.Status, entry.Value.ExitCode,
-                entry.Value.Status == ServiceStatus.NotStarted ? null : entry.Value.Log)).ToList();
+                entry.Value.Status == ServiceStatus.NotStarted ? null : entry.Value.Log, entry.Value.Failure)).ToList();
             output.Result = new UpResult(logsFolder, services);
             output.Written.AddRange(services.Select(service => service.Log).OfType<string>());
         }

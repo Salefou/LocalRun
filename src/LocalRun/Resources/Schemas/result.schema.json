@@ -343,15 +343,16 @@
           "enum": ["planned", "packed", "failed", "skipped"]
         },
         "durationMs": { "description": "Time in its dotnet commands, or null when none ran.", "type": ["integer", "null"] },
-        "failure": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/PackFailure" }] }
+        "failure": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/DotnetFailure" }] }
       },
       "required": ["project", "packageId", "depth", "from", "to", "status", "durationMs", "failure"],
       "additionalProperties": false
     },
-    "PackFailure": {
+    "DotnetFailure": {
+      "description": "A failed dotnet command: of pack and go (clean, restore, pack), or of up (build).",
       "type": "object",
       "properties": {
-        "step": { "enum": ["clean", "restore", "pack"] },
+        "step": { "enum": ["clean", "restore", "pack", "build"] },
         "exitCode": { "type": "integer" },
         "output": {
           "description": "The command's error lines, or its last lines when it printed none (at most 20).",
@@ -454,9 +455,13 @@
           "enum": ["not-started", "exited", "failed", "stopped", "killed"]
         },
         "exitCode": { "description": "Null when it never started, or was killed and didn't exit in time.", "type": ["integer", "null"] },
-        "log": { "type": ["string", "null"] }
+        "log": { "type": ["string", "null"] },
+        "failure": {
+          "description": "When its build failed (it is then not-started, as all are): the step, its exit code and its errors.",
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/DotnetFailure" }]
+        }
       },
-      "required": ["project", "status", "exitCode", "log"],
+      "required": ["project", "status", "exitCode", "log", "failure"],
       "additionalProperties": false
     },
     "UpEvent": {
