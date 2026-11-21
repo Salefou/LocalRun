@@ -747,6 +747,30 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal("settings-invalid", run.Json.GetProperty("error").GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task Settings_ChecksTheFile_AndOnlyWarns()
+    {
+        string settings = Path.Combine(workDir, "settings.json");
+        File.WriteAllText(settings, """{ "root": "relative/path" }""");
+
+        var invalid = await LrunAsync("settings", "--path", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, invalid.ExitCode);
+        Assert.Equal(["settings-invalid"], Codes(invalid));
+        var result = invalid.Json.GetProperty("result");
+        Assert.Equal(settings, result.GetProperty("path").GetString());
+        Assert.False(result.GetProperty("valid").GetBoolean());
+        Assert.Contains("'root'", result.GetProperty("problem").GetString());
+
+        File.WriteAllText(settings, """{ "root": "~/repos" }""");
+
+        var valid = await LrunAsync("settings", "--path", "--json");
+
+        Assert.Empty(Codes(valid));
+        Assert.True(valid.Json.GetProperty("result").GetProperty("valid").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, valid.Json.GetProperty("result").GetProperty("problem").ValueKind);
+    }
+
     private static void WriteApp(string root, string name, string main)
     {
         WriteCsproj(root, name, """

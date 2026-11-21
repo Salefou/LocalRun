@@ -150,11 +150,12 @@ internal static class CommandCatalog
         [
             OptionInfo.One("--config", "<file>", $"Config the up was started with: it records itself next to it (default: {LocalRunCli.DefaultConfigPath})."),
         ]),
-        Command("settings", "Create your settings file if missing (all commented out), then open it. It holds what differs from " +
+        Command("settings", "Create your settings file if missing (all commented out), check it (warning settings-invalid), " +
+            "then open it. It holds what differs from " +
             "one user to the next: the local NuGet feed, the root to scan, the default suffix, how long up waits after Ctrl+C " +
             "before killing the processes, the log level. An option given on the command line always wins over it.",
         [
-            OptionInfo.Flag("--path", $"Only print where the file is (default: ~/.lrun/settings.json, or ${UserSettings.PathVariable})."),
+            OptionInfo.Flag("--path", $"Only print where the file is, and check it (default: ~/.lrun/settings.json, or ${UserSettings.PathVariable})."),
         ]),
         Command("doctor", "Check the setup before running anything: dotnet SDK, settings file, root, local feed (writable), every " +
             "NuGet source the projects restore from (reachable), and in each git repository origin's default branch and the last " +

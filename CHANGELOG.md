@@ -37,6 +37,8 @@ bumps the minor version, anything else the patch.
 - `build` records how it made the config, in a new `Build` field of `localrun.config.json` (time, `lrun` version, flags,
   projects found changed, what it left out, each repository's HEAD), and marks test projects kept with `--tests`
   (`"Test": true`). Older configs still load. `list --json` gives each project's `test` too.
+- `lrun settings` checks the file each time (`--path` too) and warns `settings-invalid` when `build`, `pack` or `up`
+  would fail on it, so you see whether a fix holds without running them; `--json` gives `valid` and `problem`.
 - `lrun down` stops a running `up` from another shell or process, as Ctrl+C in its console would (grace period, then
   kills), and waits until it has exited; with nothing running, it exits `0`. So `up` can run in the background (a shell
   job, an agent's background command) and still stop cleanly. Windows only.

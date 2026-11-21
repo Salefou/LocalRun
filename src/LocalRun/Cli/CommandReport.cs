@@ -346,7 +346,9 @@ internal sealed record PackResult(string Plan, bool Packed, IReadOnlyList<Packag
 internal sealed record PackageReport(string Project, string PackageId, int Depth, string From, string To,
     string Status, long? DurationMs, DotnetFailure? Failure);
 
-internal sealed record SettingsResult(string Path, bool Created);
+/// <param name="Valid">Whether the commands that read the file can use it (true when there is none).</param>
+/// <param name="Problem">Why not, when <paramref name="Valid"/> is false (warned <c>settings-invalid</c>).</param>
+internal sealed record SettingsResult(string Path, bool Created, bool Valid, string? Problem);
 
 /// <param name="Logs">The folder of the services' log files.</param>
 /// <param name="Services">The executables of the config, dependencies first, without the excluded ones.</param>

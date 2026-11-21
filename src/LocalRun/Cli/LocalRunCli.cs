@@ -658,15 +658,17 @@ public static class LocalRunCli
         string path = UserSettings.DefaultPath;
         if (pathOnly)
         {
+            string? pathProblem = SettingsProblem(path);
             if (OutputMode.Json)
-                output.Result = new SettingsResult(path, Created: false);
+                output.Result = new SettingsResult(path, Created: false, pathProblem == null, pathProblem);
             else
                 Console.WriteLine(path);
             return;
         }
 
         bool created = UserSettings.CreateIfMissing(path);
-        output.Result = new SettingsResult(path, created);
+        string? problem = SettingsProblem(path);
+        output.Result = new SettingsResult(path, created, problem == null, problem);
         if (created)
         {
             output.Written.Add(path);
@@ -682,6 +684,24 @@ public static class LocalRunCli
         {
             try { Process.Start("notepad.exe", $"\"{path}\""); }
             catch (Exception ex) { logger.LogWarning(DiagnosticEvents.OpenFailed, "Could not open notepad: {Error}", ex.Message); }
+        }
+    }
+
+    /// <summary>
+    /// Why the settings file can't be used, warned (<c>settings-invalid</c>), or null when it can or doesn't exist. The
+    /// commands that read it fail on it and send you to <c>settings</c>: that's where you see whether your fix holds.
+    /// </summary>
+    private static string? SettingsProblem(string path)
+    {
+        try
+        {
+            UserSettings.Load(path);
+            return null;
+        }
+        catch (SettingsInvalidException ex)
+        {
+            logger.LogWarning(DiagnosticEvents.SettingsInvalid, "{Problem}", ex.Message);
+            return ex.Message;
         }
     }
 

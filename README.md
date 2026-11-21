@@ -700,13 +700,14 @@ it on every command:
 
 The file is created with all of it commented out, and never overwritten. Comments and trailing commas are allowed;
 an unknown key or a bad value fails the command that reads it (`build`, `pack`, `up`) with the file's path; the
-others then log at `Information`, and `lrun doctor` points at the file. Paths are
+others then log at `Information`, and `lrun doctor` points at the file. `settings` checks it each time, so after a fix
+it says whether the file now holds (warning `settings-invalid` otherwise; `--json`: `valid` and `problem`). Paths are
 absolute or start with `~`; a relative one would depend on where you run `lrun` from. An option on the command
 line (`--local-nuget`, `--root`, `--suffix`, `--stop-timeout`, `--log-level`) always wins.
 
 | Option | Description |
 |---|---|
-| `--path` | Only print where the file is, without creating or opening anything. |
+| `--path` | Only print where the file is, without creating or opening anything (it is still checked). |
 
 The file is `~/.lrun/settings.json`, or the path in the `LOCALRUN_SETTINGS` environment variable.
 
@@ -1022,7 +1023,7 @@ Results:
 | `verify` | `config`, `feed`, `libraries`, `ok`, `missing`, `stale` (counts), `packages` in config order: `project`, `packageId`, `status` (`ok`, `missing`, `stale`), `reason` (for `stale`: `csproj-ahead` or `edited`), `csprojVersion`, `feedVersion` (the newest in the feed), `packedAt`, `editedFile` (relative to the project's folder) and `editedAt` (times in UTC). `build --verify` puts the same object under `verify` in its result. |
 | `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
 | `plot` | `plot`: the page's path. |
-| `settings` | `path`, `created`. |
+| `settings` | `path`, `created`, `valid` (false when the commands reading the file would fail on it), `problem`. |
 | `version` | `version`. |
 | `help` | `help`: the help text; `globalOptions`, `commands`, `exitCodes`, `errorCodes`, `diagnosticCodes`: the same as data (see [`help`](#help)). |
 | `schema` | `name`, `schema`: the JSON Schema as an object. |
@@ -1065,6 +1066,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
 | `stop-signal-failed` | `up`: Ctrl+C could not be passed on to its processes on a stop; those still running are killed after the grace period. | — |
 | `plan-older-than-config` | `status`: the repack plan is older than the config, so made from an earlier one; `go` would pack that. `pack` plans again. | — |
+| `settings-invalid` | `settings`: the settings file can't be used (unreadable, an unknown key, a bad value); `build`, `pack` and `up` would fail on it with that error code. | — |
 | `doctor-warning`, `doctor-failure` | `doctor`: a setup check that may surprise, or that will make a command fail (the result names the check). `doctor` fails on a failure itself (exit code `1`). | — |
 | `unspecified` | A warning without a code yet. | — |
 
