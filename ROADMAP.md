@@ -339,8 +339,6 @@ leftovers, `settings` checking the file, and the agent instructions. Left, each 
 - **`status` doesn't say whether the plan ran**, nor how it ended. Related: 3.
 - **Depth numbering**: `depth` is 0-based in JSON, the text says `Depth 1/3`, `status` says `d0`. Changing the JSON is
   breaking: a 1.0 question.
-- **`planned-below-base` on executables**: they are packed too, so the warning fires on a service nobody consumes as a
-  package. Skip it for executables, or stop packing them (a bigger question).
 - **`--with-services added: nothing`** reads oddly when the services were kept already as users: reword.
 - **`result.projects` differs** between `build` (counts) and `list` (an array). Renaming is breaking: a 1.0 question.
 - **Which build of a package a service runs**: the version alone (`local.1`) can't prove a service loaded the new

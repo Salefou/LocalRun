@@ -122,6 +122,7 @@ changes, update its file and its summary here together.
 - **Versioning** (`docs/agents/versioning.md`): before changing `BumpOptions`, `RepackOptionsParser`,
   `RepackConfigBuilder`, `PackageIterations`, how `build` records `LatestVersion`, or README "Versioning rules".
   - The csproj is never written. `pack` never plans a stable version (the CLI's suffix defaults to `local`).
+  - `pack` plans libraries only, and `build` looks up `LatestVersion` for libraries only: executables are built by `up`.
   - The base is the latest over all the restore sources plus the local feed, or the csproj version when higher (by the
     number alone, then the bump flag is ignored). One iteration number `.N` for the whole plan, no counter file.
 - **Execution** (`docs/agents/execution.md`): before changing `RepackExecutor`, `SolutionProperties`, `DotnetOutput`,

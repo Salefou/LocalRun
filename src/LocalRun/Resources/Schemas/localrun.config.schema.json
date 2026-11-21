@@ -126,7 +126,7 @@
           "$ref": "#/$defs/ProjectVersion"
         },
         "LatestVersion": {
-          "description": "The highest version on the project's NuGet sources and the local feed; pack starts from it. Absent with build --csproj, or when none was found.",
+          "description": "The highest version on the project's NuGet sources and the local feed; pack starts from it. Absent with build --csproj, for an executable (never packed), or when none was found.",
           "$ref": "#/$defs/ProjectVersion"
         },
         "Dependencies": {

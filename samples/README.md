@@ -23,7 +23,7 @@ workspace/
   reporting/  LrSample.Reports         1.1.0        lib  ─pkg→  Pricing.Models, ─proj→ tools/Orphan
               LrSample.ReportCli       1.1.0        exe  ─proj→ Reports
               tools/LrSample.Orphan    0.0.1        lib  (in no .sln)
-  island/     LrSample.Island.Core     0.1.0        lib
+  island/     LrSample.Island.Core     0.1.0-rc.1   lib
               LrSample.Island.App      0.1.0        exe  ─proj→ Island.Core
 ```
 
@@ -36,7 +36,7 @@ What each part is there to exercise:
 | Third-party restore during `go` | Logging uses Humanizer.Core from nuget.org |
 | Independent trees, packed in parallel | `island/` shares nothing with the rest; so does Orphan without `--include-external` |
 | `--include-external` | Orphan is in no solution, so the Reports → Orphan edge is dropped unless asked |
-| Version edge cases | `2.3.1-beta` (prerelease), `1.4.2.7` (4 parts), `1.4` (short), `0.9.0-rc.1` (dotted label) |
+| Version edge cases | `2.3.1-beta` (prerelease), `1.4.2.7` (4 parts), `1.4` (short), `0.1.0-rc.1` (dotted label, sorting above `local` and `dev`) |
 | Executables for `up` | OrderGateway, RiskService, ReportCli, Island.App print the version of every LrSample library they loaded |
 | Services vs jobs under `up` | OrderGateway and RiskService (`svc`) are long-running HTTP services that stop on Ctrl+C; ReportCli and Island.App are one-shot jobs |
 
@@ -77,7 +77,7 @@ lrun plot --open
 
   ```
   Scanned …\samples\workspace: 11 projects in 5 solutions, 7 libraries and 4 executables
-  No project found on your sources: pack starts from the csproj versions
+  No library found on your sources: pack starts from the csproj versions
   Services: LrSample.Island.App, LrSample.RiskService, LrSample.OrderGateway, LrSample.ReportCli
   Config: …\samples\.lrun\localrun.config.json
   Next: lrun pack
@@ -113,8 +113,8 @@ lrun plot --open
   ```
 
   The repository is this one, two levels above the root. After `lrun pack --dry-run --patch`, the last line becomes
-  `Plan: …\repack.config.json, written …, 11 packages`, then one line per depth (`Depth 1/4: LrSample.Island.Core 0.1.0
-  -> 0.1.1-local.1, …`). Rebuilding the config after that adds `[WRN] The plan is older than the config…`
+  `Plan: …\repack.config.json, written …, 7 packages` (the libraries), then one line per depth (`Depth 1/3:
+  LrSample.Island.Core 0.1.0-rc.1 -> 0.1.1-local.1, …`). Rebuilding the config after that adds `[WRN] The plan is older than the config…`
   (`plan-older-than-config`) until `pack` runs again.
 
 ### 2. Filters
@@ -169,43 +169,43 @@ out, have a grey dashed outline with dashed edges and no version.
 ### 3. Version planning (nothing is built)
 
 Rebuild the full config (step 1), then run each command below with `--dry-run` and compare the versions in
-`repack.config.json`. The first lines printed sum them up: the change 9 projects share, and the two whose
-prerelease label is replaced, e.g. for `lrun pack --dry-run --patch`:
+`repack.config.json`. Only the 7 libraries are planned: the executables are left out, as `up` builds them from
+source. The first lines printed sum them up: the change 5 projects share, and the two whose prerelease label is
+replaced, e.g. for `lrun pack --dry-run --patch`:
 
 ```
-Versions: patch bump, release -> local.1, 9 projects; 2 other(s):
+Versions: patch bump, release -> local.1, 5 projects; 2 other(s):
+  LrSample.Island.Core: 0.1.0-rc.1 -> 0.1.1-local.1
   LrSample.Logging: 2.3.1-beta -> 2.3.2-local.1
-  LrSample.RiskService: 0.9.0-rc.1 -> 0.9.1-local.1
 Plan: …\samples\.lrun\repack.config.json
-> Depth 1/4: LrSample.Island.Core, LrSample.Orphan, LrSample.Primitives
-> Depth 2/4: LrSample.Island.App, LrSample.Logging, LrSample.Pricing.Models
-> Depth 3/4: LrSample.Pricing, LrSample.Reports, LrSample.RiskService
-> Depth 4/4: LrSample.OrderGateway, LrSample.ReportCli
+> Depth 1/3: LrSample.Island.Core, LrSample.Orphan, LrSample.Primitives
+> Depth 2/3: LrSample.Logging, LrSample.Pricing.Models
+> Depth 3/3: LrSample.Pricing, LrSample.Reports
 Dry run, nothing packed. Next: lrun go (after editing the plan, if needed)
 ```
 
 Every version ends in `.1`: nothing is packed yet.
 
-| Command (with `--dry-run`) | Logging `2.3.1-beta` | Pricing.Models `1.4.2.7` | Pricing `1.4` | RiskService `0.9.0-rc.1` |
+| Command (with `--dry-run`) | Logging `2.3.1-beta` | Pricing.Models `1.4.2.7` | Pricing `1.4` | Island.Core `0.1.0-rc.1` |
 |---|---|---|---|---|
-| `lrun pack` | 2.3.1-local.1 | 1.4.2.7-local.1 | 1.4.0-local.1 | 0.9.0-local.1 |
-| `lrun pack --patch` | 2.3.2-local.1 | 1.4.3-local.1 | 1.4.1-local.1 | 0.9.1-local.1 |
-| `lrun pack --suffix dev` | 2.3.1-dev.1 | 1.4.2.7-dev.1 | 1.4.0-dev.1 | 0.9.0-dev.1 |
-| `lrun pack --patch --suffix dev` | 2.3.2-dev.1 | 1.4.3-dev.1 | 1.4.1-dev.1 | 0.9.1-dev.1 |
-| `lrun pack --minor` | 2.4.0-local.1 | 1.5.0-local.1 | 1.5.0-local.1 | 0.10.0-local.1 |
-| `lrun pack --alpha` | 2.3.2-alpha.1 | 1.4.3-alpha.1 | 1.4.1-alpha.1 | 0.9.1-alpha.1 |
+| `lrun pack` | 2.3.1-local.1 | 1.4.2.7-local.1 | 1.4.0-local.1 | 0.1.0-local.1 |
+| `lrun pack --patch` | 2.3.2-local.1 | 1.4.3-local.1 | 1.4.1-local.1 | 0.1.1-local.1 |
+| `lrun pack --suffix dev` | 2.3.1-dev.1 | 1.4.2.7-dev.1 | 1.4.0-dev.1 | 0.1.0-dev.1 |
+| `lrun pack --patch --suffix dev` | 2.3.2-dev.1 | 1.4.3-dev.1 | 1.4.1-dev.1 | 0.1.1-dev.1 |
+| `lrun pack --minor` | 2.4.0-local.1 | 1.5.0-local.1 | 1.5.0-local.1 | 0.2.0-local.1 |
+| `lrun pack --alpha` | 2.3.2-alpha.1 | 1.4.3-alpha.1 | 1.4.1-alpha.1 | 0.1.1-alpha.1 |
 | `lrun pack --major --suffix rc.1` | 3.0.0-rc.1.1 | 2.0.0-rc.1.1 | 2.0.0-rc.1.1 | 1.0.0-rc.1.1 |
 | `lrun pack --suffix -dev` | rejected, exit code 2 | | | |
-| `lrun pack --next --suffix dev` | 2.3.1-dev.1 | 1.4.3-dev.1 | 1.4.1-dev.1 | 0.9.1-dev.1 |
+| `lrun pack --next --suffix dev` | 2.3.1-dev.1 | 1.4.3-dev.1 | 1.4.1-dev.1 | 0.1.1-dev.1 |
 | `lrun pack --remote` | rejected, exit code 2: `'--remote' is gone: 'lrun build' now records the latest versions…` | | | |
 | `lrun pack --go` | rejected, exit code 2: `'--go' was removed in 0.4.0: 'lrun pack' now packs…` | | | |
 
 `lrun pack` and `lrun pack --suffix dev` also print `[WRN] The planned version sorts below the latest for 1 project(s)
-(0.9.0-rc.1 -> 0.9.0-local.1): …` (`planned-below-base`, with `dev.1` for the second): `local` and `dev` sort below
-RiskService's `rc`, while Logging's `beta` sorts below both. `--next` patch-bumps RiskService instead, so it doesn't warn.
+(0.1.0-rc.1 -> 0.1.0-local.1): …` (`planned-below-base`, with `dev.1` for the second): `local` and `dev` sort below
+Island.Core's `rc`, while Logging's `beta` sorts below both. `--next` patch-bumps Island.Core instead, so it doesn't warn.
 
 `repack.config.json` has 3 trees (main graph, island, Orphan alone) and these depths:
-0 Island.Core, Orphan, Primitives · 1 Island.App, Logging, Pricing.Models · 2 Pricing, Reports, RiskService · 3 OrderGateway, ReportCli.
+0 Island.Core, Orphan, Primitives · 1 Logging, Pricing.Models · 2 Pricing, Reports.
 The dry run prints them as above, the three trees together.
 
 ### 4. Pack and run
@@ -218,8 +218,8 @@ lrun up
 ```
 
 - `pack` prints the versions and the plan's path as in step 3, then a line per depth before packing it, and
-  `ok Packed 11 projects in 13 s` (`✓` on a terminal). Nothing else: the samples build without warnings. 11 packages
-  are in `.feed/`.
+  `ok Packed 7 projects in 10 s` (`✓` on a terminal). Nothing else: the samples build without warnings. 7 packages
+  are in `.feed/`, one per library: no executable.
 - `lrun verify` then prints `ok 7 of 7 libraries up to date in …\samples\.feed` and exits 0 (before `pack`, or with
   `build … --verify`: a `no package in the local feed` warning per library, `0 of 7`, then `FAILED`, exit code 6; the
   config is written all the same). Save a file of `workspace/pricing/LrSample.Pricing` (or
@@ -311,11 +311,11 @@ Right after step 4 (no reset), pack again with the same command:
 lrun pack --patch --suffix dev
 ```
 
-- Prints `Versions: patch bump, release -> dev.2, 9 projects; 2 other(s):` (`LrSample.Logging: 2.3.1-beta -> 2.3.2-dev.2`,
-  `LrSample.RiskService: 0.9.0-rc.1 -> 0.9.1-dev.2`): iteration 2, since `.1` is in the feed. `.feed/` now holds 22
-  packages, both iterations.
-- RiskService's `.2` package depends on `Pricing.Models 1.4.3-dev.2` and `Primitives 1.0.1-dev.2`: `go` restores
-  with `--force`, so its `*-*` references are re-resolved rather than kept from the first run.
+- Prints `Versions: patch bump, release -> dev.2, 5 projects; 2 other(s):` (`LrSample.Island.Core: 0.1.0-rc.1 ->
+  0.1.1-dev.2`, `LrSample.Logging: 2.3.1-beta -> 2.3.2-dev.2`): iteration 2, since `.1` is in the feed. `.feed/` now
+  holds 14 packages, both iterations.
+- Reports' `.2` package depends on `Pricing.Models 1.4.3-dev.2` (and Pricing.Models' on `Primitives 1.0.1-dev.2`):
+  `go` restores with `--force`, so their `*-*` references are re-resolved rather than kept from the first run.
 
 Then rebuild, as on another day, and continue the line:
 
@@ -327,17 +327,18 @@ lrun build --root workspace --local-nuget .feed --csproj
 lrun pack --next --suffix dev
 ```
 
-- `build` finds your packages in `.feed/` (a source in `NuGet.config`): `Latest versions found for all 11 projects`,
-  recorded as `LatestVersion` in the config (`1.0.1-dev.2` for Primitives, `2.3.2-dev.2` for Logging; with
+- `build` finds your packages in `.feed/` (a source in `NuGet.config`): `Latest versions found for all 7 libraries`,
+  recorded as `LatestVersion` in the config (none for the executables) (`1.0.1-dev.2` for Primitives, `2.3.2-dev.2` for Logging; with
   `--log-level Debug`, a line per project). From a terminal the plot opens, and shows `latest 1.0.1-dev.2`
   under Primitives' `1.0.0`.
-- `pack --next --suffix dev` continues the line: `Versions: dev.2 -> dev.3, 11 projects` (Primitives `1.0.1-dev.3`,
+- `pack --next --suffix dev` continues the line: `Versions: dev.2 -> dev.3, 7 projects` (Primitives `1.0.1-dev.3`,
   Logging `2.3.2-dev.3`).
-- `pack --patch --suffix dev` now bumps past it: `Versions: patch bump, dev.2 -> dev.1, 11 projects` (Primitives
+- `pack --patch --suffix dev` now bumps past it: `Versions: patch bump, dev.2 -> dev.1, 7 projects` (Primitives
   `1.0.2-dev.1`), iteration 1 since `1.0.2-dev` was never packed.
 - With `--csproj`, `build` prints no `Latest versions` line and records no `LatestVersion`: `pack --next --suffix dev`
-  starts from the csproj versions, `Versions: patch bump, release -> dev.3, 9 projects` (Primitives `1.0.1-dev.3`,
-  still iteration 3, shared with what `.feed/` holds) and `LrSample.Logging: 2.3.1-beta -> 2.3.1-dev.3`.
+  starts from the csproj versions, `Versions: patch bump, release -> dev.3, 5 projects` (Primitives `1.0.1-dev.3`,
+  still iteration 3, shared with what `.feed/` holds), `LrSample.Island.Core: 0.1.0-rc.1 -> 0.1.1-dev.3` and
+  `LrSample.Logging: 2.3.1-beta -> 2.3.1-dev.3`.
 
 ### 6. Edge cases
 
@@ -371,7 +372,7 @@ lrun pack --config edge.json --repack-config edge-plan.json --strict     # after
 | `broken-import/`: `LrEdge.BrokenImport` imports a file that doesn't exist | `evaluation-failed`: `MSBuild could not evaluate …LrEdge.BrokenImport.csproj, its csproj is read as is (version and package id may be wrong)`; with `--strict`, exit code 5. The config holds it at 1.2.0, read from the XML. `pack` then fails at its depth with the `error MSB4019: The imported project "…missing.props" was not found` line and `FAILED pack failed: dotnet pack failed on LrEdge.BrokenImport …`, exit code 4 (a `dotnet` command failed) |
 | `package-version/`: `LrEdge.Pinned` sets `<PackageVersion>3.0.0</PackageVersion>` | `build` succeeds with no warning. `pack --dry-run` plans `1.0.0 -> 1.0.0-local.1` but warns `package-version-override`: `LrEdge.Pinned sets <PackageVersion> in its csproj, which overrides the planned version: go will pack it under the csproj's`; with `--strict`, the plan is written, then exit code 5 |
 | `unreachable-source/`: its `NuGet.config` adds a source on a `.invalid` host, and a local folder that doesn't exist | Two `source-query-failed` warnings, after about 6 s of NuGet retries: `Failed to query source '…\unreachable-source\no-such-feed': the folder doesn't exist.` and `Failed to query source 'http://lrun-samples.invalid/v3/index.json': Unable to load the service index …`; with `--strict`, `source-query-failed (2)`, exit code 5. `--csproj` skips the queries, and so the warnings |
-| `empty/`: no project | `build` warns `empty-selection`: `No project found under …\empty: the config holds none`. `pack` warns `Nothing to pack: the config holds no project.` and prints `ok Packed 0 projects`. Both exit 0, with `--strict` too: nothing to do is a valid outcome |
+| `empty/`: no project | `build` warns `empty-selection`: `No project found under …\empty: the config holds none`. `pack` warns `Nothing to pack: the config holds no library.` and prints `ok Packed 0 projects`. Both exit 0, with `--strict` too: nothing to do is a valid outcome |
 | `non-planar/`: the two smallest graphs that can't be drawn without crossings, as dependency graphs. `k33/`: K₃,₃, every `LrEdge.Desk.*` (X, Y, Z, in `Desks.slnx`) uses every `LrEdge.Feed.*` (A, B, C, in `Feeds.slnx`). `k5/`: K₅, each `LrEdge.K<i>` uses every `K<j>` with j < i, odd ones in `Odd.slnx` and even ones in `Even.slnx` (project references within a solution, package references across) | Succeeds with no warning, 11 projects. The page reads `11 projects · 4 solutions · ⚠ 1 group cycle`: no project cycle, but Odd and Even use each other (K1 → K2 → K3), so their frames and the edges between them are red. Hovering K3 lights K4, K5 in orange and K1, K2 in blue. *Collapse all* leaves Feeds → Desks (`×9`) and Odd ⇄ Even (3 edges each way). With the default bands, Odd and Even are adjacent bands and the K edges zigzag between them, all pointing right; collapsed, Odd → Even points right and Even → Odd loops back on the left. With *Layout: free*, the layout has to route around the cycle and some K edges loop back around the frames; `lrun build --root edge-cases --plot` then shows the K₅ part on its own, the other edge cases packed beside it, never inside its loops |
 
 ## Changing the samples

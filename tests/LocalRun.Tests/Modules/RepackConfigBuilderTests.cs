@@ -33,6 +33,28 @@ public sealed class RepackConfigBuilderTests : IDisposable
     }
 
     [Fact]
+    public async Task Executables_AreLeftOut_OfThePlan()
+    {
+        var service = new ProjectNode
+        {
+            Name = "Service",
+            Path = "Service/Service.csproj",
+            Type = "executable",
+            Version = ProjectVersion.Parse("1.0.0"),
+            Dependencies = ["Lib"],
+        };
+        var config = new LocalRunConfig { RootPath = root, LocalNugetPath = Feed, Projects = [Project("Lib", "1.4.2"), service] };
+
+        var repackConfig = await new RepackConfigBuilder(_ => Cache)
+            .BuildRepackConfig(config, new RepackOptions { BumpOptions = new BumpOptions { Suffix = "local" }, CleanBeforeRestore = false });
+
+        var planned = Assert.Single(repackConfig.RepackTrees.SelectMany(tree => tree.Projects));
+        Assert.Equal("Lib", planned.Name);
+        Assert.Equal(0, planned.Depth);
+        Assert.Equal(2, config.Projects.Count);
+    }
+
+    [Fact]
     public async Task LatestVersion_IsTheBase_WhenRecorded()
     {
         var plan = await Plan(new BumpOptions { BumpType = BumpType.Minor, Suffix = "alpha" },

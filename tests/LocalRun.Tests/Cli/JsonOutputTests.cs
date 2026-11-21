@@ -326,7 +326,8 @@ public sealed class JsonOutputTests : IDisposable
         AssertPlain(pack);
         var plan = pack.Json.GetProperty("result");
         Assert.False(plan.GetProperty("packed").GetBoolean());
-        Assert.Equal(["Lib", "App"], plan.GetProperty("packages").EnumerateArray().Select(package => package.GetProperty("project").GetString()));
+        // App, an executable, is left out: up builds it from source
+        Assert.Equal(["Lib"], plan.GetProperty("packages").EnumerateArray().Select(package => package.GetProperty("project").GetString()));
         var lib = plan.GetProperty("packages")[0];
         Assert.Equal("1.0.0", lib.GetProperty("from").GetString());
         Assert.Equal("1.0.1-local.1", lib.GetProperty("to").GetString());

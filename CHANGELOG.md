@@ -7,6 +7,13 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Changed
+
+- `pack` plans libraries only: executables are left out of `repack.config.json`, as nothing consumes them as packages
+  and `up` builds them from source. Packing them could stop the whole chain (a native AOT app, a test harness) and
+  filled the feed with packages nobody uses; `go` no longer counts the Web projects the SDK refused to pack. `build`
+  no longer looks up the latest version of executables, which found strangers' packages of the same name on nuget.org.
+
 ### Fixed
 
 - ASP.NET Core and worker services (`Microsoft.NET.Sdk.Web`, `Microsoft.NET.Sdk.Worker`) without an explicit

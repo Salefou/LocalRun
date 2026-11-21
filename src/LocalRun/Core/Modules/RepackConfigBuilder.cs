@@ -27,8 +27,16 @@ internal class RepackConfigBuilder
         this.globalPackagesFolderOf = globalPackagesFolderOf;
     }
 
-    public Task<RepackConfig> BuildRepackConfig(LocalRunConfig config, RepackOptions repackOptions)
+    /// <summary>
+    /// Plans the libraries of the config. Executables are left out: nothing consumes them as packages, <c>up</c> builds
+    /// them from source, and packing them could only fail (native AOT, test harnesses) or be refused (Web SDK).
+    /// </summary>
+    public Task<RepackConfig> BuildRepackConfig(LocalRunConfig fullConfig, RepackOptions repackOptions)
     {
+        var config = LibrariesOf(fullConfig);
+        int executables = fullConfig.Projects.Count - config.Projects.Count;
+        if (executables != 0)
+            logger.LogDebug("Left out {Executables}: up builds them from source", Text.Count(executables, "executable"));
         var dependencyGraph = DependencyGraph.FromConfig(config);
 
         var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => BaseVersion(proj).Version, StringComparer.OrdinalIgnoreCase);
@@ -110,12 +118,22 @@ internal class RepackConfigBuilder
         });
     }
 
+    /// <summary>The config without its executables (a copy: the caller's config is left as read).</summary>
+    internal static LocalRunConfig LibrariesOf(LocalRunConfig config) => new()
+    {
+        SchemaVersion = config.SchemaVersion,
+        RootPath = config.RootPath,
+        LocalNugetPath = config.LocalNugetPath,
+        Projects = [.. config.Projects.Where(proj => proj.Type != "executable")],
+        Build = config.Build,
+    };
+
     /// <summary>The plan's versions: the change most projects share, once, then a line per project that differs.</summary>
     private static void LogVersions(IReadOnlyList<(string Name, ProjectVersion From, ProjectVersion To)> plan)
     {
         if (plan.Count == 0)
         {
-            logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing to pack: the config holds no project.");
+            logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing to pack: the config holds no library.");
             return;
         }
         var (common, commonCount, others) = VersionChanges.Summarize(plan, Terminal.Arrow);
