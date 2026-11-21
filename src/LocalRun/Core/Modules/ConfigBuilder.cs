@@ -184,7 +184,8 @@ public class ConfigBuilder
     /// <summary>
     /// Records each project's highest version across the NuGet sources that apply to its folder, as a restore from
     /// there would see them: the local feed included when a NuGet.Config lists it, so your own builds count.
-    /// Skipped with <c>--csproj</c>.
+    /// Skipped with <c>--csproj</c>, and for executables: <c>pack</c> leaves them out, and a lookup by their name would only
+    /// find strangers' packages (<c>TestApp</c>, <c>ConsoleDemo</c> on nuget.org).
     /// </summary>
     public async Task FetchLatestVersionsAsync(LocalRunConfig config)
     {
@@ -195,18 +196,19 @@ public class ConfigBuilder
         // missing (nothing packed yet), so a NuGet.Config listing it doesn't warn about it
         string? localFeed = string.IsNullOrEmpty(config.LocalNugetPath) ? null : config.LocalNugetPath;
         // Several projects at once (each querying its sources at once); logged afterwards, in config order
-        var latestPerProject = new NuGetVersion?[config.Projects.Count];
-        await Parallel.ForEachAsync(Enumerable.Range(0, config.Projects.Count), new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentLookups },
+        var libraries = config.Projects.Where(proj => proj.Type != "executable").ToList();
+        var latestPerProject = new NuGetVersion?[libraries.Count];
+        await Parallel.ForEachAsync(Enumerable.Range(0, libraries.Count), new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentLookups },
             async (i, _) =>
             {
-                var proj = config.Projects[i];
+                var proj = libraries[i];
                 string projectFolder = Path.GetDirectoryName(Path.Combine(config.RootPath, proj.Path))!;
                 latestPerProject[i] = await nugetVersionChecker.GetLatestVersionAcrossSourcesAsync(proj.PackageIdOrName, projectFolder, localFeed);
             });
 
-        for (int i = 0; i < config.Projects.Count; i++)
+        for (int i = 0; i < libraries.Count; i++)
         {
-            var proj = config.Projects[i];
+            var proj = libraries[i];
             string project = proj.PackageId == null ? proj.Name : $"{proj.Name} ({proj.PackageId})";
             if (latestPerProject[i] is not { } latest)
             {
@@ -217,16 +219,16 @@ public class ConfigBuilder
             proj.LatestVersion = ProjectVersion.Parse(latest.ToNormalizedString());
             logger.LogDebug("{Project}: {LatestVersion} (csproj {Version})", project, proj.LatestVersion, proj.Version);
         }
-        int found = config.Projects.Count(proj => proj.LatestVersion != null);
-        if (config.Projects.Count == 0)
+        int found = libraries.Count(proj => proj.LatestVersion != null);
+        if (libraries.Count == 0)
             return;
         if (found == 0)
-            logger.LogInformation("No project found on your sources: pack starts from the csproj versions");
-        else if (found == config.Projects.Count)
-            logger.LogInformation("Latest versions found for all {Projects}", Text.Count(found, "project"));
+            logger.LogInformation("No library found on your sources: pack starts from the csproj versions");
+        else if (found == libraries.Count)
+            logger.LogInformation("Latest versions found for all {Libraries}", Text.Count(found, "library", "libraries"));
         else
-            logger.LogInformation("Latest versions found for {Found} of {Count} projects, the others start from their csproj version", found, config.Projects.Count);
-        logger.LogDebug("Fetched the latest versions of {Count} projects in {ElapsedMs}ms", config.Projects.Count, stopwatch.ElapsedMilliseconds);
+            logger.LogInformation("Latest versions found for {Found} of {Count} libraries, the others start from their csproj version", found, libraries.Count);
+        logger.LogDebug("Fetched the latest versions of {Count} libraries in {ElapsedMs}ms", libraries.Count, stopwatch.ElapsedMilliseconds);
     }
 
     /// <summary>Projects looked up at once by <see cref="FetchLatestVersionsAsync"/>: enough to hide the latency of remote feeds.</summary>

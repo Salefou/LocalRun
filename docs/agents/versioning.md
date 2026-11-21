@@ -4,6 +4,12 @@ Read before changing `BumpOptions`, `RepackOptionsParser`, `RepackConfigBuilder`
 `NugetVersionChecker`, how `build` records `LatestVersion`, or the README "Versioning rules" table. The summary in
 `CLAUDE.md` is what must never break; this file is the whole rule and why.
 
+- **Libraries only** (user feedback, 2026-11-21): `RepackConfigBuilder` plans the config's libraries and leaves its
+  executables out, and `build` doesn't look up their `LatestVersion`. Nothing consumes an executable as a package, `up`
+  builds it from source, and packing one could only fail (native AOT needing `vswhere.exe`, a test harness referencing
+  a dummy package) or be refused by the SDK (Web/Worker projects default to `IsPackable=false`), stopping the whole
+  chain; a lookup by its name finds strangers' packages (`TestApp`, `ConsoleDemo` on nuget.org). Not handled: an
+  executable packed on purpose as a .NET tool (`PackAsTool`), and test projects kept with `--tests` (still planned).
 - **Version bump rules** (a bump resets lower components and replaces the prerelease label; no bump
   keeps the version and only `--suffix` replaces the label) are mirrored case by case in
   `tests/LocalRun.Tests/Options/BumpOptionsTests.cs` (BumpOptions level, null suffix = drop the label).

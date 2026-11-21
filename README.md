@@ -65,10 +65,11 @@ so you can **inspect or hand-edit** the plan between steps.
 1. **`build`** finds every `*.csproj` under the root, reads its name, type (executable for an `OutputType` of `Exe`/`WinExe`, or a Web/Worker SDK without one),
    version (`<Version>`, else `<VersionPrefix>`-`<VersionSuffix>`), `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
    that reference them. Optional filters keep only the part of the graph you care about. It also records
-   each project's latest version on your NuGet sources and in the local feed (unless `--csproj`). The result
+   each library's latest version on your NuGet sources and in the local feed (unless `--csproj`). The result
    is written in topological order to `localrun.config.json`.
 2. **`plot`** renders that graph as a self-contained interactive HTML page (no internet access needed).
-3. **`pack`** decides, for every project, the version it will be packed as: the config's version (the
+3. **`pack`** decides, for every library, the version it will be packed as (executables are left out: `up`
+   builds them from source): the config's version (the
    latest one when recorded, else the csproj's), bumped, with your suffix and an iteration number that
    goes up each time you pack the same versions again. The plan is written to `repack.config.json`, then
    executed as `go` does. With `--dry-run`, it stops there, for you to review or edit the plan.
@@ -263,7 +264,7 @@ start, and the config's path:
 Scanned C:\…\samples\workspace: 11 projects in 5 solutions, 7 libraries and 4 executables
 --with-services added: LrSample.OrderGateway, LrSample.Pricing, LrSample.ReportCli, LrSample.Reports
 Kept 6 of 11 (--users-of LrSample.Pricing.Models, --deps-of LrSample.RiskService, --with-services)
-Latest versions found for all 6 projects
+Latest versions found for all 3 libraries
 Services: LrSample.RiskService, LrSample.OrderGateway, LrSample.ReportCli
 Config: C:\…\samples\.lrun\localrun.config.json
 Next: lrun pack
@@ -281,7 +282,7 @@ Next: lrun pack
 | `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 | `--tests` | off | Keep the test projects. By default `build` leaves them out (and lists them): projects referencing `Microsoft.NET.Test.Sdk`, setting `<IsTestProject>true</IsTestProject>`, or using the `MSTest.Sdk` project SDK. |
-| `--csproj` | off | Read the csproj files as they are: skip the MSBuild evaluation of versions and package ids (below), and don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` reads each csproj's version and package id from its XML, and asks MSBuild (`dotnet msbuild -getProperty`, about a second per project, 8 at a time) only for the projects whose XML can't tell: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above it that sets `Version`, `VersionPrefix`, `VersionSuffix`, `PackageId` or `AssemblyName` or imports other files. If MSBuild fails on a project, its csproj is read as is, with a warning. `build` also records each project's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. When a csproj version is higher than that latest (a `11.0.0-preview` in development while `10.7.0` is released), `pack` starts from the csproj version and warns once. That csproj already is the version in development, so a bump flag is ignored for it and only the suffix applies (`11.0.0-local.1`, with or without `--patch`). Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
+| `--csproj` | off | Read the csproj files as they are: skip the MSBuild evaluation of versions and package ids (below), and don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` reads each csproj's version and package id from its XML, and asks MSBuild (`dotnet msbuild -getProperty`, about a second per project, 8 at a time) only for the projects whose XML can't tell: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above it that sets `Version`, `VersionPrefix`, `VersionSuffix`, `PackageId` or `AssemblyName` or imports other files. If MSBuild fails on a project, its csproj is read as is, with a warning. `build` also records each library's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. When a csproj version is higher than that latest (a `11.0.0-preview` in development while `10.7.0` is released), `pack` starts from the csproj version and warns once. That csproj already is the version in development, so a bump flag is ignored for it and only the suffix applies (`11.0.0-local.1`, with or without `--patch`). Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
 | `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `.lrun/plots/dependencies-<date-time>.html`), and open it in the browser. Only on a terminal: with output redirected, the page is written and its path printed. |
 | `--verify` | off | Then check the local feed against the config just written, as [`verify`](#verify) does: exit code `6` when a package is missing or stale (the config is written all the same). |
 
@@ -404,7 +405,8 @@ The path of the page is printed. `build --plot` opens it too, but only on a term
 
 ### `pack`
 
-Compute the version every project will be packed as, write the plan to a repack config, then execute it
+Compute the version every library of the config will be packed as (executables are left out: nothing consumes them
+as packages, and [`up`](#up) builds them from source), write the plan to a repack config, then execute it
 as [`go`](#go) does. The plan is written first, so a failed or surprising repack can be inspected. With
 `--dry-run`, `pack` stops there and prints the depths `go` would go through.
 
@@ -428,9 +430,9 @@ The versions are printed once for the whole plan, since the iteration number is 
 projects make, then a line for each project that differs (the full plan is in the repack config):
 
 ```
-Versions: patch bump, release -> dev.1, 9 projects; 2 other(s):
+Versions: patch bump, release -> dev.1, 5 projects; 2 other(s):
+  LrSample.Island.Core: 0.1.0-rc.1 -> 0.1.1-dev.1
   LrSample.Logging: 2.3.1-beta -> 2.3.2-dev.1
-  LrSample.RiskService: 0.9.0-rc.1 -> 0.9.1-dev.1
 ```
 
 Since 0.4.0, `pack` packs: `pack --go` is rejected (exit code `2`) with a pointer to `--dry-run`. Since 0.2.0,
@@ -468,11 +470,11 @@ no solution references get none.
 Output (`pack` prints the same, after the versions and the plan's path):
 
 ```
-> Depth 1/4: LrSample.Island.Core, LrSample.Orphan, LrSample.Primitives
+> Depth 1/3: LrSample.Island.Core, LrSample.Orphan, LrSample.Primitives
 [WRN] C:\…\TmpWarn.cs(1,53): warning CS0168: The variable 'unused' is declared but never used [C:\…\LrSample.Primitives.csproj]
-> Depth 2/4: LrSample.Island.App, LrSample.Logging, LrSample.Pricing.Models
+> Depth 2/3: LrSample.Logging, LrSample.Pricing.Models
 …
-ok Packed 11 projects in 15 s
+ok Packed 7 projects in 10 s
 ```
 
 A line per depth says what is about to run (a long list ends with `and N more`). Of the `dotnet` output, only
@@ -847,7 +849,7 @@ step that wrote it.
       "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // null if no solution references it
       "Type": "library",                        // "executable" for <OutputType>Exe</OutputType> (or WinExe), or a Web/Worker SDK without one
       "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // <Version>, else <VersionPrefix>[-<VersionSuffix>], else 1.0.0
-      "LatestVersion": { "Major": 1, "Minor": 5, "PatchAndSuffix": "0" },   // on your NuGet sources; absent with --csproj or when not found
+      "LatestVersion": { "Major": 1, "Minor": 5, "PatchAndSuffix": "0" },   // on your NuGet sources; absent with --csproj, for an executable, or when not found
       "Dependencies": []                        // names of other projects in the graph
     }
   ],
