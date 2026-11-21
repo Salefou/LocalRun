@@ -869,8 +869,8 @@ step that wrote it.
 A test project kept with `--tests` also has `"Test": true`. `pack`, `go` and `up` don't read `Build`.
 
 `build` rewrites this file from scratch, so hand edits last until the next `build`. To leave a project
-out of a repack, delete it from `repack.config.json` before `go`. To leave an executable out of `up`,
-use `up --exclude`. (Configs from before 2026-10-24 may still hold `SkipRepack` / `SkipRun` fields:
+out of a repack, run `build` again with a narrower selection (`--deps-of` the services you need,
+`--users-of` the library you changed), then `pack`. To leave an executable out of `up`, use `up --exclude`. (Configs from before 2026-10-24 may still hold `SkipRepack` / `SkipRun` fields:
 they are ignored, with an `unknown-config-field` warning.)
 
 ### `repack.config.json` — written by `pack`
