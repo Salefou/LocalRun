@@ -6,7 +6,9 @@ Read before changing `StatusText` / `StatusResult`, `BuildRecord` / `ConfigBuild
 - **`status`** (`StatusText`, `StatusResult`, ROADMAP item 3, user feedback, 2026-11-21): reads the config and the plan
   only, never scans, queries NuGet or calls git. Its header comes from `LocalRunConfig.Build` (`BuildRecord`, written by
   `build` through `ConfigBuilder.Record`); a config without it still shows. Recorded HEADs are shown, not compared (that
-  is ROADMAP 4/5). A plan older than the config warns `plan-older-than-config`, not strict. A new `build` flag goes into
+  is ROADMAP 4/5). Being only informative, they never fail `build` (`RepositoryHeads`): an unreadable repository is
+  left out at debug level, and git failing to load (its native library) records none with one `git-unavailable`
+  warning, not strict (user feedback, 2026-11-21). A plan older than the config warns `plan-older-than-config`, not strict. A new `build` flag goes into
   `BuildRecord` too. It also reads `up.json` next to the config (`running`, null when no live `up`): still a read of
   files, which is why there is no `ps` command (ROADMAP A3).
 - **`doctor`** (`Doctor`, ROADMAP A7, user feedback, 2026-11-12): read-only setup checks on `build`'s root and feed (not

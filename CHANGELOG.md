@@ -20,6 +20,8 @@ bumps the minor version, anything else the patch.
   `<OutputType>` are executables, as the SDK builds them, and so is `<OutputType>WinExe</OutputType>`: they were typed
   `library`, so `up` skipped them. An unfiltered `up` now also starts such projects (samples, demos): narrow the run
   with `--users-of` / `--deps-of`.
+- `build` no longer fails when git can't be loaded (its native library, e.g. with the tool installed under a path longer
+  than Windows allows): it warns `git-unavailable` and records no repository HEAD for `status`.
 
 ## [0.6.0] - 2026-11-21
 

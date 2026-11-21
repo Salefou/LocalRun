@@ -1069,6 +1069,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `not-in-git`, `no-git-base`, `no-common-history`, `repo-unreadable` | `--git-changes` could not tell what changed, so it kept more (`no-git-base`: run `git fetch`). | — |
 | `dotnet-warning`, `dotnet-error`, `dotnet-output` | A line of a `dotnet` command, verbatim (`dotnet-output`: a failed command that printed no error line). | — |
 | `open-failed` | A file or page could not be opened. | — |
+| `git-unavailable` | `build`: git could not be loaded (its native library), so the repositories' HEADs that `status` shows are not recorded. `build` succeeds. | — |
 | `package-missing`, `package-stale` | `verify`: a library with no package in the local feed, or an outdated one. `verify` fails on them itself (exit code `6`). | — |
 | `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
 | `stop-signal-failed` | `up`: Ctrl+C could not be passed on to its processes on a stop; those still running are killed after the grace period. | — |
