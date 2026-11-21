@@ -36,6 +36,7 @@ everyone is "Before 1.0".
 | 9, Failures suggest the way out | Getting past a project that can't build: `up` / `go` hints, `build --exclude` | Decided. Related: `up --exclude`, A2 |
 | 10, Packed under another version | Repositories versioned from git tags (MinVer): the plan's version kept, or the real one reported | Decided. Related: 5 (`verify`) |
 | 11, Plan only what produces a package | Non-packable libraries and test projects no longer planned, counted or expected by `verify` | Decided. Builds on 10's check |
+| 12, First-run trial leftovers | `--git-changes` without git, "latest" of a stranger's package, pinned consumers, test detection | Each open. Related: A10 |
 | Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
 | MCP server | Agents calling `lrun` as tools | Builds on 3 and A1–A4; conflicts with "Non-interactive CLI": ask first |
 
@@ -290,6 +291,26 @@ Decided (user feedback, 2026-11-21):
   The warning comes back on every `go` until the csproj changes: being reminded is fine.
 - **Not now**: executables with `PackAsTool` (`dotnet` tools). Nothing in the graph depends on a tool, and testing one
   from the feed means a `dotnet tool update` by hand: plan them when someone asks.
+
+### 12. First-run trial leftovers **(user, 2026-11-21)**
+
+Smaller findings of the same runs on Serilog and OpenTelemetry, each to settle when it is picked up:
+- **`--git-changes` when git can't be loaded**: since #64, `build` warns `git-unavailable` and goes on when it can't
+  record the repositories' HEADs, but `build --git-changes` still fails (`GitChangeDetector` opens the repositories
+  outside its error handling). Proposed, to confirm: apply "when unsure, keep more", every project of a repository git
+  can't read counts as changed, with the `git-unavailable` warning (not strict, like the selection's other fallbacks).
+- **"Latest" found under someone else's package**: `build` looks up each library's latest version by package id across
+  the sources, so a generic id finds a stranger's package on nuget.org (`TestApp` 1.0.1, `ConsoleDemo` 1.0.0, harmless
+  since executables aren't looked up any more). For a library with a generic id it gives a wrong base. Open: match on
+  more than the id (the package's repository URL against the project's), or warn when the latest found is far above
+  the csproj version?
+- **A consumer pinned below the plan never takes the local package**: a consumer requiring an exact released version
+  (OpenTelemetry pins `OpenTelemetry.Instrumentation.AspNetCore` 1.21.0 through central package management) restores
+  that one, and nothing says so at run time (README "Versioning rules" does). Evidence for A10 "Which build of a
+  package a service runs"; `pack` could also name the consumers whose reference excludes the planned version.
+- **Test projects detected from the csproj alone**: a test SDK referenced from a `Directory.Build.props` (OpenTelemetry's
+  Android, Apple, MAUI and Blazor WebAssembly `.Tests`) isn't seen, so those projects are kept as libraries. Same gap as
+  the version evaluation (README "Known limitations").
 
 ---
 

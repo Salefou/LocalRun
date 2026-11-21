@@ -1343,7 +1343,8 @@ Exit it and re-run the script.
 - Versions and package ids come from the `.csproj` XML, and from MSBuild for the projects it can't tell (see
   `--csproj`). The test is conservative on files it can follow (`Directory.Build.props` / `.targets` above the
   project) but not on others: a value set by an environment variable, a global property or a `Directory.Packages.props`
-  isn't looked for, so a project not flagged is read as is.
+  isn't looked for, so a project not flagged is read as is. Test projects are recognised from the `.csproj` alone
+  too: one whose test SDK comes from a `Directory.Build.props` is kept as a library.
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
   told apart, so they're all left out of the graph (with an error), rather than handled.
 - `plot` groups projects by solution or top folder, but the other commands still work project by project:
