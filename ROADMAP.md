@@ -33,6 +33,7 @@ everyone is "Before 1.0".
 | A9, Run from a copy | Rebuilding a service while `up` runs it (no file lock) | Postponed. Builds on A3 |
 | A10, Agent test run follow-ups | What an agent tripped on, driving `lrun` from `help --agent` alone | Related: A1, A2, 3, 5 |
 | 8, Project identity | Projects sharing a file name (samples in open-source repos): kept, named by path | Decided, additive form |
+| 9, Failures suggest the way out | Getting past a project that can't build: `up` / `go` hints, `build --exclude` | Decided. Related: `up --exclude`, A2 |
 | Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
 | MCP server | Agents calling `lrun` as tools | Builds on 3 and A1–A4; conflicts with "Non-interactive CLI": ask first |
 
@@ -69,7 +70,7 @@ with `config-invalid`. Migrating an older one when the shape changes is left to 
 Everything else is additive: 3 (`status`, and the config recording its build flags, time and
 HEADs as optional fields), 4's flags, 5's `--fix` and source commit, A1's `--config`, A2 (new `--json` fields, no
 `schemaVersion` bump), A3 (as long as `up` stays in the foreground by default), A5, A7, A8, 8 (project identity),
-the MCP server.
+9 (hints, `build --exclude`), the MCP server.
 
 ---
 
@@ -220,6 +221,31 @@ most trees have no collision) and by `PackageId` (executables, the usual collide
 So the item is additive (see "Before 1.0"): every run that works today gives the same result, and runs with collisions
 keep more. A script that names a project by its unique file name starts exiting `2` once a second project of that name
 appears under the root: it says so, with the paths, and scripts wanting stability name the path.
+
+### 9. Failures that suggest the way out **(user, 2026-11-21)**
+
+What happens: when part of a selection can't build, the user has to find the way around it alone. On a first run on
+cloned Serilog repositories, `go` stopped twice on executables (packed before #63) and the README offered deleting them
+from `repack.config.json` by hand; `up` then stopped on a sample whose build needs a tool missing on the machine
+(`dotnet build failed on AotTestApp: nothing was started.`), and `up --exclude` had to be found in the README.
+
+Decided (user feedback, 2026-11-21): a failure suggests the command that gets past it, where the user meets the need,
+with the exact names. Warning before running was turned down: those failures come from the machine or from a
+project's own build tricks, which the tool can't foresee.
+- **`up`**: after a build failure, `lrun up --exclude <the failed ones>`. After a service exits with an error once
+  started too: the failing service is most likely the one just edited, so the hint is to run it on the side (from the
+  IDE, under the debugger) and the others with `--exclude`.
+- **`build --exclude <names…>`**: leaves the named projects out of the selection, after the other filters; unknown
+  names exit `2`, like the other filters. Not the `SkipRepack` / `SkipRun` fields removed on 2026-10-24 (`build`
+  rewrote them away, see `docs/agents/history.md`): a flag is given again with each `build`. A new `build` flag, so
+  the ripple checklist applies (`list` too, `BuildRecord` and its schema, `CommandCatalog`, README, CHANGELOG).
+- **`go`**: when a project fails to pack, the hint is the `build` command the config came from (its flags are in
+  `BuildRecord`) plus `--exclude <the failed one>`, then `pack` and `go` again.
+
+To decide when building it: the users of an excluded library are kept without that dependency (they restore the
+published package), as for collisions and cycles. Is `kept-without-dependency` then still strict, though the user asked
+for the exclusion? And `go` stops at the first failing depth (finding of the same run): keep packing what doesn't depend
+on the failure, then fail, as `up` builds every service before reporting?
 
 ---
 
