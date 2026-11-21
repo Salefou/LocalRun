@@ -3,6 +3,7 @@ namespace LocalRun.Tests.Modules;
 using LibGit2Sharp;
 using LocalRun.Core.Model;
 using LocalRun.Core.Modules;
+using LocalRun.Logger;
 
 public sealed class RepositoryHeadsTests : IDisposable
 {
@@ -57,6 +58,33 @@ public sealed class RepositoryHeadsTests : IDisposable
         var heads = RepositoryHeads.Find(root, [a, a2, b, c]);
 
         Assert.Equal([new RepositoryHead("billing", billingHead, null), new RepositoryHead("shop", shopHead, shopBranch)], heads);
+    }
+
+    [Fact]
+    public void GitThatCannotLoad_RecordsNoHead_WithAWarning()
+    {
+        string a = Csproj("shop", "A");
+        var notLoaded = new TypeInitializationException("LibGit2Sharp.Core.NativeMethods",
+            new DllNotFoundException("Unable to load DLL 'git2': The filename or extension is too long."));
+
+        var heads = RepositoryHeads.Find(root, [a], _ => throw notLoaded);
+
+        Assert.Empty(heads);
+        Assert.Contains(Log.Diagnostics, diagnostic => diagnostic.Code == "git-unavailable"
+            && diagnostic.Message.Contains("The filename or extension is too long"));
+    }
+
+    [Fact]
+    public void AFolderThatCannotBeSearched_IsLeftOut_TheOthersKept()
+    {
+        string a = Csproj("shop", "A");
+        string b = Csproj("billing", "B");
+        Repository.Init(Path.Combine(root, "shop"));
+
+        var heads = RepositoryHeads.Find(root, [a, b],
+            folder => folder.Contains("billing") ? throw new IOException("denied") : Repository.Discover(folder));
+
+        Assert.Equal("shop", Assert.Single(heads).Path);
     }
 
     [Fact]
