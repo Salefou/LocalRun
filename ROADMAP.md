@@ -35,6 +35,7 @@ everyone is "Before 1.0".
 | 8, Project identity | Projects sharing a file name (samples in open-source repos): kept, named by path | Decided, additive form |
 | 9, Failures suggest the way out | Getting past a project that can't build: `up` / `go` hints, `build --exclude` | Decided. Related: `up --exclude`, A2 |
 | 10, Packed under another version | Repositories versioned from git tags (MinVer): the plan's version kept, or the real one reported | Decided. Related: 5 (`verify`) |
+| 11, Plan only what produces a package | Non-packable libraries and test projects no longer planned, counted or expected by `verify` | Decided. Builds on 10's check |
 | Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
 | MCP server | Agents calling `lrun` as tools | Builds on 3 and A1–A4; conflicts with "Non-interactive CLI": ask first |
 
@@ -71,7 +72,8 @@ with `config-invalid`. Migrating an older one when the shape changes is left to 
 Everything else is additive: 3 (`status`, and the config recording its build flags, time and
 HEADs as optional fields), 4's flags, 5's `--fix` and source commit, A1's `--config`, A2 (new `--json` fields, no
 `schemaVersion` bump), A3 (as long as `up` stays in the foreground by default), A5, A7, A8, 8 (project identity),
-9 (hints, `build --exclude`), 10 (a new warning and the actual version written back), the MCP server.
+9 (hints, `build --exclude`), 10 (a new warning and the actual version written back), 11 (a new
+`status` value: plans shrink only by what was never packed), the MCP server.
 
 ---
 
@@ -271,6 +273,23 @@ Open:
   package management) and ignore the csproj version then?
 - `package-version-override` (a `<PackageVersion>` in the csproj, seen before packing) is strict; this check isn't, for
   the reason above. Keep both, or make the first one non-strict too?
+
+### 11. Plan only what produces a package **(user, 2026-11-21)**
+
+What happens: `pack` plans every library, and since #63 no executable. A library with `<IsPackable>false</IsPackable>`
+(a helper next to examples, `Utils` in OpenTelemetry) is planned, the SDK packs nothing, `go` still counts it as
+packed, and `verify` reports it missing forever, advising `lrun pack`. A test project kept with `--tests` is planned
+too, and the SDK refuses to pack it.
+
+Decided (user feedback, 2026-11-21):
+- **Plan the libraries that produce a package**: not those with `IsPackable` false, never test projects. Read from the
+  csproj, like the version (an `IsPackable` set in a `Directory.Build.props` falls into the known evaluation gap). A
+  library left out of the plan stays in the graph: its users reference it as a project and build it from source.
+- **Safety net**, with item 10's check: a project the SDK packed nothing for gets a new status, `not-packed`, instead
+  of `packed`, a warning (not strict) suggesting `<IsPackable>false</IsPackable>`, and `verify` no longer expects it.
+  The warning comes back on every `go` until the csproj changes: being reminded is fine.
+- **Not now**: executables with `PackAsTool` (`dotnet` tools). Nothing in the graph depends on a tool, and testing one
+  from the feed means a `dotnet tool update` by hand: plan them when someone asks.
 
 ---
 
