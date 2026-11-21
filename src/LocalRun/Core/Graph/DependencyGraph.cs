@@ -106,9 +106,7 @@ public class DependencyGraph
         {
             var ns = doc.Root!.Name.Namespace;
             string name = Path.GetFileNameWithoutExtension(csproj);
-            string type = doc.Descendants(ns + "OutputType")
-                .Select(desc => desc.Value)
-                .Any(desc => desc == "Exe") ? "executable" : "library";
+            string type = IsExecutable(doc) ? "executable" : "library";
 
             string? packageId;
             ProjectVersion version;
@@ -221,6 +219,30 @@ public class DependencyGraph
             return null;
         }
         return id;
+    }
+
+    /// <summary>The project SDKs whose default <c>OutputType</c> is <c>Exe</c> (ASP.NET Core services, worker services).</summary>
+    private static readonly string[] ExecutableSdks = ["Microsoft.NET.Sdk.Web", "Microsoft.NET.Sdk.Worker"];
+
+    /// <summary>
+    /// An executable: an explicit <c>OutputType</c> of <c>Exe</c> or <c>WinExe</c>, or, without any <c>OutputType</c>,
+    /// a project SDK that defaults to <c>Exe</c> (<see cref="ExecutableSdks"/>), named in the <c>Sdk</c> attribute
+    /// (<c>Name/version</c>, <c>;</c>-separated) or an <c>&lt;Sdk Name&gt;</c> element.
+    /// </summary>
+    internal static bool IsExecutable(XDocument doc)
+    {
+        var ns = doc.Root!.Name.Namespace;
+        var outputTypes = doc.Descendants(ns + "OutputType").Select(elem => elem.Value.Trim()).ToList();
+        if (outputTypes.Count > 0)
+        {
+            return outputTypes.Any(outputType => string.Equals(outputType, "Exe", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(outputType, "WinExe", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var sdks = (doc.Root.Attribute("Sdk")?.Value ?? "").Split(';')
+            .Concat(doc.Root.Elements(ns + "Sdk").Select(elem => elem.Attribute("Name")?.Value ?? ""))
+            .Select(sdk => sdk.Split('/')[0].Trim());
+        return sdks.Any(sdk => ExecutableSdks.Contains(sdk, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>

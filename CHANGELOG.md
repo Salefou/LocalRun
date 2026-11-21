@@ -7,6 +7,13 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Fixed
+
+- ASP.NET Core and worker services (`Microsoft.NET.Sdk.Web`, `Microsoft.NET.Sdk.Worker`) without an explicit
+  `<OutputType>` are executables, as the SDK builds them, and so is `<OutputType>WinExe</OutputType>`: they were typed
+  `library`, so `up` skipped them. An unfiltered `up` now also starts such projects (samples, demos): narrow the run
+  with `--users-of` / `--deps-of`.
+
 ## [0.6.0] - 2026-11-21
 
 `lrun` describes itself to programs and agents (`help --json`, `schema`, `changelog`, `help --agent`), `status` shows
