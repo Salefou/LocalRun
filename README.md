@@ -1269,7 +1269,10 @@ rule on `master` requiring the **build-and-test** check.
 2. Tag that commit of `master` `v<VersionPrefix>` (e.g. `v0.1.0`) and push the tag.
    `.github/workflows/release.yml` then tests, checks the tag matches `<VersionPrefix>`, packs, pushes the
    package and its symbols to nuget.org and creates the GitHub release. nuget.org takes a few minutes, up to an
-   hour, to validate and index it.
+   hour, to validate and index it. A green run only means nuget.org accepted the package: the release is out once
+   `dotnet tool install LocalRun --version <version> --tool-path <scratch dir> --no-http-cache` works and the
+   installed `lrun version` prints it. The package download answers before the version list `dotnet tool install`
+   reads, so a download that works is not enough.
 3. Bump `<VersionPrefix>` to the next patch in a PR, so local builds (`0.1.1-local-…`) sort above the release
    you just made, and the next release above them.
 
