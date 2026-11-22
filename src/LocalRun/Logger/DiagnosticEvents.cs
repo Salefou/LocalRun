@@ -125,6 +125,10 @@ public static class DiagnosticEvents
     public static readonly EventId PlanOlderThanConfig = Code(161, "plan-older-than-config", strict: false,
         "status: the repack plan is older than the config, so planned from an earlier one: go would pack that. pack plans again.");
 
+    public static readonly EventId PackedVersionDiffers = Code(162, "packed-version-differs", strict: false,
+        "go: a package was packed under another version than planned (its build sets the version in a target: " +
+        "Nerdbank.GitVersioning, GitVersion, a hand-written target); the plan now records the version packed.");
+
     // The commands that read the settings fail on an invalid file (error code settings-invalid); settings itself warns
 
     public static readonly EventId SettingsInvalid = Code(170, "settings-invalid", strict: false,

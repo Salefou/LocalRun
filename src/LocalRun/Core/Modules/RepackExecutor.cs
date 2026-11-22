@@ -2,6 +2,8 @@
 using LocalRun.Core.Model;
 using LocalRun.Logger;
 using Microsoft.Extensions.Logging;
+using NuGet.Packaging;
+using NuGet.Versioning;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -20,6 +22,9 @@ public sealed class PackOutcome
     public long? DurationMs { get; internal set; }
 
     public DotnetFailure? Failure { get; internal set; }
+
+    /// <summary>The version of the package produced, when it isn't the planned one (written back into the plan).</summary>
+    public string? PackedVersion { get; internal set; }
 }
 
 public static class PackStatus
@@ -56,6 +61,7 @@ public class RepackExecutor
         Directory.CreateDirectory(repackConfig.LocalNugetPath);
         string versionsPropsPath = Path.Combine(Path.GetTempPath(), $"localrun-versions-{Guid.NewGuid():N}.props");
         await File.WriteAllTextAsync(versionsPropsPath, BuildVersionsProps(repackConfig));
+        string packFolder = Path.Combine(Path.GetTempPath(), $"localrun-pack-{Guid.NewGuid():N}");
         Stopwatch stopwatch = Stopwatch.StartNew();
         var depths = Depths(repackConfig);
         outcomes.Clear();
@@ -71,12 +77,14 @@ public class RepackExecutor
                     await CleanAllAsync(depths[i]);
                 }
                 await RestoreAllAsync(depths[i], repackConfig.LocalNugetPath);
-                await PackAllAsync(depths[i], repackConfig.LocalNugetPath, versionsPropsPath);
+                await PackAllAsync(depths[i], repackConfig.LocalNugetPath, versionsPropsPath, packFolder);
             }
         }
         finally
         {
             File.Delete(versionsPropsPath);
+            if (Directory.Exists(packFolder))
+                Directory.Delete(packFolder, recursive: true);
         }
         logger.LogInformation(LogEvents.Done, "Packed {Projects} in {Duration}",
             Text.Count(depths.Sum(depth => depth.Count), "project"), Text.Duration(stopwatch.Elapsed));
@@ -101,6 +109,7 @@ public class RepackExecutor
     /// Passing -p:PackageVersion instead would be a global property: it flows into project references too,
     /// so a package would declare its own version as the version of every project it references.
     /// Imported through CustomBeforeMicrosoftCommonProps, which every project, referenced ones included, imports.
+    /// MinVer sets the version in a target, after these props: its own override makes it take the planned one too.
     /// </summary>
     internal static string BuildVersionsProps(RepackConfig repackConfig)
     {
@@ -113,6 +122,7 @@ public class RepackExecutor
             string version = SecurityElement.Escape(proj.ToVersion.AsVersionString());
             sb.AppendLine($"  <PropertyGroup Condition=\"'$(MSBuildProjectFullPath)' == '{path}'\">");
             sb.AppendLine($"    <PackageVersion>{version}</PackageVersion>");
+            sb.AppendLine($"    <MinVerVersionOverride>{version}</MinVerVersionOverride>");
             sb.AppendLine("  </PropertyGroup>");
         }
         sb.AppendLine("</Project>");
@@ -122,13 +132,67 @@ public class RepackExecutor
     // NoSummary: MSBuild would list every warning a second time at the end of each command (up's builds use it too)
     internal const string NoSummary = " -clp:NoSummary";
 
-    private async Task PackAllAsync(List<ProjectRepack> projects, string nugetRepoPath, string versionsPropsPath)
+    /// <summary>
+    /// Packs each project into a folder of its own, then moves what it produced into the feed: the package itself says
+    /// which version was packed, whatever set it (a tool setting the version in a target wins over the props file).
+    /// </summary>
+    private async Task PackAllAsync(List<ProjectRepack> projects, string nugetRepoPath, string versionsPropsPath, string packFolder)
     {
         await Task.WhenAll(projects.Select(async proj =>
         {
-            await RunDotnetAsync("pack", proj, $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{nugetRepoPath}\" -p:CustomBeforeMicrosoftCommonProps=\"{versionsPropsPath}\"{NoSummary}{SolutionProperties.Arguments(proj.SolutionPath)}");
-            outcomes[proj.Name].Status = PackStatus.Packed;
+            string output = Path.Combine(packFolder, Guid.NewGuid().ToString("N"));
+            await RunDotnetAsync("pack", proj, $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{output}\" -p:CustomBeforeMicrosoftCommonProps=\"{versionsPropsPath}\"{NoSummary}{SolutionProperties.Arguments(proj.SolutionPath)}");
+            var outcome = outcomes[proj.Name];
+            outcome.Status = PackStatus.Packed;
+            if (MoveToFeed(output, nugetRepoPath) is { } packed && PackedVersionIfOther(proj, packed) is { } other)
+            {
+                outcome.PackedVersion = other;
+                logger.LogWarning(DiagnosticEvents.PackedVersionDiffers,
+                    "{Project} was packed as {Packed}, not the planned {Planned}: its build sets the version itself. The plan now records {Packed}",
+                    proj.Name, other, proj.ToVersion.AsVersionString(), other);
+            }
         }));
+    }
+
+    /// <summary>Moves every file of a pack's output folder into the feed (packages, symbol packages).</summary>
+    /// <returns>The version of the package moved, or null when the pack produced none.</returns>
+    internal static NuGetVersion? MoveToFeed(string output, string feed)
+    {
+        if (!Directory.Exists(output))
+            return null;
+        NuGetVersion? version = null;
+        foreach (var file in Directory.EnumerateFiles(output))
+        {
+            if (file.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
+            {
+                using var reader = new PackageArchiveReader(file);
+                version = reader.GetIdentity().Version;
+            }
+            File.Move(file, Path.Combine(feed, Path.GetFileName(file)), overwrite: true);
+        }
+        return version;
+    }
+
+    /// <summary>The version packed, normalized, when it isn't the planned one (build metadata aside).</summary>
+    internal static string? PackedVersionIfOther(ProjectRepack proj, NuGetVersion packed) =>
+        NuGetVersion.TryParse(proj.ToVersion.AsVersionString(), out var planned) && planned.Equals(packed)
+            ? null
+            : packed.ToNormalizedString();
+
+    /// <summary>Writes the versions packed into the plan, for those packed under another one.</summary>
+    /// <returns>Whether the plan changed.</returns>
+    public bool RecordPackedVersions(RepackConfig repackConfig)
+    {
+        bool changed = false;
+        foreach (var proj in repackConfig.RepackTrees.SelectMany(tree => tree.Projects))
+        {
+            if (outcomes.GetValueOrDefault(proj.Name)?.PackedVersion is { } packed)
+            {
+                proj.ToVersion = ProjectVersion.Parse(packed);
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     private async Task CleanAllAsync(List<ProjectRepack> projects)

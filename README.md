@@ -452,11 +452,18 @@ together (a depth starts once the previous one is packed everywhere):
    depths come from the feed and third-party packages from your usual sources. The feed folder is
    created if it doesn't exist yet. `--force` re-resolves floating references (`*-*`) even when nothing
    else changed, so a consumer picks up the iteration packed at the depth before instead of keeping the previous one.
-3. `dotnet pack <csproj> --no-restore -o <local feed> -p:CustomBeforeMicrosoftCommonProps=<versions.props>`:
+3. `dotnet pack <csproj> --no-restore -o <temporary folder> -p:CustomBeforeMicrosoftCommonProps=<versions.props>`,
+   then the package is moved into the local feed:
    a temporary props file sets the `PackageVersion` of **every project in the plan**, matched by path.
    So a package that project-references another declares that project's planned version as its
    dependency (with a plain `-p:PackageVersion`, MSBuild would hand the packed project's own version to
-   its references too). A project that sets `<PackageVersion>` itself in its `.csproj` overrides this.
+   its references too). It also sets `MinVerVersionOverride`, so projects versioned by
+   [MinVer](https://github.com/adamralph/minver) from git tags get the planned version too.
+   A project can still set another version: a `<PackageVersion>` in its `.csproj` (`pack` warns
+   `package-version-override`), or a tool setting it in a target (Nerdbank.GitVersioning, GitVersion).
+   `go` reads the version of each package produced: when it isn't the planned one, it warns
+   `packed-version-differs` and writes the version packed into `repack.config.json` (and the result's `to`), so the plan
+   says what the feed holds. Not a failure, even with `--strict`: the override may be intended.
 
 Like `up`'s, these commands get the `Solution*` properties of the project's solution (`SolutionDir`,
 `SolutionPath`, `SolutionName`, …), as when Visual Studio builds the solution. A project built on its own
@@ -1073,6 +1080,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `package-missing`, `package-stale` | `verify`: a library with no package in the local feed, or an outdated one. `verify` fails on them itself (exit code `6`). | — |
 | `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
 | `stop-signal-failed` | `up`: Ctrl+C could not be passed on to its processes on a stop; those still running are killed after the grace period. | — |
+| `packed-version-differs` | `go`: a package was packed under another version than planned (its build sets the version in a target); the plan now records the version packed. | — |
 | `plan-older-than-config` | `status`: the repack plan is older than the config, so made from an earlier one; `go` would pack that. `pack` plans again. | — |
 | `settings-invalid` | `settings`: the settings file can't be used (unreadable, an unknown key, a bad value); `build`, `pack` and `up` would fail on it with that error code. | — |
 | `doctor-warning`, `doctor-failure` | `doctor`: a setup check that may surprise, or that will make a command fail (the result names the check). `doctor` fails on a failure itself (exit code `1`). | — |

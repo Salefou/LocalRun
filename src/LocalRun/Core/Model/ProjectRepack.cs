@@ -22,7 +22,8 @@ public class ProjectRepack
 
     public required ProjectVersion FromVersion { get; init; }
 
-    public required ProjectVersion ToVersion { get; init; }
+    /// <summary>The planned version; after <c>go</c>, the version actually packed when its build set another one.</summary>
+    public required ProjectVersion ToVersion { get; set; }
 
 
     public override string ToString()

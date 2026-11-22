@@ -7,6 +7,15 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Added
+
+- `go` checks the version of every package it produced against the plan. A project whose build sets the version in a
+  target (Nerdbank.GitVersioning, GitVersion, a hand-written target) was packed under that version silently: `go` now
+  warns `packed-version-differs` (not strict: the override may be intended) and writes the version packed into
+  `repack.config.json` and the result's `to`.
+- Projects versioned by MinVer get the planned version: `go` sets `MinVerVersionOverride` along with `PackageVersion`.
+  They were packed under MinVer's version from git tags (`1.21.1-alpha.0.38` instead of the planned `1.21.1-dev.1`).
+
 ### Changed
 
 - `pack` plans libraries only: executables are left out of `repack.config.json`, as nothing consumes them as packages

@@ -8,7 +8,15 @@ why.
   through a generated props file (`CustomBeforeMicrosoftCommonProps`, matched by
   `MSBuildProjectFullPath`). Never go back to `-p:PackageVersion`: as a global property it flows into
   project references, and packages then declare their own version for every project they reference
-  (NU1107 in consumers). `samples/` reproduces this: Logging project-references Primitives.
+  (NU1107 in consumers). `samples/` reproduces this: Logging project-references Primitives. The same props set
+  `MinVerVersionOverride` (MinVer sets the version in a target, after the props: its override is the clean way in).
+- **The package says what was packed** (ROADMAP item 10, user feedback, 2026-11-21): each `dotnet pack` writes into a
+  temporary folder of its own, then `RepackExecutor.MoveToFeed` moves its files (`.nupkg`, `.snupkg`) into the feed and
+  reads the `.nupkg`'s version (`PackageArchiveReader`). A version other than planned (build metadata aside) warns
+  `packed-version-differs`, **not strict** (an override may be intended: packing an older version to benchmark it),
+  and `ExecutePlanAsync` writes it back into `repack.config.json` (after a failure too), so the result's `to`, `status`
+  and a second `go` see what the feed holds. Covers any tool (Nerdbank.GitVersioning has no clean override). Seen on
+  OpenTelemetry: planned `1.21.1-dev.1`, packed `1.21.1-alpha.0.38` by MinVer, silently.
 - **Solution properties**: every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments` (`SolutionDir`
   etc. of the project's solution, `ProjectRepack.SolutionPath` / `ProjectNode.SolutionPath`), since projects are built
   alone: an `OutputPath` of `$(SolutionDir)\bin\…` otherwise lands at the drive root (`C:\bin`). Reported 2026-10-26.
