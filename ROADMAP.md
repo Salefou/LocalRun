@@ -32,7 +32,11 @@ everyone is "Before 1.0".
 | A8, `clean-feed` | Local feeds piling up iterations | Related: 3 |
 | A9, Run from a copy | Rebuilding a service while `up` runs it (no file lock) | Postponed. Builds on A3 |
 | A10, Agent test run follow-ups | What an agent tripped on, driving `lrun` from `help --agent` alone | Related: A1, A2, 3, 5 |
-| Project identity | Projects sharing a file name (keyed by path or `PackageId`) | 1.0 blocker: breaking either way |
+| 8, Project identity | Projects sharing a file name (samples in open-source repos): kept, named by path | Decided, additive form |
+| 9, Failures suggest the way out | Getting past a project that can't build: `up` / `go` hints, `build --exclude` | Decided. Related: `up --exclude`, A2 |
+| 10, Packed under another version | Repositories versioned from git tags (MinVer): the plan's version kept, or the real one reported | Decided. Related: 5 (`verify`) |
+| 11, Plan only what produces a package | Non-packable libraries and test projects no longer planned, counted or expected by `verify` | Decided. Builds on 10's check |
+| 12, First-run trial leftovers | `--git-changes` without git, "latest" of a stranger's package, pinned consumers, test detection | Each open. Related: A10 |
 | Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
 | MCP server | Agents calling `lrun` as tools | Builds on 3 and A1–A4; conflicts with "Non-interactive CLI": ask first |
 
@@ -57,8 +61,9 @@ is accepted. Decide these before 1.0, or commit to their additive form:
 
 Not on this roadmap yet, and breaking whichever way they are decided, so they are the real 1.0 blockers:
 
-- **Project identity**: projects are keyed by file name (collisions left out, see `docs/agents/selection.md`). Keying by path or
-  `PackageId` changes filter names, config keys and collision behaviour.
+- ~~**Project identity**: projects are keyed by file name (collisions left out, see `docs/agents/selection.md`). Keying by path or
+  `PackageId` changes filter names, config keys and collision behaviour.~~ Decided in its additive form (user feedback,
+  2026-11-21): item 8, the file name when unique, the path on a collision.
 - **Solution filters**: additive as a new flag (`--solution`), breaking if `--users-of` / `--deps-of` start accepting
   solution names (a project and a solution can share a name).
 
@@ -67,7 +72,9 @@ with `config-invalid`. Migrating an older one when the shape changes is left to 
 
 Everything else is additive: 3 (`status`, and the config recording its build flags, time and
 HEADs as optional fields), 4's flags, 5's `--fix` and source commit, A1's `--config`, A2 (new `--json` fields, no
-`schemaVersion` bump), A3 (as long as `up` stays in the foreground by default), A5, A7, A8, the MCP server.
+`schemaVersion` bump), A3 (as long as `up` stays in the foreground by default), A5, A7, A8, 8 (project identity),
+9 (hints, `build --exclude`), 10 (a new warning and the actual version written back), 11 (a new
+`status` value: plans shrink only by what was never packed), the MCP server.
 
 ---
 
@@ -187,6 +194,123 @@ Not now (user feedback, 2026-11-20): the MSBuild evaluation timeout (60 s), `doc
 parallelism (8 evaluations, 8 source lookups). They depend on the machine, but no one has hit them: add one when a real
 case shows up. Rejected: a default `up --exclude` (it belongs to a workspace, not a user) and a default bump flag (the
 same `lrun pack` would plan different versions on two machines).
+
+### 8. Project identity: a handle for every project **(user, 2026-11-21)**
+
+What happens: projects are keyed by file name, and every project of a shared name is left out with a
+`name-collision` error. Open-source repositories name their samples alike: a first run on 11 cloned Serilog
+repositories left out 5 `Sample` projects (one per repository, the runnable ASP.NET Core sample among them) and 2
+`TestDummies`; on OpenTelemetry, `getting-started-console` x3, `customizing-the-sdk` x3, and `TestApp.AspNetCore` in two
+repositories. Nothing references any of them by name: they are left out for lack of a handle, not because a
+dependency is ambiguous.
+
+A name serves two purposes, which the current rule treats as one:
+- **An edge target**, resolving "A depends on X". A `ProjectReference` is a path: never ambiguous, but the scan keeps
+  only its file name (`DependencyGraph.FromSource`). A `PackageReference` is a package id: ambiguous only when two
+  scanned projects pack the same id, which is a real conflict (two sources for one package).
+- **A handle**, what a filter, `up --exclude` or a config key names. Every kept project needs a unique one.
+
+Decided (user feedback, 2026-11-21), over keying every project by path (stable, but long names where none are needed:
+most trees have no collision) and by `PackageId` (executables, the usual colliders, have no meaningful one):
+- A project's handle is its file name when unique, its path relative to the root (as `ProjectNode.Path`, with
+  `.csproj`, printed with `/`) when several projects share the name. A tree without collisions is unchanged.
+- Filters, `up --exclude` and the other options naming projects accept the path for every project (case-insensitive,
+  `/` or `\`), so a script can name one stably. A bare name shared by several projects keeps exiting `2`, listing the
+  paths to use instead.
+- `ProjectReference`s resolve by path; the solution lookup (`SolutionScanner`, keyed by name today) by path too.
+- Two projects packing the same package id stay left out, with `name-collision` (its meaning narrows, the code stays).
+- Configs: no `SchemaVersion` bump. A path-shaped `Name` and `Dependencies` entry only appear for projects that were
+  left out before; check this against the config contract when building it.
+
+So the item is additive (see "Before 1.0"): every run that works today gives the same result, and runs with collisions
+keep more. A script that names a project by its unique file name starts exiting `2` once a second project of that name
+appears under the root: it says so, with the paths, and scripts wanting stability name the path.
+
+### 9. Failures that suggest the way out **(user, 2026-11-21)**
+
+What happens: when part of a selection can't build, the user has to find the way around it alone. On a first run on
+cloned Serilog repositories, `go` stopped twice on executables (packed before #63) and the README offered deleting them
+from `repack.config.json` by hand; `up` then stopped on a sample whose build needs a tool missing on the machine
+(`dotnet build failed on AotTestApp: nothing was started.`), and `up --exclude` had to be found in the README.
+
+Decided (user feedback, 2026-11-21): a failure suggests the command that gets past it, where the user meets the need,
+with the exact names. Warning before running was turned down: those failures come from the machine or from a
+project's own build tricks, which the tool can't foresee.
+- **`up`**: after a build failure, `lrun up --exclude <the failed ones>`. After a service exits with an error once
+  started too: the failing service is most likely the one just edited, so the hint is to run it on the side (from the
+  IDE, under the debugger) and the others with `--exclude`.
+- **`build --exclude <names…>`**: leaves the named projects out of the selection, after the other filters; unknown
+  names exit `2`, like the other filters. Not the `SkipRepack` / `SkipRun` fields removed on 2026-10-24 (`build`
+  rewrote them away, see `docs/agents/history.md`): a flag is given again with each `build`. A new `build` flag, so
+  the ripple checklist applies (`list` too, `BuildRecord` and its schema, `CommandCatalog`, README, CHANGELOG).
+- **`go`**: when a project fails to pack, the hint is the `build` command the config came from (its flags are in
+  `BuildRecord`) plus `--exclude <the failed one>`, then `pack` and `go` again.
+
+To decide when building it: the users of an excluded library are kept without that dependency (they restore the
+published package), as for collisions and cycles. Is `kept-without-dependency` then still strict, though the user asked
+for the exclusion? And `go` stops at the first failing depth (finding of the same run): keep packing what doesn't depend
+on the failure, then fail, as `up` builds every service before reporting?
+
+### 10. Packages packed under another version than planned **(user, 2026-11-21)**
+
+What happens: on OpenTelemetry, which takes its versions from git tags with MinVer, `pack` planned `1.21.1-dev.1` and
+`go` packed `1.21.1-alpha.0.38`, silently. `go` passes the planned version through a props file read early; MinVer sets
+`Version` / `PackageVersion` in a target, later, and the last one wins. `package-version-override` reads the csproj XML
+only, so it can't see it, and consumers of the package don't get the version the plan promised. Same for any tool
+setting the version in a target (Nerdbank.GitVersioning, GitVersion).
+
+Decided (user feedback, 2026-11-21):
+- **After each pack, compare the package produced with the plan.** When they differ, a warning with a new code, not
+  strict: an override may be intended (packing an older version to benchmark it against the current one). The
+  version actually packed is written back into `repack.config.json` and reported in `to`, so `verify` and `status`
+  see the truth. Covers every tool, known or not.
+- **MinVer obeys the plan**: the generated props file also sets `MinVerVersionOverride` (MinVer's own override) to
+  the planned version, per project. Other tools rely on the check above: Nerdbank.GitVersioning has no clean override.
+
+Open:
+- The SDK default `1.0.0` is all the evaluation sees of such a project's version (set in a target). Where the latest
+  published version is lower (`0.11.0-alpha.1`), that fake `1.0.0` counts as a csproj ahead of it and wins the base.
+  Detect the git-versioning tool at `build` (a `PackageReference` to it, often in `Directory.Build.props` or central
+  package management) and ignore the csproj version then?
+- `package-version-override` (a `<PackageVersion>` in the csproj, seen before packing) is strict; this check isn't, for
+  the reason above. Keep both, or make the first one non-strict too?
+
+### 11. Plan only what produces a package **(user, 2026-11-21)**
+
+What happens: `pack` plans every library, and since #63 no executable. A library with `<IsPackable>false</IsPackable>`
+(a helper next to examples, `Utils` in OpenTelemetry) is planned, the SDK packs nothing, `go` still counts it as
+packed, and `verify` reports it missing forever, advising `lrun pack`. A test project kept with `--tests` is planned
+too, and the SDK refuses to pack it.
+
+Decided (user feedback, 2026-11-21):
+- **Plan the libraries that produce a package**: not those with `IsPackable` false, never test projects. Read from the
+  csproj, like the version (an `IsPackable` set in a `Directory.Build.props` falls into the known evaluation gap). A
+  library left out of the plan stays in the graph: its users reference it as a project and build it from source.
+- **Safety net**, with item 10's check: a project the SDK packed nothing for gets a new status, `not-packed`, instead
+  of `packed`, a warning (not strict) suggesting `<IsPackable>false</IsPackable>`, and `verify` no longer expects it.
+  The warning comes back on every `go` until the csproj changes: being reminded is fine.
+- **Not now**: executables with `PackAsTool` (`dotnet` tools). Nothing in the graph depends on a tool, and testing one
+  from the feed means a `dotnet tool update` by hand: plan them when someone asks.
+
+### 12. First-run trial leftovers **(user, 2026-11-21)**
+
+Smaller findings of the same runs on Serilog and OpenTelemetry, each to settle when it is picked up:
+- **`--git-changes` when git can't be loaded**: since #64, `build` warns `git-unavailable` and goes on when it can't
+  record the repositories' HEADs, but `build --git-changes` still fails (`GitChangeDetector` opens the repositories
+  outside its error handling). Proposed, to confirm: apply "when unsure, keep more", every project of a repository git
+  can't read counts as changed, with the `git-unavailable` warning (not strict, like the selection's other fallbacks).
+- **"Latest" found under someone else's package**: `build` looks up each library's latest version by package id across
+  the sources, so a generic id finds a stranger's package on nuget.org (`TestApp` 1.0.1, `ConsoleDemo` 1.0.0, harmless
+  since executables aren't looked up any more). For a library with a generic id it gives a wrong base. Open: match on
+  more than the id (the package's repository URL against the project's), or warn when the latest found is far above
+  the csproj version?
+- **A consumer pinned below the plan never takes the local package**: a consumer requiring an exact released version
+  (OpenTelemetry pins `OpenTelemetry.Instrumentation.AspNetCore` 1.21.0 through central package management) restores
+  that one, and nothing says so at run time (README "Versioning rules" does). Evidence for A10 "Which build of a
+  package a service runs"; `pack` could also name the consumers whose reference excludes the planned version.
+- **Test projects detected from the csproj alone**: a test SDK referenced from a `Directory.Build.props` (OpenTelemetry's
+  Android, Apple, MAUI and Blazor WebAssembly `.Tests`) isn't seen, so those projects are kept as libraries. Same gap as
+  the version evaluation (README "Known limitations").
 
 ---
 

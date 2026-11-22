@@ -869,8 +869,8 @@ step that wrote it.
 A test project kept with `--tests` also has `"Test": true`. `pack`, `go` and `up` don't read `Build`.
 
 `build` rewrites this file from scratch, so hand edits last until the next `build`. To leave a project
-out of a repack, delete it from `repack.config.json` before `go`. To leave an executable out of `up`,
-use `up --exclude`. (Configs from before 2026-10-24 may still hold `SkipRepack` / `SkipRun` fields:
+out of a repack, run `build` again with a narrower selection (`--deps-of` the services you need,
+`--users-of` the library you changed), then `pack`. To leave an executable out of `up`, use `up --exclude`. (Configs from before 2026-10-24 may still hold `SkipRepack` / `SkipRun` fields:
 they are ignored, with an `unknown-config-field` warning.)
 
 ### `repack.config.json` — written by `pack`
@@ -1343,7 +1343,8 @@ Exit it and re-run the script.
 - Versions and package ids come from the `.csproj` XML, and from MSBuild for the projects it can't tell (see
   `--csproj`). The test is conservative on files it can follow (`Directory.Build.props` / `.targets` above the
   project) but not on others: a value set by an environment variable, a global property or a `Directory.Packages.props`
-  isn't looked for, so a project not flagged is read as is.
+  isn't looked for, so a project not flagged is read as is. Test projects are recognised from the `.csproj` alone
+  too: one whose test SDK comes from a `Directory.Build.props` is kept as a library.
 - Dependencies are matched **by name**: projects with the same file name in different repos can't be
   told apart, so they're all left out of the graph (with an error), rather than handled.
 - `plot` groups projects by solution or top folder, but the other commands still work project by project:
