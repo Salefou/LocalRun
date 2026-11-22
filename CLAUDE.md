@@ -105,6 +105,10 @@ changes, update its file and its summary here together.
 - **Non-interactive CLI**: nothing in `src/LocalRun` may prompt, read stdin or open windows
   unless asked by a flag (`plot --open`; `build --plot` opens the page on a terminal only). There is no interactive front end any more (the REPL
   was removed on 2026-10-24); don't add one without asking.
+- **A step writes its own output only** (user feedback, 2026-11-22): `build` writes `localrun.config.json`, `pack` and
+  `go` write `repack.config.json`, `up` its state and logs. What a later step learns goes into its own file, and the
+  commands that need it read that file (`go`'s `NotPacked` marks, read by `verify`); never write back into an earlier
+  step's file.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
 - **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
   rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
@@ -122,14 +126,17 @@ changes, update its file and its summary here together.
 - **Versioning** (`docs/agents/versioning.md`): before changing `BumpOptions`, `RepackOptionsParser`,
   `RepackConfigBuilder`, `PackageIterations`, how `build` records `LatestVersion`, or README "Versioning rules".
   - The csproj is never written. `pack` never plans a stable version (the CLI's suffix defaults to `local`).
-  - `pack` plans libraries only, and `build` looks up `LatestVersion` for libraries only: executables are built by `up`.
+  - `pack` plans, `build` looks up `LatestVersion` for, and `verify` expects only the libraries producing a package
+    (`ProjectNode.ProducesPackage`): not executables (built by `up`), not `IsPackable` false, not test projects unless
+    their csproj sets `IsPackable` true.
   - The base is the latest over all the restore sources plus the local feed, or the csproj version when higher (by the
     number alone, then the bump flag is ignored). One iteration number `.N` for the whole plan, no counter file.
 - **Execution** (`docs/agents/execution.md`): before changing `RepackExecutor`, `SolutionProperties`, `DotnetOutput`,
   `RunProcessor`, `ProcessJob`, `ConsoleSignal`, `UpState`, `down`, or a `dotnet` command line of `go` / `up`.
   - Never `-p:PackageVersion` (a global property reaches project references: NU1107); a generated props file sets it
     (and `MinVerVersionOverride`). `go` reads each package's version: one other than planned warns
-    `packed-version-differs` (not strict) and is written back into the plan.
+    `packed-version-differs` (not strict) and is written back into the plan; no package at all is `not-packed` (warning,
+    not strict), marked `NotPacked` in the plan.
   - Every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments`.
   - `up`: builds sequentially (every one even after a failure, each with `--force` so floating versions take the
     feed's latest), runs side by side, no readiness checks by design, `dotnet run` processes in a
@@ -141,7 +148,8 @@ changes, update its file and its summary here together.
 - **Inspection** (`docs/agents/inspection.md`): before changing `status`, `doctor` or `verify`.
   - `status` reads the config, the plan and `up.json` only: never scans, queries NuGet or calls git.
   - `doctor` never fixes anything; its check names are a contract like codes.
-  - `verify` covers libraries only; `package-missing` / `package-stale` are not strict, `verify` fails itself (exit 6).
+  - `verify` covers the libraries producing a package, less those the plan marks `NotPacked`; `package-missing` /
+    `package-stale` are not strict, `verify` fails itself (exit 6).
 - **User settings** (`docs/agents/settings.md`): before changing `UserSettings` or which command reads a setting.
   - Command line > settings > built-in default. Paths absolute or `~`-prefixed, unknown keys fail.
   - Tests and hand testing set `LOCALRUN_SETTINGS`: never touch the real file.

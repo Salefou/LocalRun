@@ -35,7 +35,7 @@ everyone is "Before 1.0".
 | 8, Project identity | Projects sharing a file name (samples in open-source repos): kept, named by path | Decided, additive form |
 | 9, Failures suggest the way out | Getting past a project that can't build: `up` / `go` hints, `build --exclude` | Decided. Related: `up --exclude`, A2 |
 | 10, Packed under another version | Repositories versioned from git tags (MinVer): the plan's version kept, or the real one reported | Shipped core (check, MinVer override); the csproj `1.0.0` of such projects open. Related: 5 (`verify`) |
-| 11, Plan only what produces a package | Non-packable libraries and test projects no longer planned, counted or expected by `verify` | Decided. Builds on 10's check |
+| 11, Plan only what produces a package | Non-packable libraries and test projects no longer planned, counted or expected by `verify` | Shipped (`Packable`, `not-packed`); `PackAsTool` not now |
 | 12, First-run trial leftovers | `--git-changes` without git, "latest" of a stranger's package, pinned consumers, test detection | Each open. Related: A10 |
 | Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
 | MCP server | Agents calling `lrun` as tools | Builds on 3 and A1–A4; conflicts with "Non-interactive CLI": ask first |
@@ -278,7 +278,7 @@ Open:
 - `package-version-override` (a `<PackageVersion>` in the csproj, seen before packing) is strict; this check isn't, for
   the reason above. Keep both, or make the first one non-strict too?
 
-### 11. Plan only what produces a package **(user, 2026-11-21)**
+### 11. Plan only what produces a package **(user, 2026-11-21)**: shipped after 0.6.0
 
 What happens: `pack` plans every library, and since #63 no executable. A library with `<IsPackable>false</IsPackable>`
 (a helper next to examples, `Utils` in OpenTelemetry) is planned, the SDK packs nothing, `go` still counts it as
@@ -286,12 +286,18 @@ packed, and `verify` reports it missing forever, advising `lrun pack`. A test pr
 too, and the SDK refuses to pack it.
 
 Decided (user feedback, 2026-11-21):
-- **Plan the libraries that produce a package**: not those with `IsPackable` false, never test projects. Read from the
-  csproj, like the version (an `IsPackable` set in a `Directory.Build.props` falls into the known evaluation gap). A
-  library left out of the plan stays in the graph: its users reference it as a project and build it from source.
-- **Safety net**, with item 10's check: a project the SDK packed nothing for gets a new status, `not-packed`, instead
+- ~~**Plan the libraries that produce a package**: not those with `IsPackable` false, never test projects. Read from the
+  csproj, like the version. A library left out of the plan stays in the graph: its users reference it as a project and
+  build it from source.~~ Done after 0.6.0, `Packable` in the config. Settled on the way (user feedback, 2026-11-22):
+  MSBuild is asked for `IsPackable` where the csproj can't tell, like the version, so one set in a `Directory.Build.props`
+  is seen (no evaluation gap there, unlike first thought); a test project whose own csproj sets `IsPackable` true is
+  planned (an explicit opt-in, the way to force one into the feed for a dev run); non-packable libraries still order
+  the plan's depths.
+- ~~**Safety net**, with item 10's check: a project the SDK packed nothing for gets a new status, `not-packed`, instead
   of `packed`, a warning (not strict) suggesting `<IsPackable>false</IsPackable>`, and `verify` no longer expects it.
-  The warning comes back on every `go` until the csproj changes: being reminded is fine.
+  The warning comes back on every `go` until the csproj changes: being reminded is fine.~~ Done after 0.6.0: `go` marks
+  it `NotPacked` in the plan, `verify` reads the plan (`--repack-config`). Rejected: `go` writing it into
+  `localrun.config.json` (user feedback, 2026-11-22: a step writes its own output only).
 - **Not now**: executables with `PackAsTool` (`dotnet` tools). Nothing in the graph depends on a tool, and testing one
   from the feed means a `dotnet tool update` by hand: plan them when someone asks.
 

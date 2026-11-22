@@ -1,0 +1,9 @@
+<Project>
+  <!-- Makes LrEdge.Helpers produce no package, from outside its csproj (a helper next to samples, as in many
+       repositories): `lrun build` asks MSBuild and leaves it out of the plan; with its csproj flag, it can't see it,
+       `pack` plans it and `go` reports it not packed. Imports the samples' shared props too. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

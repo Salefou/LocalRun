@@ -110,10 +110,12 @@ public class DependencyGraph
 
             string? packageId;
             ProjectVersion version;
+            bool? evaluatedPackable = null;
             if (evaluated.TryGetValue(csproj, out var fromMsBuild))
             {
                 version = ProjectVersion.Parse(fromMsBuild.Version);
                 packageId = string.Equals(fromMsBuild.PackageId, name, StringComparison.OrdinalIgnoreCase) ? null : fromMsBuild.PackageId;
+                evaluatedPackable = fromMsBuild.IsPackable;
             }
             else
             {
@@ -134,6 +136,7 @@ public class DependencyGraph
                 SolutionPath = solutionPath,
                 Type = type,
                 Test = test,
+                Packable = ReadPackable(doc, test, evaluatedPackable),
                 Version = version,
                 Dependencies = References(doc, "ProjectReference", path => Path.GetFileNameWithoutExtension(path)),
             }, References(doc, "PackageReference", id => id)));
@@ -158,6 +161,7 @@ public class DependencyGraph
                 SolutionPath = project.SolutionPath,
                 Type = project.Type,
                 Test = project.Test,
+                Packable = project.Packable,
                 Version = project.Version,
                 Dependencies = deps,
             });
@@ -181,7 +185,7 @@ public class DependencyGraph
         if (needed.Count == 0)
             return results;
 
-        logger.LogInformation(LogEvents.Progress, "Asking MSBuild for the version and package id of {Count} project(s) whose csproj does not tell them ('--csproj' skips this)...", needed.Count);
+        logger.LogInformation(LogEvents.Progress, "Asking MSBuild for the version, package id and IsPackable of {Count} project(s) whose csproj does not tell them ('--csproj' skips this)...", needed.Count);
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var answers = new EvaluatedProject?[needed.Count];
         Parallel.For(0, needed.Count, new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentEvaluations },
@@ -241,8 +245,11 @@ public class DependencyGraph
             .Where(reference => !removed.Contains(reference))];
     }
 
-    /// <summary>The project SDKs whose default <c>OutputType</c> is <c>Exe</c> (ASP.NET Core services, worker services).</summary>
-    private static readonly string[] ExecutableSdks = ["Microsoft.NET.Sdk.Web", "Microsoft.NET.Sdk.Worker"];
+    /// <summary>
+    /// The project SDKs whose default <c>OutputType</c> is <c>Exe</c> (ASP.NET Core services, worker services, Blazor
+    /// WebAssembly apps). A Razor class library (<c>Microsoft.NET.Sdk.Razor</c>) is a library.
+    /// </summary>
+    private static readonly string[] ExecutableSdks = ["Microsoft.NET.Sdk.Web", "Microsoft.NET.Sdk.Worker", "Microsoft.NET.Sdk.BlazorWebAssembly"];
 
     /// <summary>
     /// An executable: an explicit <c>OutputType</c> of <c>Exe</c> or <c>WinExe</c>, or, without any <c>OutputType</c>,
@@ -277,6 +284,24 @@ public class DependencyGraph
                 .Any(elem => string.Equals(elem.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase))
             || doc.Descendants(ns + "PackageReference")
                 .Any(elem => string.Equals(elem.Attribute("Include")?.Value, "Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// <see cref="ProjectNode.Packable"/>, null when it is the default. A library produces a package unless <c>IsPackable</c>
+    /// is false: MSBuild's value when it evaluated the project, else the csproj's last one (a <c>$(…)</c> counts as unknown,
+    /// so the library is kept: <c>go</c>'s <c>not-packed</c> check is the safety net). A test project produces none unless
+    /// its own csproj sets <c>IsPackable</c> to true: the test SDK's default false comes from a package, which an
+    /// evaluation before restore doesn't see.
+    /// </summary>
+    internal static bool? ReadPackable(XDocument doc, bool test, bool? evaluated)
+    {
+        var ns = doc.Root!.Name.Namespace;
+        var declared = doc.Root.Elements(ns + "PropertyGroup").Elements(ns + "IsPackable")
+            .Select(elem => bool.TryParse(elem.Value.Trim(), out bool value) ? value : (bool?)null)
+            .LastOrDefault();
+        if (test)
+            return declared == true ? true : null;
+        return (evaluated ?? declared) == false ? false : null;
     }
 
     /// <summary>

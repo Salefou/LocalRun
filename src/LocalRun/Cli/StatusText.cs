@@ -90,7 +90,10 @@ internal static class StatusText
                 foreach (var proj in projects)
                 {
                     string version = proj.LatestVersion == null ? proj.Version : $"{proj.Version.PadRight(versionWidth)}  latest {proj.LatestVersion}";
-                    logger.LogInformation("    {Project}  d{Depth}  {Version}", proj.Name.PadRight(nameWidth), proj.Depth, version);
+                    // Only where it isn't what its kind implies: a library producing no package, a test project producing one
+                    string packable = proj.Type == "executable" || proj.Packable == !proj.Test ? ""
+                        : proj.Packable ? "  (packed)" : "  (no package)";
+                    logger.LogInformation("    {Project}  d{Depth}  {Version}{Packable}", proj.Name.PadRight(nameWidth), proj.Depth, version, packable);
                 }
             }
         }

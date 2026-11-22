@@ -129,6 +129,11 @@ public static class DiagnosticEvents
         "go: a package was packed under another version than planned (its build sets the version in a target: " +
         "Nerdbank.GitVersioning, GitVersion, a hand-written target); the plan now records the version packed.");
 
+    // Not strict: a library the SDK packs nothing for is not packable, which build could not see (user feedback, 2026-11-21)
+    public static readonly EventId NotPacked = Code(163, "not-packed", strict: false,
+        "go: dotnet pack produced no package for a planned project (IsPackable false where lrun can't read it); the plan " +
+        "marks it NotPacked, verify no longer expects it. Set <IsPackable>false</IsPackable> in its csproj to leave it out of the plan.");
+
     // The commands that read the settings fail on an invalid file (error code settings-invalid); settings itself warns
 
     public static readonly EventId SettingsInvalid = Code(170, "settings-invalid", strict: false,

@@ -94,10 +94,12 @@ internal static class CommandCatalog
             OptionInfo.One("--root", "<dir>", "Directory to scan, as for build (default: your settings, else current directory)."),
             .. Filters,
         ]),
-        Command("verify", "Check that the local feed holds an up-to-date package of every library of a config: none is missing, none " +
-            "older than its csproj version or than a file of its folder. Exit code 6 if not.",
+        Command("verify", "Check that the local feed holds an up-to-date package of every library of a config that produces one: " +
+            "none is missing, none older than its csproj version or than a file of its folder. Exit code 6 if not.",
         [
             ReadConfig,
+            OptionInfo.One("--repack-config", "<file>", "Repack config file to read, if there is one: the projects go found produced " +
+                $"no package are not expected (default: {LocalRunCli.DefaultRepackConfigPath})."),
         ]),
         Command("status", "Print what a config holds, from the files alone (no scan, no NuGet source, no git): when and how build " +
             "made it (flags, lrun version, each repository's commit), its projects by solution and type with their versions, what " +

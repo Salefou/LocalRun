@@ -62,14 +62,14 @@ so you can **inspect or hand-edit** the plan between steps.
                dependencies.html    dotnet run, executables in dependency order
 ```
 
-1. **`build`** finds every `*.csproj` under the root, reads its name, type (executable for an `OutputType` of `Exe`/`WinExe`, or a Web/Worker SDK without one),
+1. **`build`** finds every `*.csproj` under the root, reads its name, type (executable for an `OutputType` of `Exe`/`WinExe`, or a Web, Worker or Blazor WebAssembly SDK without one),
    version (`<Version>`, else `<VersionPrefix>`-`<VersionSuffix>`), `ProjectReference`s and `PackageReference`s, and maps projects to the `*.sln` / `*.slnx` files
    that reference them. Optional filters keep only the part of the graph you care about. It also records
    each library's latest version on your NuGet sources and in the local feed (unless `--csproj`). The result
    is written in topological order to `localrun.config.json`.
 2. **`plot`** renders that graph as a self-contained interactive HTML page (no internet access needed).
-3. **`pack`** decides, for every library, the version it will be packed as (executables are left out: `up`
-   builds them from source): the config's version (the
+3. **`pack`** decides, for every library that produces a package, the version it will be packed as (executables are
+   left out, as `up` builds them from source, and so are libraries with `IsPackable` false and test projects): the config's version (the
    latest one when recorded, else the csproj's), bumped, with your suffix and an iteration number that
    goes up each time you pack the same versions again. The plan is written to `repack.config.json`, then
    executed as `go` does. With `--dry-run`, it stops there, for you to review or edit the plan.
@@ -282,7 +282,7 @@ Next: lrun pack
 | `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 | `--tests` | off | Keep the test projects. By default `build` leaves them out (and lists them): projects referencing `Microsoft.NET.Test.Sdk`, setting `<IsTestProject>true</IsTestProject>`, or using the `MSTest.Sdk` project SDK. |
-| `--csproj` | off | Read the csproj files as they are: skip the MSBuild evaluation of versions and package ids (below), and don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` reads each csproj's version and package id from its XML, and asks MSBuild (`dotnet msbuild -getProperty`, about a second per project, 8 at a time) only for the projects whose XML can't tell: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above it that sets `Version`, `VersionPrefix`, `VersionSuffix`, `PackageId` or `AssemblyName` or imports other files. If MSBuild fails on a project, its csproj is read as is, with a warning. `build` also records each library's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. When a csproj version is higher than that latest (a `11.0.0-preview` in development while `10.7.0` is released), `pack` starts from the csproj version and warns once. That csproj already is the version in development, so a bump flag is ignored for it and only the suffix applies (`11.0.0-local.1`, with or without `--patch`). Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
+| `--csproj` | off | Read the csproj files as they are: skip the MSBuild evaluation of versions, package ids and `IsPackable` (below), and don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` reads each csproj's version, package id and `IsPackable` from its XML, and asks MSBuild (`dotnet msbuild -getProperty`, about a second per project, 8 at a time) only for the projects whose XML can't tell: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above it that sets `Version`, `VersionPrefix`, `VersionSuffix`, `PackageId`, `AssemblyName` or `IsPackable` or imports other files. If MSBuild fails on a project, its csproj is read as is, with a warning. `build` also records each library's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. When a csproj version is higher than that latest (a `11.0.0-preview` in development while `10.7.0` is released), `pack` starts from the csproj version and warns once. That csproj already is the version in development, so a bump flag is ignored for it and only the suffix applies (`11.0.0-local.1`, with or without `--patch`). Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
 | `--plot` | off | Then plot the graph just written, as [`plot`](#plot) does with its defaults (a new `.lrun/plots/dependencies-<date-time>.html`), and open it in the browser. Only on a terminal: with output redirected, the page is written and its path printed. |
 | `--verify` | off | Then check the local feed against the config just written, as [`verify`](#verify) does: exit code `6` when a package is missing or stale (the config is written all the same). |
 
@@ -407,7 +407,10 @@ The path of the page is printed. `build --plot` opens it too, but only on a term
 
 Compute the version every library of the config will be packed as (executables are left out: nothing consumes them
 as packages, and [`up`](#up) builds them from source), write the plan to a repack config, then execute it
-as [`go`](#go) does. The plan is written first, so a failed or surprising repack can be inspected. With
+as [`go`](#go) does. Only libraries that produce a package are planned: not those with `<IsPackable>false</IsPackable>`
+(as MSBuild evaluates it when `build` asked it, a `Directory.Build.props` included, else as the csproj says), nor test
+projects kept with `--tests`, unless their csproj sets `<IsPackable>true</IsPackable>`. They stay in the graph: their
+users build them from source, as project references. The plan is written first, so a failed or surprising repack can be inspected. With
 `--dry-run`, `pack` stops there and prints the depths `go` would go through.
 
 | Option | Default | Description |
@@ -464,6 +467,9 @@ together (a depth starts once the previous one is packed everywhere):
    `go` reads the version of each package produced: when it isn't the planned one, it warns
    `packed-version-differs` and writes the version packed into `repack.config.json` (and the result's `to`), so the plan
    says what the feed holds. Not a failure, even with `--strict`: the override may be intended.
+   A project for which `dotnet pack` produces no package (its `IsPackable` is false where `lrun` can't read it) is
+   `not-packed` in the result, with a `not-packed` warning (not strict) suggesting `<IsPackable>false</IsPackable>` in its
+   csproj, and `"NotPacked": true` in the plan: `verify` no longer expects it. The next `go` tries it, and warns, again.
 
 Like `up`'s, these commands get the `Solution*` properties of the project's solution (`SolutionDir`,
 `SolutionPath`, `SolutionName`, …), as when Visual Studio builds the solution. A project built on its own
@@ -492,7 +498,9 @@ printed no error line, its whole output is printed before the failure.
 ### `verify`
 
 Check that the local feed holds an up-to-date package of every library of a config, so the services `up` starts get
-the code on disk. Executables are left out: `up` builds them from source. Each library is:
+the code on disk. Only what [`pack`](#pack) plans is expected: executables (`up` builds them from source), libraries
+with `IsPackable` false and test projects are left out, and so are the projects the plan marks `NotPacked` (`go` found
+they produced no package; `build --verify` reads no plan). Each library is:
 
 - `ok`: its newest package in the feed was written after every file of its folder changed, and its version is not
   behind the csproj's;
@@ -521,6 +529,7 @@ touching files without changing them makes a library look stale: repacking is th
 | Option | Default | Description |
 |---|---|---|
 | `--config <file>` | `.lrun/localrun.config.json` | Config file to read; the feed checked is its `LocalNugetPath`. |
+| `--repack-config <file>` | `.lrun/repack.config.json` | Repack config file to read, if there is one: the projects it marks `NotPacked` are not expected. |
 
 ### `status`
 
@@ -556,7 +565,8 @@ Plan: …\.lrun\repack.config.json, written 2026-11-21 10:45 (2 hours ago), 3 pa
   with `--git-changes`, and each repository's branch and commit at that time. A config written by an older `lrun` has
   none of it: `status` says so and shows the rest.
 - Projects are grouped by solution, then libraries, executables and test projects (kept with `--tests`), each with its
-  depth (from 0, the order `go` packs in), its csproj version and the latest version `build` found.
+  depth (from 0, the order `go` packs in), its csproj version and the latest version `build` found. A library producing
+  no package is marked `(no package)`, a test project producing one `(packed)`.
 - `Left out` lists what `build` left out and why: `test`, `filter`, `name-collision` (with the paths), `cycle` (with the
   projects kept without it).
 - A plan older than the config was made from an earlier one: `go` would pack that. `status` warns
@@ -854,9 +864,9 @@ step that wrote it.
       "PackageId": "Acme.Pricing",              // <PackageId>, else <AssemblyName>; absent when it is the name
       "Path": "pricing\\src\\Shared.Pricing\\Shared.Pricing.csproj",
       "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // null if no solution references it
-      "Type": "library",                        // "executable" for <OutputType>Exe</OutputType> (or WinExe), or a Web/Worker SDK without one
+      "Type": "library",                        // "executable" for <OutputType>Exe</OutputType> (or WinExe), or a Web, Worker or Blazor WebAssembly SDK without one
       "Version": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },   // <Version>, else <VersionPrefix>[-<VersionSuffix>], else 1.0.0
-      "LatestVersion": { "Major": 1, "Minor": 5, "PatchAndSuffix": "0" },   // on your NuGet sources; absent with --csproj, for an executable, or when not found
+      "LatestVersion": { "Major": 1, "Minor": 5, "PatchAndSuffix": "0" },   // on your NuGet sources; absent with --csproj, for a project producing no package, or when not found
       "Dependencies": []                        // names of other projects in the graph
     }
   ],
@@ -873,7 +883,9 @@ step that wrote it.
 }
 ```
 
-A test project kept with `--tests` also has `"Test": true`. `pack`, `go` and `up` don't read `Build`.
+A test project kept with `--tests` also has `"Test": true`. `"Packable"` appears only when it isn't the default: `false`
+for a library with `IsPackable` false, `true` for a test project whose csproj sets `IsPackable` true; `pack` plans the
+libraries producing a package. `pack`, `go` and `up` don't read `Build`.
 
 `build` rewrites this file from scratch, so hand edits last until the next `build`. To leave a project
 out of a repack, run `build` again with a narrower selection (`--deps-of` the services you need,
@@ -905,7 +917,8 @@ they are ignored, with an `unknown-config-field` warning.)
 }
 ```
 
-Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`.
+Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`. After `go`, a project that
+produced no package also has `"NotPacked": true` (see [`go`](#go)).
 
 ### `plots/dependencies-<date-time>.html` — written by `plot` (or `build --plot`)
 
@@ -1032,10 +1045,10 @@ Results:
 | Command | `result` |
 |---|---|
 | `build` | `config`, `root`, `localNuget`, `filters` (as typed, or `null`), `scanned` (projects found, without tests and name collisions), `projects` (`total`, `libraries`, `executables`), `services`, `leftOut` (see below), `gitChanges` (the changed projects, with `--git-changes`), `plot` (with `--plot`). |
-| `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not), `latestVersion` (always `null`: `list` never queries the sources), `test` (a test project, with `--tests`); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
+| `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not), `latestVersion` (always `null`: `list` never queries the sources), `test` (a test project, with `--tests`), `packable` (whether it produces a package, so `pack` plans it); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
 | `status` | `config`, `written` (when the file was last written), `root`, `localNuget`, `build` (the config's `Build` in camelCase, or `null` for an older config), `counts`, `projects` as in `list` (with `latestVersion`), `plan` (`null` without one): `path`, `written`, `olderThanConfig`, `clean`, `packages` in packing order (`project`, `packageId`, `depth`, `from`, `to`); `running`: the `up` running with this config, as in `down`'s `up`, or `null`. `written` (the envelope's) is empty. |
 | `verify` | `config`, `feed`, `libraries`, `ok`, `missing`, `stale` (counts), `packages` in config order: `project`, `packageId`, `status` (`ok`, `missing`, `stale`), `reason` (for `stale`: `csproj-ahead` or `edited`), `csprojVersion`, `feedVersion` (the newest in the feed), `packedAt`, `editedFile` (relative to the project's folder) and `editedAt` (times in UTC). `build --verify` puts the same object under `verify` in its result. |
-| `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
+| `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `not-packed` (the pack succeeded but produced no package: warning `not-packed`), `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
 | `plot` | `plot`: the page's path. |
 | `settings` | `path`, `created`, `valid` (false when the commands reading the file would fail on it), `problem`. |
 | `version` | `version`. |
@@ -1081,6 +1094,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
 | `stop-signal-failed` | `up`: Ctrl+C could not be passed on to its processes on a stop; those still running are killed after the grace period. | — |
 | `packed-version-differs` | `go`: a package was packed under another version than planned (its build sets the version in a target); the plan now records the version packed. | — |
+| `not-packed` | `go`: `dotnet pack` produced no package for a planned project (`IsPackable` false where `lrun` can't read it); the plan marks it `NotPacked`, `verify` no longer expects it. | — |
 | `plan-older-than-config` | `status`: the repack plan is older than the config, so made from an earlier one; `go` would pack that. `pack` plans again. | — |
 | `settings-invalid` | `settings`: the settings file can't be used (unreadable, an unknown key, a bad value); `build`, `pack` and `up` would fail on it with that error code. | — |
 | `doctor-warning`, `doctor-failure` | `doctor`: a setup check that may surprise, or that will make a command fail (the result names the check). `doctor` fails on a failure itself (exit code `1`). | — |

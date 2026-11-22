@@ -15,7 +15,10 @@ using System.Threading.Tasks;
 /// <summary>What became of one project of a plan in a run.</summary>
 public sealed class PackOutcome
 {
-    /// <summary><c>planned</c> before anything runs (a dry run), else <c>packed</c>, <c>failed</c>, or <c>skipped</c> (not reached).</summary>
+    /// <summary>
+    /// <c>planned</c> before anything runs (a dry run), else <c>packed</c>, <c>not-packed</c> (the pack succeeded but produced
+    /// no package), <c>failed</c>, or <c>skipped</c> (not reached).
+    /// </summary>
     public string Status { get; internal set; } = PackStatus.Planned;
 
     /// <summary>Time spent in this project's <c>dotnet</c> commands, or null before any ran.</summary>
@@ -31,6 +34,7 @@ public static class PackStatus
 {
     public const string Planned = "planned";
     public const string Packed = "packed";
+    public const string NotPacked = "not-packed";
     public const string Failed = "failed";
     public const string Skipped = "skipped";
 }
@@ -86,8 +90,10 @@ public class RepackExecutor
             if (Directory.Exists(packFolder))
                 Directory.Delete(packFolder, recursive: true);
         }
-        logger.LogInformation(LogEvents.Done, "Packed {Projects} in {Duration}",
-            Text.Count(depths.Sum(depth => depth.Count), "project"), Text.Duration(stopwatch.Elapsed));
+        int notPacked = outcomes.Values.Count(outcome => outcome.Status == PackStatus.NotPacked);
+        logger.LogInformation(LogEvents.Done, "Packed {Projects} in {Duration}{NotPacked}",
+            Text.Count(depths.Sum(depth => depth.Count) - notPacked, "project"), Text.Duration(stopwatch.Elapsed),
+            notPacked == 0 ? string.Empty : $" ({notPacked} produced no package)");
     }
 
     /// <summary>
@@ -143,8 +149,17 @@ public class RepackExecutor
             string output = Path.Combine(packFolder, Guid.NewGuid().ToString("N"));
             await RunDotnetAsync("pack", proj, $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{output}\" -p:CustomBeforeMicrosoftCommonProps=\"{versionsPropsPath}\"{NoSummary}{SolutionProperties.Arguments(proj.SolutionPath)}");
             var outcome = outcomes[proj.Name];
+            var packed = MoveToFeed(output, nugetRepoPath);
+            if (packed == null)
+            {
+                outcome.Status = PackStatus.NotPacked;
+                logger.LogWarning(DiagnosticEvents.NotPacked,
+                    "{Project} produced no package: it is not packable (IsPackable false where lrun can't read it?). Set <IsPackable>false</IsPackable> in its csproj to leave it out of the plan",
+                    proj.Name);
+                return;
+            }
             outcome.Status = PackStatus.Packed;
-            if (MoveToFeed(output, nugetRepoPath) is { } packed && PackedVersionIfOther(proj, packed) is { } other)
+            if (PackedVersionIfOther(proj, packed) is { } other)
             {
                 outcome.PackedVersion = other;
                 logger.LogWarning(DiagnosticEvents.PackedVersionDiffers,
@@ -179,16 +194,26 @@ public class RepackExecutor
             ? null
             : packed.ToNormalizedString();
 
-    /// <summary>Writes the versions packed into the plan, for those packed under another one.</summary>
+    /// <summary>
+    /// Writes what the run found into the plan: the version packed, for those packed under another one, and
+    /// <see cref="ProjectRepack.NotPacked"/> (set for those that produced no package, cleared for those that did).
+    /// </summary>
     /// <returns>Whether the plan changed.</returns>
     public bool RecordPackedVersions(RepackConfig repackConfig)
     {
         bool changed = false;
         foreach (var proj in repackConfig.RepackTrees.SelectMany(tree => tree.Projects))
         {
-            if (outcomes.GetValueOrDefault(proj.Name)?.PackedVersion is { } packed)
+            var outcome = outcomes.GetValueOrDefault(proj.Name);
+            if (outcome?.PackedVersion is { } packed)
             {
                 proj.ToVersion = ProjectVersion.Parse(packed);
+                changed = true;
+            }
+            bool notPacked = outcome?.Status == PackStatus.NotPacked;
+            if (outcome?.Status is PackStatus.Packed or PackStatus.NotPacked && proj.NotPacked != notPacked)
+            {
+                proj.NotPacked = notPacked;
                 changed = true;
             }
         }

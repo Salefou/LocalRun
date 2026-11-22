@@ -26,7 +26,9 @@ public sealed record PackageCheck(string Project, string PackageId, string Statu
 /// Checks that the local feed holds an up-to-date package of every library of a config, so that what consumes them as
 /// packages gets the code on disk: a package is missing, or stale when its csproj version is ahead of the feed's newest
 /// (a version bump pulled since the last pack) or when a file of the project's folder changed after that package was written.
-/// Executables are left out: <c>up</c> builds them from source.
+/// Only the projects producing a package are checked (<see cref="ProjectNode.ProducesPackage"/>): executables (<c>up</c>
+/// builds them from source), libraries with <c>IsPackable</c> false, test projects, and those <c>go</c> found produced no
+/// package (marked <c>NotPacked</c> in the plan) are left out.
 /// </summary>
 public static class FeedVerifier
 {
@@ -39,10 +41,13 @@ public static class FeedVerifier
     /// <summary>Build outputs, which change when the project is built or packed (dot-folders are skipped too).</summary>
     private static readonly HashSet<string> SkippedFolders = new(StringComparer.OrdinalIgnoreCase) { "bin", "obj" };
 
-    /// <returns>A check per library of the config, in config order. Logs a warning for each one not ok.</returns>
-    public static List<PackageCheck> Verify(LocalRunConfig config)
+    /// <param name="plan">The repack plan, when there is one: its projects marked <c>NotPacked</c> are not expected.</param>
+    /// <returns>A check per library expected in the feed, in config order. Logs a warning for each one not ok.</returns>
+    public static List<PackageCheck> Verify(LocalRunConfig config, RepackConfig? plan = null)
     {
-        var libraries = config.Projects.Where(proj => proj.Type != "executable").ToList();
+        var notPacked = (plan?.RepackTrees ?? []).SelectMany(tree => tree.Projects).Where(proj => proj.NotPacked)
+            .Select(proj => proj.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var libraries = config.Projects.Where(proj => proj.ProducesPackage && !notPacked.Contains(proj.Name)).ToList();
         var projectFolders = config.Projects
             .Select(proj => Path.GetDirectoryName(Path.Combine(config.RootPath, proj.Path))!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -68,7 +73,7 @@ public static class FeedVerifier
         }
 
         if (libraries.Count == 0)
-            logger.LogWarning(DiagnosticEvents.EmptySelection, "No library in the config: nothing to verify");
+            logger.LogWarning(DiagnosticEvents.EmptySelection, "No library producing a package in the config: nothing to verify");
         else if (!feedExists)
             logger.LogInformation("The local feed {Feed} doesn't exist: nothing was packed into it yet", config.LocalNugetPath);
         int ok = checks.Count(check => check.Ok);

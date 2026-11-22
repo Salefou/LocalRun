@@ -15,8 +15,19 @@ bumps the minor version, anything else the patch.
   `repack.config.json` and the result's `to`.
 - Projects versioned by MinVer get the planned version: `go` sets `MinVerVersionOverride` along with `PackageVersion`.
   They were packed under MinVer's version from git tags (`1.21.1-alpha.0.38` instead of the planned `1.21.1-dev.1`).
+- `go` reports a project for which `dotnet pack` produced no package as `not-packed` (it was counted as `packed`), with
+  a `not-packed` warning (not strict) suggesting `<IsPackable>false</IsPackable>`, and marks it `"NotPacked": true` in
+  `repack.config.json`. `verify` reads the plan (new option `--repack-config`, when the file exists) and no longer
+  expects those projects: they were reported missing forever.
+- `list` and `status` results give each project's `packable`; `status` marks a library producing no package.
 
 ### Changed
+
+- `pack` plans only the libraries that produce a package: not those with `<IsPackable>false</IsPackable>` (helpers next
+  to samples), nor test projects kept with `--tests` unless their csproj sets `IsPackable` true. They stay in the
+  graph, their users building them from source, and still order the plan. `build` records it as `"Packable"` in
+  `localrun.config.json` (only when not the default), asks MSBuild for `IsPackable` where the csproj can't tell (a
+  `Directory.Build.props` setting it), and no longer looks up their latest version; `verify` no longer expects them.
 
 - `pack` plans libraries only: executables are left out of `repack.config.json`, as nothing consumes them as packages
   and `up` builds them from source. Packing them could stop the whole chain (a native AOT app, a test harness) and
@@ -29,6 +40,8 @@ bumps the minor version, anything else the patch.
   `<OutputType>` are executables, as the SDK builds them, and so is `<OutputType>WinExe</OutputType>`: they were typed
   `library`, so `up` skipped them. An unfiltered `up` now also starts such projects (samples, demos): narrow the run
   with `--users-of` / `--deps-of`.
+- Blazor WebAssembly apps (`Microsoft.NET.Sdk.BlazorWebAssembly`) without an explicit `<OutputType>` are executables,
+  as the SDK builds them: they were typed `library`, so `pack` planned them.
 - `build` no longer fails when git can't be loaded (its native library, e.g. with the tool installed under a path longer
   than Windows allows): it warns `git-unavailable` and records no repository HEAD for `status`.
 - `build` no longer crashes (`Object reference not set to an instance of an object`) on a csproj holding a

@@ -28,16 +28,24 @@ internal class RepackConfigBuilder
     }
 
     /// <summary>
-    /// Plans the libraries of the config. Executables are left out: nothing consumes them as packages, <c>up</c> builds
-    /// them from source, and packing them could only fail (native AOT, test harnesses) or be refused (Web SDK).
+    /// Plans the libraries of the config that produce a package (<see cref="ProjectNode.ProducesPackage"/>). Executables
+    /// are left out: nothing consumes them as packages, <c>up</c> builds them from source, and packing them could only fail
+    /// (native AOT, test harnesses) or be refused (Web SDK). So are libraries with <c>IsPackable</c> false and test
+    /// projects: the SDK packs nothing for them, their users build them from source as project references.
     /// </summary>
     public Task<RepackConfig> BuildRepackConfig(LocalRunConfig fullConfig, RepackOptions repackOptions)
     {
-        var config = LibrariesOf(fullConfig);
-        int executables = fullConfig.Projects.Count - config.Projects.Count;
+        // Depths come from every library, packable or not: one reached through a non-packable one still waits for it
+        var libraries = LibrariesOf(fullConfig);
+        var dependencyGraph = DependencyGraph.FromConfig(libraries);
+        var config = PackablesOf(libraries);
+        int executables = fullConfig.Projects.Count - libraries.Projects.Count;
         if (executables != 0)
             logger.LogDebug("Left out {Executables}: up builds them from source", Text.Count(executables, "executable"));
-        var dependencyGraph = DependencyGraph.FromConfig(config);
+        var notPackable = libraries.Projects.Where(proj => !proj.ProducesPackage).Select(proj => proj.Name).ToList();
+        if (notPackable.Count != 0)
+            logger.LogInformation("Left out {Libraries} producing no package (IsPackable false, tests): {Projects}",
+                Text.Count(notPackable.Count, "library", "libraries"), Text.Abbreviate(notPackable, shown: 5));
 
         var fromVersions = config.Projects.ToDictionary(proj => proj.Name, proj => BaseVersion(proj).Version, StringComparer.OrdinalIgnoreCase);
         var ahead = config.Projects.Where(proj => BaseVersion(proj).CsprojAhead).Select(proj => proj.Name).ToList();
@@ -80,7 +88,7 @@ internal class RepackConfigBuilder
         {
             List<ProjectRepack> projectRepacks = [];
 
-            foreach (var proj in projTree)
+            foreach (var proj in projTree.Where(proj => proj.ProducesPackage))
             {
                 var version = fromVersions[proj.Name];
                 var bumpedVersion = toVersions[proj.Name];
@@ -102,6 +110,8 @@ internal class RepackConfigBuilder
                     Depth = depth,
                 });
             }
+            if (projectRepacks.Count == 0)
+                continue;
             repackTrees.Add(new()
             {
                 Projects = [.. projectRepacks
@@ -128,12 +138,22 @@ internal class RepackConfigBuilder
         Build = config.Build,
     };
 
+    /// <summary>The config's projects producing a package (a copy).</summary>
+    internal static LocalRunConfig PackablesOf(LocalRunConfig config) => new()
+    {
+        SchemaVersion = config.SchemaVersion,
+        RootPath = config.RootPath,
+        LocalNugetPath = config.LocalNugetPath,
+        Projects = [.. config.Projects.Where(proj => proj.ProducesPackage)],
+        Build = config.Build,
+    };
+
     /// <summary>The plan's versions: the change most projects share, once, then a line per project that differs.</summary>
     private static void LogVersions(IReadOnlyList<(string Name, ProjectVersion From, ProjectVersion To)> plan)
     {
         if (plan.Count == 0)
         {
-            logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing to pack: the config holds no library.");
+            logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing to pack: the config holds no library producing a package.");
             return;
         }
         var (common, commonCount, others) = VersionChanges.Summarize(plan, Terminal.Arrow);

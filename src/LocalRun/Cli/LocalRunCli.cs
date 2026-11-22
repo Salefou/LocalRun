@@ -317,10 +317,15 @@ public static class LocalRunCli
     private static async Task VerifyAsync(CommandLineArgs args, CommandOutput output)
     {
         string configPath = Path.GetFullPath(args.Value("--config") ?? DefaultConfigPath);
+        string repackConfigPath = Path.GetFullPath(args.Value("--repack-config") ?? DefaultRepackConfigPath);
         args.EnsureAllConsumed();
 
         LocalRunConfig config = await ReadFromFile<LocalRunConfig>(configPath, "--config", "build");
-        var result = VerifyResult.Of(configPath, config.LocalNugetPath, FeedVerifier.Verify(config));
+        // Only for what go found produced no package: a plan is optional
+        RepackConfig? plan = File.Exists(repackConfigPath)
+            ? await ReadFromFile<RepackConfig>(repackConfigPath, "--repack-config", "pack")
+            : null;
+        var result = VerifyResult.Of(configPath, config.LocalNugetPath, FeedVerifier.Verify(config, plan));
         output.Result = result;
         result.ThrowIfFailed();
     }
@@ -505,7 +510,8 @@ public static class LocalRunCli
 
     /// <summary>
     /// Packs a plan; the result says what became of each project, after a failure too. A project packed under another
-    /// version than planned has the version packed written into the plan, so that the plan and the result say what the feed holds.
+    /// version than planned has the version packed written into the plan, one that produced no package is marked
+    /// <c>NotPacked</c> there, so that the plan and the result say what the feed holds.
     /// </summary>
     private static async Task ExecutePlanAsync(RepackConfig repackConfig, string repackConfigPath, CommandOutput output)
     {
@@ -523,7 +529,7 @@ public static class LocalRunCli
                 await WriteToFile(repackConfigPath, repackConfig);
                 if (!output.Written.Contains(repackConfigPath))
                     output.Written.Add(repackConfigPath);
-                logger.LogInformation("Plan updated with the versions packed: {Path}", repackConfigPath);
+                logger.LogInformation("Plan updated with what was packed: {Path}", repackConfigPath);
             }
             output.Result = PackResult.Of(repackConfigPath, packed, repackConfig, executor.Outcomes);
         }
