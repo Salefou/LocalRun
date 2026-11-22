@@ -503,7 +503,10 @@ public static class LocalRunCli
         await ExecutePlanAsync(repackConfig, repackConfigPath, output);
     }
 
-    /// <summary>Packs a plan; the result says what became of each project, after a failure too.</summary>
+    /// <summary>
+    /// Packs a plan; the result says what became of each project, after a failure too. A project packed under another
+    /// version than planned has the version packed written into the plan, so that the plan and the result say what the feed holds.
+    /// </summary>
     private static async Task ExecutePlanAsync(RepackConfig repackConfig, string repackConfigPath, CommandOutput output)
     {
         var executor = new RepackExecutor();
@@ -515,6 +518,13 @@ public static class LocalRunCli
         }
         finally
         {
+            if (executor.RecordPackedVersions(repackConfig))
+            {
+                await WriteToFile(repackConfigPath, repackConfig);
+                if (!output.Written.Contains(repackConfigPath))
+                    output.Written.Add(repackConfigPath);
+                logger.LogInformation("Plan updated with the versions packed: {Path}", repackConfigPath);
+            }
             output.Result = PackResult.Of(repackConfigPath, packed, repackConfig, executor.Outcomes);
         }
     }

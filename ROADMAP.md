@@ -34,7 +34,7 @@ everyone is "Before 1.0".
 | A10, Agent test run follow-ups | What an agent tripped on, driving `lrun` from `help --agent` alone | Related: A1, A2, 3, 5 |
 | 8, Project identity | Projects sharing a file name (samples in open-source repos): kept, named by path | Decided, additive form |
 | 9, Failures suggest the way out | Getting past a project that can't build: `up` / `go` hints, `build --exclude` | Decided. Related: `up --exclude`, A2 |
-| 10, Packed under another version | Repositories versioned from git tags (MinVer): the plan's version kept, or the real one reported | Decided. Related: 5 (`verify`) |
+| 10, Packed under another version | Repositories versioned from git tags (MinVer): the plan's version kept, or the real one reported | Shipped core (check, MinVer override); the csproj `1.0.0` of such projects open. Related: 5 (`verify`) |
 | 11, Plan only what produces a package | Non-packable libraries and test projects no longer planned, counted or expected by `verify` | Decided. Builds on 10's check |
 | 12, First-run trial leftovers | `--git-changes` without git, "latest" of a stranger's package, pinned consumers, test detection | Each open. Related: A10 |
 | Solution filters | Selecting by solution rather than by project | 1.0 blocker unless it is a new flag |
@@ -260,12 +260,15 @@ only, so it can't see it, and consumers of the package don't get the version the
 setting the version in a target (Nerdbank.GitVersioning, GitVersion).
 
 Decided (user feedback, 2026-11-21):
-- **After each pack, compare the package produced with the plan.** When they differ, a warning with a new code, not
+- ~~**After each pack, compare the package produced with the plan.** When they differ, a warning with a new code, not
   strict: an override may be intended (packing an older version to benchmark it against the current one). The
   version actually packed is written back into `repack.config.json` and reported in `to`, so `verify` and `status`
-  see the truth. Covers every tool, known or not.
-- **MinVer obeys the plan**: the generated props file also sets `MinVerVersionOverride` (MinVer's own override) to
-  the planned version, per project. Other tools rely on the check above: Nerdbank.GitVersioning has no clean override.
+  see the truth. Covers every tool, known or not.~~ Done after 0.6.0 (user feedback, 2026-11-21): each project packs
+  into a temporary folder, the package's own version is read before it moves into the feed; code
+  `packed-version-differs`.
+- ~~**MinVer obeys the plan**: the generated props file also sets `MinVerVersionOverride` (MinVer's own override) to
+  the planned version, per project. Other tools rely on the check above: Nerdbank.GitVersioning has no clean override.~~
+  Done after 0.6.0 (user feedback, 2026-11-21).
 
 Open:
 - The SDK default `1.0.0` is all the evaluation sees of such a project's version (set in a target). Where the latest

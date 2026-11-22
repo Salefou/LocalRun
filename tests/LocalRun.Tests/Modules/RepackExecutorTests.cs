@@ -54,6 +54,67 @@ public class RepackExecutorTests
         Assert.Equal(3, groups.Count);
         Assert.Equal($"'$(MSBuildProjectFullPath)' == '{Path.Combine(root, "Api", "Api.csproj")}'", groups[1].Attribute("Condition")!.Value);
         Assert.Equal(["1.0.1-dev", "2.3.2-dev", "0.1.1-dev"], groups.Select(group => group.Element("PackageVersion")!.Value));
+        Assert.Equal(["1.0.1-dev", "2.3.2-dev", "0.1.1-dev"], groups.Select(group => group.Element("MinVerVersionOverride")!.Value));
+    }
+
+    [Fact]
+    public void MoveToFeed_MovesEveryFile_AndReadsTheVersionFromThePackage()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"lrun-test-{Guid.NewGuid():N}");
+        string output = Path.Combine(root, "out");
+        string feed = Path.Combine(root, "feed");
+        Directory.CreateDirectory(output);
+        Directory.CreateDirectory(feed);
+        try
+        {
+            // The file name says what was planned; the nuspec, what was packed: the nuspec wins
+            WritePackage(Path.Combine(output, "Lib.1.0.1-dev.1.nupkg"), "Lib", "1.0.1-alpha.0.38");
+            File.WriteAllText(Path.Combine(output, "Lib.1.0.1-dev.1.snupkg"), "symbols");
+
+            var version = RepackExecutor.MoveToFeed(output, feed);
+
+            Assert.Equal("1.0.1-alpha.0.38", version!.ToNormalizedString());
+            Assert.Empty(Directory.EnumerateFiles(output));
+            Assert.Equal(["Lib.1.0.1-dev.1.nupkg", "Lib.1.0.1-dev.1.snupkg"],
+                Directory.EnumerateFiles(feed).Select(Path.GetFileName).Order());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void MoveToFeed_NoPackageProduced_GivesNull()
+    {
+        string missing = Path.Combine(Path.GetTempPath(), $"lrun-test-{Guid.NewGuid():N}");
+
+        Assert.Null(RepackExecutor.MoveToFeed(missing, missing));
+    }
+
+    [Theory]
+    [InlineData("1.0.1-dev.1", "1.0.1-dev.1", null)]
+    [InlineData("1.0.1-dev.1", "1.0.1-dev.1+abc123", null)]
+    [InlineData("1.0", "1.0.0", null)]
+    [InlineData("1.21.1-dev.1", "1.21.1-alpha.0.38", "1.21.1-alpha.0.38")]
+    [InlineData("1.21.1-dev.1", "1.0.0", "1.0.0")]
+    public void PackedVersionIfOther_IgnoresMetadataAndShortForms(string planned, string packed, string? expected)
+    {
+        var proj = Repack("Lib", "Lib.csproj", planned);
+
+        Assert.Equal(expected, RepackExecutor.PackedVersionIfOther(proj, NuGet.Versioning.NuGetVersion.Parse(packed)));
+    }
+
+    private static void WritePackage(string path, string id, string version)
+    {
+        using var zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Create);
+        using var writer = new StreamWriter(zip.CreateEntry($"{id}.nuspec").Open());
+        writer.Write($"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+              <metadata><id>{id}</id><version>{version}</version><authors>a</authors><description>d</description></metadata>
+            </package>
+            """);
     }
 
     [Fact]

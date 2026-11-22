@@ -127,7 +127,9 @@ changes, update its file and its summary here together.
     number alone, then the bump flag is ignored). One iteration number `.N` for the whole plan, no counter file.
 - **Execution** (`docs/agents/execution.md`): before changing `RepackExecutor`, `SolutionProperties`, `DotnetOutput`,
   `RunProcessor`, `ProcessJob`, `ConsoleSignal`, `UpState`, `down`, or a `dotnet` command line of `go` / `up`.
-  - Never `-p:PackageVersion` (a global property reaches project references: NU1107); a generated props file sets it.
+  - Never `-p:PackageVersion` (a global property reaches project references: NU1107); a generated props file sets it
+    (and `MinVerVersionOverride`). `go` reads each package's version: one other than planned warns
+    `packed-version-differs` (not strict) and is written back into the plan.
   - Every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments`.
   - `up`: builds sequentially (every one even after a failure, each with `--force` so floating versions take the
     feed's latest), runs side by side, no readiness checks by design, `dotnet run` processes in a
