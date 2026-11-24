@@ -144,6 +144,8 @@ changes, update its file and its summary here together.
   - `up`'s processes run on hidden consoles of their own (Windows): a stop (Ctrl+C or `lrun down`) is sent to them
     alone, through the helper, never as a Ctrl+C on `up`'s console (shared with the caller's shell).
   - One `up` per config folder (`up.json`, `up-running`); `down` is Windows only, a named event.
+  - A build failure or a service crash suggests `lrun up --exclude <failed>`, rebuilt from the run's own options by the
+    CLI (`UpCommandLine`); none when nothing else would run.
   - `failure.errors`: one entry per (code, message, file, line, column, project), capped at 50.
 - **Inspection** (`docs/agents/inspection.md`): before changing `status`, `doctor` or `verify`.
   - `status` reads the config, the plan and `up.json` only: never scans, queries NuGet or calls git.

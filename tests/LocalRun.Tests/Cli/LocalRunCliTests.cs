@@ -125,4 +125,17 @@ public class LocalRunCliTests
             Directory.Delete(cwd, recursive: true);
         }
     }
+
+    [Fact]
+    public void UpCommandLine_ExcludesTheFailedOnes()
+    {
+        Assert.Equal("lrun up --exclude AotTestApp", LocalRunCli.UpCommandLine(null, null, ["AotTestApp"], null, null));
+    }
+
+    [Fact]
+    public void UpCommandLine_KeepsTheRunsOptions_AndEachExcludedNameOnce()
+    {
+        Assert.Equal("lrun up --config \"my configs/a.json\" --only A B --exclude C B --logs logs --stop-timeout 5",
+            LocalRunCli.UpCommandLine("my configs/a.json", ["A", "B"], ["C", "B", "b"], "logs", "5"));
+    }
 }

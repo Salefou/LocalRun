@@ -292,12 +292,20 @@ Variations worth trying:
   ```
 
   Then `lrun up`: RiskService logs `cannot listen on http://localhost:5102/ … (port already in use?)`
-  and exits with code 1, while the others keep running. After Ctrl+C, `up` fails with
-  `LrSample.RiskService (exit code 1) failed` (exit code 1). Running `lrun up` twice doesn't show this:
+  and exits with code 1, followed by `To debug LrSample.RiskService: run it from your IDE, and the others with: lrun up
+  --exclude LrSample.RiskService`, while the others keep running. After Ctrl+C (or `lrun down`), `up` fails with
+  `LrSample.RiskService (exit code 1) failed. To debug, run it from your IDE, and the others with: lrun up --exclude
+  LrSample.RiskService` (exit code 1). Running `lrun up` twice doesn't show this:
   the second one is refused (`up-running`) before it builds anything.
+- **A service that doesn't build**: after step 4, add `TmpErr.cs` holding
+  `namespace X; public class E { public void M() { int x = "s"; } }` to `workspace/trading/LrSample.RiskService`, then
+  `lrun up`: the `error CS0029` line, the other executables still built, then `FAILED up failed: dotnet build failed on
+  LrSample.RiskService: nothing was started. To start the others: lrun up --exclude LrSample.RiskService`, exit code 4.
+  `lrun up --exclude LrSample.ReportCli` suggests `lrun up --exclude LrSample.ReportCli LrSample.RiskService`. Delete
+  the file afterwards.
 - **Another port**: `$env:LRSAMPLE_ORDERGATEWAY_PORT = 6101` (or `LRSAMPLE_RISKSERVICE_PORT`) before `lrun up`.
 - **Debugging one service**: `lrun up --exclude LrSample.RiskService` logs `Not running
-  LrSample.RiskService: start them yourself…` and starts the 3 others; then run RiskService from your
+  LrSample.RiskService (excluded)` and starts the 3 others; then run RiskService from your
   IDE (`:5102` stays free for it). `--exclude LrSample.Pricing` is rejected (exit code 2): it's a library.
 - **Graphs**: each `lrun plot` (or `lrun build … --plot`) writes a new `.lrun/plots/dependencies-<date-time>.html` and prints
   its path (`Plot: …`). `build --plot` opens it in the browser from a terminal; piped (`lrun build … --plot | more`), it

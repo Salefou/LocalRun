@@ -644,6 +644,11 @@ Windows ends them too, so they don't keep holding their ports and build output.
 Processes are started in dependency order, but `up` doesn't wait for one to be *ready* before
 starting the next: by design, each service is expected to wait for (or retry) the ones it needs.
 
+When an executable fails to build (often a tool missing on the machine, or a project's own build step), `up` starts
+nothing and says how to start the others: `To start the others: lrun up --exclude AotTestApp`. When a service exits
+with an error once started, it is most likely the one you just changed: `up` says to run it from your IDE, and the
+others with `lrun up --exclude <it>`. The suggested command keeps the options of the run (`--config`, `--only`, …).
+
 | Option | Default | Description |
 |---|---|---|
 | `--config <file>` | `.lrun/localrun.config.json` | Config file to read. |

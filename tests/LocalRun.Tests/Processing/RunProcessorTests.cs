@@ -98,4 +98,27 @@ public class RunProcessorTests
     {
         Assert.Equal(string.Empty, RunProcessor.LocalFeedRestoreArgument(new LocalRunConfig { LocalNugetPath = feed }));
     }
+
+    private static string Excluding(IReadOnlyCollection<string> names) => $"lrun up --exclude {string.Join(' ', names)}";
+
+    [Fact]
+    public void ExcludeHint_SuggestsTheCommandWithoutTheFailedOnes()
+    {
+        Assert.Equal(" To start the others: lrun up --exclude A B",
+            RunProcessor.ExcludeHint(Excluding, ["A", "B"], executableCount: 3, "To start the others"));
+    }
+
+    [Theory]
+    [InlineData(2)] // every executable failed: nothing would be left to run
+    [InlineData(1)]
+    public void ExcludeHint_IsEmpty_WhenNoOtherWouldRun(int executableCount)
+    {
+        Assert.Equal(string.Empty, RunProcessor.ExcludeHint(Excluding, ["A", "B"], executableCount, "To start the others"));
+    }
+
+    [Fact]
+    public void ExcludeHint_IsEmpty_WithoutACommandLine()
+    {
+        Assert.Equal(string.Empty, RunProcessor.ExcludeHint(null, ["A"], executableCount: 3, "To start the others"));
+    }
 }

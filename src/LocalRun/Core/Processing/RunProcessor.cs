@@ -33,6 +33,8 @@ public class RunProcessor : IRunProcessor
 
     private readonly TimeSpan stopGracePeriod;
 
+    private readonly Func<IReadOnlyCollection<string>, string>? commandExcluding;
+
     private readonly ConcurrentDictionary<string, ServiceOutcome> services = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The names of <see cref="services"/> in run order, which the dictionary doesn't keep.</summary>
@@ -46,11 +48,29 @@ public class RunProcessor : IRunProcessor
     /// <param name="logsFolder">Where each service's output goes, as <c>&lt;name&gt;.log</c> (overwritten); null for none.</param>
     /// <param name="onEvent">Told of each <see cref="UpEvent"/> as it happens, from any thread.</param>
     /// <param name="stopGracePeriod">How long the processes get to exit after Ctrl+C before being killed.</param>
-    public RunProcessor(string? logsFolder = null, Action<UpEvent>? onEvent = null, TimeSpan? stopGracePeriod = null)
+    /// <param name="commandExcluding">
+    /// The command line of this run with the given executables excluded too: a failure suggests it, so that the others can
+    /// run without the failed ones. Null for no suggestion.
+    /// </param>
+    public RunProcessor(string? logsFolder = null, Action<UpEvent>? onEvent = null, TimeSpan? stopGracePeriod = null,
+        Func<IReadOnlyCollection<string>, string>? commandExcluding = null)
     {
         this.logsFolder = logsFolder;
         this.onEvent = onEvent;
         this.stopGracePeriod = stopGracePeriod ?? DefaultStopGracePeriod;
+        this.commandExcluding = commandExcluding;
+    }
+
+    /// <summary>
+    /// " {lead}: {command}", the command line that runs the others without <paramref name="failed"/>; empty when there
+    /// would be no other to run, or no command line to suggest.
+    /// </summary>
+    internal static string ExcludeHint(Func<IReadOnlyCollection<string>, string>? commandExcluding,
+        IReadOnlyCollection<string> failed, int executableCount, string lead)
+    {
+        return commandExcluding == null || failed.Count == 0 || failed.Count >= executableCount
+            ? string.Empty
+            : $" {lead}: {commandExcluding(failed)}";
     }
 
     /// <summary>Each executable of the last run, by name, dependencies first; complete after a failure too.</summary>
@@ -63,8 +83,7 @@ public class RunProcessor : IRunProcessor
         List<ProjectNode> executables = PlanRun(config, exclude, only);
         if (exclude is { Count: > 0 })
         {
-            logger.LogInformation("Not running {Projects}: start them yourself (e.g. from your IDE to debug them)",
-                string.Join(", ", exclude));
+            logger.LogInformation("Not running {Projects} (excluded)", Text.Abbreviate(exclude));
         }
         if (executables.Count == 0)
         {
@@ -126,7 +145,11 @@ public class RunProcessor : IRunProcessor
             if (stopping.IsCancellationRequested)
                 return;
             if (buildFailures.Count != 0)
-                throw new DotnetFailedException($"dotnet build failed on {string.Join(", ", buildFailures)}: nothing was started.");
+            {
+                // The failure often comes from the machine (a missing tool) or a project's own build, not from the change
+                throw new DotnetFailedException($"dotnet build failed on {string.Join(", ", buildFailures)}: nothing was started." +
+                    ExcludeHint(commandExcluding, buildFailures, executables.Count, "To start the others"));
+            }
 
             foreach (var exe in executables)
             {
@@ -152,6 +175,13 @@ public class RunProcessor : IRunProcessor
                         : exited.Result == 0 ? ServiceStatus.Exited
                         : ServiceStatus.Failed;
                     Emit(new(UpEvents.Exited) { Project = exe.Name, ExitCode = exited.Result, Status = outcome.Status });
+                    // Most likely the service just edited: debugging it on the side is the way on
+                    if (outcome.Status == ServiceStatus.Failed)
+                    {
+                        string hint = ExcludeHint(commandExcluding, [exe.Name], executables.Count, "run it from your IDE, and the others with");
+                        if (hint.Length != 0)
+                            logger.LogInformation("To debug {Project}:{Hint}", exe.Name, hint);
+                    }
                 }, TaskScheduler.Default));
             }
             logger.LogInformation(LogEvents.Done, "{Processes} started. Press Ctrl+C (or run 'lrun down') to stop them all.",
@@ -185,7 +215,9 @@ public class RunProcessor : IRunProcessor
         if (failed.Count != 0)
         {
             throw new InvalidOperationException(
-                $"{string.Join(", ", failed.Select(process => $"{process.Name.Trim()} (exit code {process.Exited.Result})"))} failed");
+                $"{string.Join(", ", failed.Select(process => $"{process.Name.Trim()} (exit code {process.Exited.Result})"))} failed." +
+                ExcludeHint(commandExcluding, [.. failed.Select(process => process.Name.Trim())], executables.Count,
+                    $"To debug, run {(failed.Count == 1 ? "it" : "them")} from your IDE, and the others with"));
         }
     }
 

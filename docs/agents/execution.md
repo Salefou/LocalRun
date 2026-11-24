@@ -43,6 +43,15 @@ why.
   ends with the result (services `not-started`, exit 0). Each service's output also goes to `--logs`
   (`.lrun/logs/<name>.log`); with `--json`, `UpEvent`s stream through `EventStream`, closed before the one-line document
   so a late `exited` can't follow it.
+- **Failures suggest the way out** (ROADMAP item 9, user feedback, 2026-11-21): a failed build ends `up`'s error with
+  `To start the others: lrun up --exclude <failed>` (warning ahead was turned down: those failures come from the machine
+  or a project's own build, which the tool can't foresee). A service exiting with an error before any stop logs, right
+  then, `To debug <it>: run it from your IDE, and the others with: lrun up --exclude <it>` (the failing one is most
+  likely the one just edited), and the final failure repeats it. The command line comes from the CLI
+  (`LocalRunCli.UpCommandLine`, passed to `RunProcessor` as `commandExcluding`): the run's own `--config`, `--only`,
+  `--exclude` (merged, each name once), `--logs`, `--stop-timeout`, global options left out. No hint when nothing else
+  would run (`RunProcessor.ExcludeHint`). `--exclude` itself logs `Not running <names> (excluded)`, with no reason
+  assumed (it said "start them yourself … to debug them", user feedback, 2026-11-21).
 - **Hidden consoles and the stop signal** (ROADMAP A3, user feedback, 2026-11-21): every process `up` starts, builds
   included, has `CreateNoWindow` (Windows: a hidden console of its own). A stop, whether Ctrl+C in `up`'s console or
   `lrun down`, goes through `RunProcessor.RequestStop()`, which starts `lrun` itself again as a helper
