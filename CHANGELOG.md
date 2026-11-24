@@ -9,6 +9,10 @@ bumps the minor version, anything else the patch.
 
 ### Added
 
+- `build --exclude <names…>` (and `list --exclude`) leaves the given projects out, after the other filters: a sample or
+  a test harness that doesn't build on your machine. Their users are kept without them, with a
+  `kept-without-dependency` warning (refused by `--strict`) naming the whole branch to exclude instead. The config
+  records the names (`Build.Exclude`, shown by `status`), and lists them as left out with the reason `excluded`.
 - `up` suggests the command that gets past a failure, with the exact names and the options of the run. When an
   executable fails to build, it still starts nothing, and ends with `To start the others: lrun up --exclude <failed>`
   (also in the JSON `error.message`). When a service exits with an error once started, `up` says to run it from the IDE

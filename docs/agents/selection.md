@@ -21,6 +21,16 @@ filter. The summary in `CLAUDE.md` is what must never break; this file is the wh
   since extra projects are easy to delete from the config/plot. The tool never fetches (the README tells
   users to run `git fetch` themselves). This rule is about `GitChangeDetector`, not you: fetching while you
   work is expected.
+- **`--exclude`** (ROADMAP item 9, user feedback, 2026-11-21/24): `DependencyGraph.Exclude` removes the named projects
+  after `Retain` (the other filters see the full graph) and before `RemoveCycles` (excluding a member may break a
+  cycle). Names are checked against the full graph like the other filters (unknown or collided → exit 2); one a filter
+  left out already is ignored. The projects using an excluded one are kept without it (they'd build against its
+  published package): `kept-without-dependency`, **strict even though the user asked for it** (user feedback,
+  2026-11-24: exclude the whole branch or not; a human with `--strict` is checking the rest builds, an agent finds its
+  way, a pipeline shouldn't use `--exclude`). The warning names the whole branch (`ExcludedProjects.Users`, transitive)
+  as an `--exclude` to copy. The usual case, an end-of-line sample or harness, keeps nobody without it: no warning.
+  Recorded in `Build.Exclude` (absent without it) and `Filters`; left out with the reason `excluded`. Not the
+  `SkipRepack` / `SkipRun` fields removed on 2026-10-24 (`history.md`): a flag, given again with each `build`.
 - **Name collisions** (user feedback, 2026-10-24): projects are keyed by file name, so the
   `DependencyGraph` constructor leaves out *every* project of a shared name (`Collisions`); `build` logs
   an error with their paths, a warning for the dependents kept without the edge, still writes the

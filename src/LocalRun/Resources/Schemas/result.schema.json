@@ -117,7 +117,7 @@
       "description": "What build left out of the config, one entry per reason.",
       "type": "object",
       "properties": {
-        "reason": { "enum": ["test", "filter", "name-collision", "cycle"] },
+        "reason": { "enum": ["test", "filter", "excluded", "name-collision", "cycle"] },
         "projects": { "type": "array", "items": { "type": "string" } },
         "paths": {
           "description": "For a name collision: the paths of the projects sharing the name, relative to the root.",
@@ -125,7 +125,7 @@
           "items": { "type": "string" }
         },
         "dependents": {
-          "description": "For a name collision or a cycle: the projects kept without their dependency on these.",
+          "description": "For a name collision, a cycle or an exclusion: the projects kept without their dependency on these.",
           "type": ["array", "null"],
           "items": { "type": "string" }
         }
@@ -221,6 +221,7 @@
         "gitChanges": { "type": "boolean" },
         "union": { "type": "boolean" },
         "withServices": { "type": "boolean" },
+        "exclude": { "description": "The names given to --exclude; absent without it.", "type": "array", "items": { "type": "string" } },
         "includeExternal": { "type": "boolean" },
         "tests": { "type": "boolean" },
         "csproj": { "type": "boolean" },

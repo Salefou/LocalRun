@@ -20,6 +20,9 @@ public class BuildConfigOptions
     /// <summary>Also keep the executables affected by the kept projects, with the libraries in between.</summary>
     public bool WithServices { get; internal set; }
 
+    /// <summary>Projects to leave out after the other filters; their users are kept without them.</summary>
+    public List<string>? Exclude { get; internal set; }
+
     /// <summary>
     /// Read the csproj XML only: no MSBuild evaluation of versions and package ids, no query of the NuGet sources
     /// (<c>pack</c> then starts from the csproj versions).

@@ -121,6 +121,8 @@ changes, update its file and its summary here together.
     Unknown names exit 2; an empty intersection only warns. `--with-services` adds the libraries in between, on purpose.
   - `list` and `build` select through the same `ConfigBuilder.SelectProjects`: a new filter applies to both.
   - `--git-changes`: **when unsure, keep more**; the tool never fetches.
+  - `--exclude`: after the other filters, before the cycles; names checked on the full graph (exit 2). Users kept
+    without them warn `kept-without-dependency`, strict even though asked for, with the whole branch to exclude.
   - Name collisions: every project of a shared name is left out, with an error. Never keep one of them silently.
   - Cycles: `build` removes them with a warning; the throw in `TopologicalClassOrder` stays as the safety net.
 - **Versioning** (`docs/agents/versioning.md`): before changing `BumpOptions`, `RepackOptionsParser`,

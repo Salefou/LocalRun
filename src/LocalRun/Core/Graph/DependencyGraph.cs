@@ -451,6 +451,32 @@ public class DependencyGraph
         }
     }
 
+    /// <summary>Projects left out by <c>--exclude</c>, each list sorted by name.</summary>
+    /// <param name="Projects">The projects removed (those named and still in the graph).</param>
+    /// <param name="Dependents">The projects kept without their direct dependency on them.</param>
+    /// <param name="Users">Every project kept that uses them, directly or not: the rest of their branch.</param>
+    public sealed record ExcludedProjects(IReadOnlyList<string> Projects, IReadOnlyList<string> Dependents, IReadOnlyList<string> Users);
+
+    /// <summary>
+    /// Removes the given projects; names not in the graph (left out by a filter already) are ignored. The projects
+    /// depending on them are kept, without those dependencies.
+    /// </summary>
+    public ExcludedProjects Exclude(IEnumerable<string> names)
+    {
+        var excluded = names.Select(name => _nodesPerName.GetValueOrDefault(name)).OfType<Node>().ToHashSet();
+        var users = new HashSet<Node>();
+        foreach (var node in excluded)
+            CollectDependents(node, users);
+        users.ExceptWith(excluded);
+
+        static List<string> Sorted(IEnumerable<Node> nodes)
+            => [.. nodes.Select(node => node.Project.Name).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
+        var result = new ExcludedProjects(Sorted(excluded),
+            Sorted(excluded.SelectMany(node => node.Dependents).Where(node => !excluded.Contains(node))), Sorted(users));
+        Prune([.. _nodesPerName.Values.Where(node => !excluded.Contains(node))]);
+        return result;
+    }
+
     /// <summary>A dependency cycle that was left out of the graph, and the projects that depended on it.</summary>
     public sealed record DependencyCycle(IReadOnlyList<string> Projects, IReadOnlyList<string> Dependents);
 
