@@ -357,6 +357,13 @@ public sealed class JsonOutputTests : IDisposable
               <ItemGroup><ProjectReference Include="..\Mid\Mid.csproj" /></ItemGroup>
             </Project>
             """);
+        // At Mid's depth, not depending on it: packed all the same
+        WriteCsproj(root, "Side", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+              <ItemGroup><ProjectReference Include="..\Lib\Lib.csproj" /></ItemGroup>
+            </Project>
+            """);
         string feed = Path.Combine(workDir, "feed");
         Assert.Equal(LocalRunCli.ExitSuccess,
             (await LrunAsync("build", "--root", root, "--local-nuget", feed, "--include-external", "--csproj", "--json")).ExitCode);
@@ -366,7 +373,10 @@ public sealed class JsonOutputTests : IDisposable
 
         Assert.Equal(LocalRunCli.ExitDotnetFailed, go.ExitCode);
         AssertPlain(go);
-        Assert.Equal("dotnet-failed", go.Json.GetProperty("error").GetProperty("code").GetString());
+        var error = go.Json.GetProperty("error");
+        Assert.Equal("dotnet-failed", error.GetProperty("code").GetString());
+        Assert.Equal("dotnet failed on Mid (restore); skipped, as it depends on it: Top. " + LocalRunCli.PackExcludeHint(["Mid"]),
+            error.GetProperty("message").GetString());
         var result = go.Json.GetProperty("result");
         Assert.False(result.GetProperty("packed").GetBoolean());
         var packages = result.GetProperty("packages").EnumerateArray().ToDictionary(package => package.GetProperty("project").GetString()!);
@@ -382,6 +392,10 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Contains(failure.GetProperty("errors").EnumerateArray(), error => error.GetProperty("code").GetString()?.StartsWith("NETSDK") == true);
         Assert.Equal("skipped", packages["Top"].GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, packages["Top"].GetProperty("durationMs").ValueKind);
+        Assert.Equal(["Mid"], packages["Top"].GetProperty("skippedFor").EnumerateArray().Select(name => name.GetString()));
+        Assert.Equal(JsonValueKind.Null, packages["Mid"].GetProperty("skippedFor").ValueKind);
+        Assert.Equal("packed", packages["Side"].GetProperty("status").GetString());
+        Assert.True(File.Exists(Path.Combine(feed, "Side.1.0.0-local.1.nupkg")));
     }
 
     [Fact]

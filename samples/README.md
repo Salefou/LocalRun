@@ -285,8 +285,12 @@ Variations worth trying:
   `namespace X; public class W { public void M() { int unused; } }` to `workspace/core/LrSample.Primitives`, then
   `lrun pack`. Depth 1 prints the `warning CS0168` line once (`[WRN] …`, yellow on a terminal) and the pack succeeds.
   Add `TmpErr.cs` holding `namespace X; public class E { public void M() { int x = "s"; } }` and run `lrun go`: the
-  warning, the `error CS0029` line, then `FAILED go failed: dotnet pack failed on LrSample.Primitives with exit code 1
-  (…)`, exit code 4 (a `dotnet` command failed). Delete both files afterwards.
+  warning, the `error CS0029` line, then `FAILED go failed: dotnet failed on LrSample.Primitives (pack); skipped, as they
+  depend on it: LrSample.Logging, LrSample.Pricing.Models, LrSample.Pricing, LrSample.Reports. To pack the others: add
+  '--exclude LrSample.Primitives' to your 'lrun build', then run 'lrun pack' again.`, exit code 4 (a `dotnet` command
+  failed). Island.Core and Orphan, which don't use Primitives, are packed all the same; depths 2 and 3 print no line,
+  having nothing left to run. With `--json`, the four skipped ones have `"skippedFor": ["LrSample.Primitives"]`. Delete
+  both files afterwards.
 - After a reset, `lrun pack --patch --suffix dev --clean` runs `dotnet clean` first (nothing more is printed).
 - **A service failing at startup**: occupy RiskService's port from another PowerShell window first:
 
@@ -383,12 +387,50 @@ lrun verify --config edge.json --repack-config edge-plan.json            # after
 | `name-collision/`: two `LrEdge.Shared` | Succeeds (exit 0) with `[ERR] Several projects are named LrEdge.Shared, all left out of the config: repo-one\…, repo-two\…` and a warning that `LrEdge.Consumer` is kept without its dependency on it. The config holds Consumer only. Adding `--users-of LrEdge.Shared` fails with `Ambiguous project(s)`, exit code 2. With `--strict`: the config is written, then `FAILED --strict: … name-collision, kept-without-dependency.`, exit code 5 |
 | `slnx-only/`: `LrEdge.Modern`, listed in `Modern.slnx` | Succeeds with no warning: `.slnx` solutions (the .NET 10 SDK default) are read like `.sln` ones. A `Did not find any solution referencing …LrEdge.Modern` warning means `.slnx` support regressed |
 | `msbuild-props/`: `LrEdge.Props`, whose `Version` and `PackageId` are `$(…)` set by the folder's `Directory.Build.props` | Succeeds with no warning, even with `--strict`: `build` asks MSBuild, and the config holds `Acme.LrEdge.Props` 2.1.0. With `--csproj`, two warnings (`unevaluated-version`: `Version $(LrEdgeVersion) of …LrEdge.Props.csproj needs MSBuild to evaluate it, 1.0.0 used instead`, and `unevaluated-package-id`: the project name is used), and `--strict` ends with `FAILED --strict: the result is incomplete or may be wrong: unevaluated-version, unevaluated-package-id.`, exit code 5 |
-| `broken-import/`: `LrEdge.BrokenImport` imports a file that doesn't exist | `evaluation-failed`: `MSBuild could not evaluate …LrEdge.BrokenImport.csproj, its csproj is read as is (version and package id may be wrong)`; with `--strict`, exit code 5. The config holds it at 1.2.0, read from the XML. `pack` then fails at its depth with the `error MSB4019: The imported project "…missing.props" was not found` line and `FAILED pack failed: dotnet pack failed on LrEdge.BrokenImport …`, exit code 4 (a `dotnet` command failed) |
+| `broken-import/`: `LrEdge.BrokenImport` imports a file that doesn't exist | `evaluation-failed`: `MSBuild could not evaluate …LrEdge.BrokenImport.csproj, its csproj is read as is (version and package id may be wrong)`; with `--strict`, exit code 5. The config holds it at 1.2.0, read from the XML. `pack` then fails at its depth with the `error MSB4019: The imported project "…missing.props" was not found` line and `FAILED pack failed: dotnet failed on LrEdge.BrokenImport (pack).`, exit code 4 (a `dotnet` command failed), with no hint: excluding it would leave nothing to pack |
 | `package-version/`: `LrEdge.Pinned` sets `<PackageVersion>3.0.0</PackageVersion>` | `build` succeeds with no warning. `pack --dry-run` plans `1.0.0 -> 1.0.0-local.1` but warns `package-version-override`: `LrEdge.Pinned sets <PackageVersion> in its csproj, which overrides the planned version: go will pack it under the csproj's`; with `--strict`, the plan is written, then exit code 5 |
 | `unreachable-source/`: its `NuGet.config` adds a source on a `.invalid` host, and a local folder that doesn't exist | Two `source-query-failed` warnings, after about 6 s of NuGet retries: `Failed to query source '…\unreachable-source\no-such-feed': the folder doesn't exist.` and `Failed to query source 'http://lrun-samples.invalid/v3/index.json': Unable to load the service index …`; with `--strict`, `source-query-failed (2)`, exit code 5. `--csproj` skips the queries, and so the warnings |
 | `empty/`: no project | `build` warns `empty-selection`: `No project found under …\empty: the config holds none`. `pack` warns `Nothing to pack: the config holds no library producing a package.` and prints `ok Packed 0 projects`. Both exit 0, with `--strict` too: nothing to do is a valid outcome |
 | `not-packable/`: `LrEdge.Packed`, and `LrEdge.Helpers` whose folder's `Directory.Build.props` sets `IsPackable` false | `build` succeeds with no warning: it asks MSBuild about Helpers. `pack --dry-run` prints `Left out 1 library producing no package (IsPackable false, tests): LrEdge.Helpers` and plans Packed alone; `status` lists `LrEdge.Helpers  d0  1.0.0  (no package)`. With `build --csproj`, Helpers is planned too, and `pack` (with `--strict`) prints `[WRN] LrEdge.Helpers produced no package: it is not packable (IsPackable false where lrun can't read it?). Set <IsPackable>false</IsPackable> in its csproj to leave it out of the plan`, then `ok Packed 1 project in … (1 produced no package)` and `Plan updated with what was packed: …`, exit code 0 (`not-packed` is not strict). The plan holds `"NotPacked": true` for Helpers, and `verify` prints `ok 1 of 1 library up to date`, exit code 0; pointed at no plan (`--repack-config nope.json`), it reports Helpers missing, exit code 6 |
 | `non-planar/`: the two smallest graphs that can't be drawn without crossings, as dependency graphs. `k33/`: K₃,₃, every `LrEdge.Desk.*` (X, Y, Z, in `Desks.slnx`) uses every `LrEdge.Feed.*` (A, B, C, in `Feeds.slnx`). `k5/`: K₅, each `LrEdge.K<i>` uses every `K<j>` with j < i, odd ones in `Odd.slnx` and even ones in `Even.slnx` (project references within a solution, package references across) | Succeeds with no warning, 11 projects. The page reads `11 projects · 4 solutions · ⚠ 1 group cycle`: no project cycle, but Odd and Even use each other (K1 → K2 → K3), so their frames and the edges between them are red. Hovering K3 lights K4, K5 in orange and K1, K2 in blue. *Collapse all* leaves Feeds → Desks (`×9`) and Odd ⇄ Even (3 edges each way). With the default bands, Odd and Even are adjacent bands and the K edges zigzag between them, all pointing right; collapsed, Odd → Even points right and Even → Odd loops back on the left. With *Layout: free*, the layout has to route around the cycle and some K edges loop back around the frames; `lrun build --root edge-cases --plot` then shows the K₅ part on its own, the other edge cases packed beside it, never inside its loops |
+
+### 7. Packing past a failure: the whole folder
+
+`edge-cases/` holds projects that can't pack on purpose. Building everything under `samples/` meets them, and shows how
+`pack` gets past them:
+
+```powershell
+.\reset.cmd
+lrun build --root . --local-nuget .feed
+lrun pack
+```
+
+- `build` prints the intended warnings of the edge cases (see [The graph](#the-graph)), keeps 31 of 35 projects
+  (`Scanned …\samples: 35 projects in 17 solutions, 31 libraries and 4 executables`) and exits 0.
+- `pack` plans 26 libraries over 5 depths. At depth 1, three fail, each printing its error line: `LrEdge.Offline`
+  (restore, `error NU1302` on the `http://` source; older SDKs fail on the unreachable source instead), `LrEdge.Top`
+  (restore, `error MSB4006: There is a circular dependency…`: it still references the cycle left out of the config) and
+  `LrEdge.BrokenImport` (pack, `error MSB4019`). `pack` doesn't stop there: depths 2 to 5 run (`LrEdge.Pinned` warns
+  `packed-version-differs`, as in step 6), nothing depending on the three. It ends with:
+
+  ```
+  FAILED pack failed: dotnet failed on LrEdge.BrokenImport (pack), LrEdge.Offline (restore), LrEdge.Top (restore). To pack
+  the others: add '--exclude LrEdge.BrokenImport LrEdge.Offline LrEdge.Top' to your 'lrun build', then run 'lrun pack'
+  again.
+  ```
+
+  exit code 4. The hint names the option, not the `build` command: the plan doesn't record how the config was made.
+- Following it:
+
+  ```powershell
+  lrun build --root . --local-nuget .feed --exclude LrEdge.BrokenImport LrEdge.Offline LrEdge.Top
+  lrun pack
+  ```
+
+  `build` prints `Excluded LrEdge.BrokenImport, LrEdge.Offline, LrEdge.Top` and `Kept 29 of 35 (--exclude …)`, with no
+  `kept-without-dependency` warning for them (nothing uses them), and finds the packages of the first run (`Latest
+  versions found for all 24 libraries`). `pack` plans iteration 2 (`Versions: local.1 -> local.2, 23 projects`) and
+  ends `ok Packed 24 projects in …`, exit code 0.
 
 ## Changing the samples
 

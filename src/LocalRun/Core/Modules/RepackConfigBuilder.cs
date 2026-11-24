@@ -84,6 +84,7 @@ internal class RepackConfigBuilder
 
         List<RepackTree> repackTrees = [];
         Dictionary<string, int> nameToDepth = dependencyGraph.ComputeNameToDepth();
+        var dependsOn = PlannedDependencies(libraries);
         foreach (var projTree in dependencyGraph.ConnectedComponents)
         {
             List<ProjectRepack> projectRepacks = [];
@@ -108,6 +109,7 @@ internal class RepackConfigBuilder
                     FromVersion = version,
                     ToVersion = bumpedVersion,
                     Depth = depth,
+                    DependsOn = dependsOn.GetValueOrDefault(proj.Name) ?? [],
                 });
             }
             if (projectRepacks.Count == 0)
@@ -126,6 +128,37 @@ internal class RepackConfigBuilder
             RepackTrees = repackTrees,
             Clean = repackOptions.CleanBeforeRestore
         });
+    }
+
+    /// <summary>
+    /// For each library producing a package, the others it depends on: directly, or through libraries producing none
+    /// (built from source as project references, so a failure behind them still reaches it). Sorted by name.
+    /// </summary>
+    internal static Dictionary<string, List<string>> PlannedDependencies(LocalRunConfig libraries)
+    {
+        // Names shared by several projects match none of them, as in the graph
+        var byName = libraries.Projects.GroupBy(proj => proj.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single(), StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var proj in byName.Values.Where(proj => proj.ProducesPackage))
+        {
+            var found = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { proj.Name };
+            var pending = new Stack<string>(proj.Dependencies);
+            while (pending.TryPop(out var name))
+            {
+                if (!visited.Add(name) || !byName.TryGetValue(name, out var dependency))
+                    continue;
+                if (dependency.ProducesPackage)
+                    found.Add(dependency.Name);
+                else
+                    foreach (var next in dependency.Dependencies)
+                        pending.Push(next);
+            }
+            result[proj.Name] = [.. found];
+        }
+        return result;
     }
 
     /// <summary>The config without its executables (a copy: the caller's config is left as read).</summary>

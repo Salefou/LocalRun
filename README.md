@@ -504,8 +504,20 @@ ok Packed 7 projects in 10 s
 
 A line per depth says what is about to run (a long list ends with `and N more`). Of the `dotnet` output, only
 the warnings and errors are printed, verbatim and all of them: a project targeting several frameworks prints a
-warning once per framework. The first failing `dotnet` command fails the whole command (exit code `1`); if it
-printed no error line, its whole output is printed before the failure.
+warning once per framework. A failing `dotnet` command doesn't stop the others: what doesn't depend on the failed
+project goes on being packed, and every project depending on it, directly or not, is `skipped` (its package would
+declare a version of the failed one that never reached the feed). Then the command fails (exit code `4`), naming each
+failed project with the step that failed, those skipped, and the way past them:
+
+```
+FAILED go failed: dotnet failed on LrSample.Primitives (pack); skipped, as they depend on it: LrSample.Logging,
+LrSample.Pricing.Models, LrSample.Pricing, LrSample.Reports. To pack the others: add '--exclude LrSample.Primitives'
+to your 'lrun build', then run 'lrun pack' again.
+```
+
+The hint names the option to add, not a whole command: the plan doesn't record which `build` made the config. When
+nothing else would be packed, there is no hint. A `dotnet` command that printed no error line has its whole output
+printed. A plan written before 0.7.1 has no `DependsOn`: everything after a failing depth is skipped.
 
 ### `verify`
 
@@ -925,6 +937,7 @@ they are ignored, with an `unknown-config-field` warning.)
           "PackageId": "Acme.Shared.Pricing",       // only when it isn't the name; reported by --json
           "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // gives the dotnet commands $(SolutionDir)
           "Depth": 0,
+          "DependsOn": [],                       // projects of the plan it depends on: go skips it when one fails
           "FromVersion": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },
           "ToVersion":   { "Major": 1, "Minor": 4, "PatchAndSuffix": "3-dev.1" }
         }
@@ -935,7 +948,8 @@ they are ignored, with an `unknown-config-field` warning.)
 }
 ```
 
-Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`. After `go`, a project that
+Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`. `DependsOn` lists the projects
+of the plan it depends on, directly or through libraries producing no package (built from source). After `go`, a project that
 produced no package also has `"NotPacked": true` (see [`go`](#go)).
 
 ### `plots/dependencies-<date-time>.html` — written by `plot` (or `build --plot`)
@@ -1066,7 +1080,7 @@ Results:
 | `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not), `latestVersion` (always `null`: `list` never queries the sources), `test` (a test project, with `--tests`), `packable` (whether it produces a package, so `pack` plans it); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
 | `status` | `config`, `written` (when the file was last written), `root`, `localNuget`, `build` (the config's `Build` in camelCase, or `null` for an older config), `counts`, `projects` as in `list` (with `latestVersion`), `plan` (`null` without one): `path`, `written`, `olderThanConfig`, `clean`, `packages` in packing order (`project`, `packageId`, `depth`, `from`, `to`); `running`: the `up` running with this config, as in `down`'s `up`, or `null`. `written` (the envelope's) is empty. |
 | `verify` | `config`, `feed`, `libraries`, `ok`, `missing`, `stale` (counts), `packages` in config order: `project`, `packageId`, `status` (`ok`, `missing`, `stale`), `reason` (for `stale`: `csproj-ahead` or `edited`), `csprojVersion`, `feedVersion` (the newest in the feed), `packedAt`, `editedFile` (relative to the project's folder) and `editedAt` (times in UTC). `build --verify` puts the same object under `verify` in its result. |
-| `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `not-packed` (the pack succeeded but produced no package: warning `not-packed`), `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
+| `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`, `skippedFor`. `status` is `planned` (dry run), `packed`, `not-packed` (the pack succeeded but produced no package: warning `not-packed`), `failed`, or `skipped` (it depends on a failed project, directly or not: `skippedFor` names the failed ones, null otherwise). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
 | `plot` | `plot`: the page's path. |
 | `settings` | `path`, `created`, `valid` (false when the commands reading the file would fail on it), `problem`. |
 | `version` | `version`. |

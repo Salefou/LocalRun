@@ -344,13 +344,18 @@
         "from": { "type": "string" },
         "to": { "type": "string" },
         "status": {
-          "description": "planned (dry run), packed, not-packed (the pack succeeded but produced no package: warning not-packed), failed, or skipped (not reached: a depth starts once the previous one is packed).",
+          "description": "planned (dry run), packed, not-packed (the pack succeeded but produced no package: warning not-packed), failed, or skipped (it depends on a failed project, directly or not: skippedFor).",
           "enum": ["planned", "packed", "not-packed", "failed", "skipped"]
         },
         "durationMs": { "description": "Time in its dotnet commands, or null when none ran.", "type": ["integer", "null"] },
-        "failure": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/DotnetFailure" }] }
+        "failure": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/DotnetFailure" }] },
+        "skippedFor": {
+          "description": "For a skipped project: the failed projects it depends on, directly or not, sorted by name; null otherwise.",
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        }
       },
-      "required": ["project", "packageId", "depth", "from", "to", "status", "durationMs", "failure"],
+      "required": ["project", "packageId", "depth", "from", "to", "status", "durationMs", "failure", "skippedFor"],
       "additionalProperties": false
     },
     "DotnetFailure": {

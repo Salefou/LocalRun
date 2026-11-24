@@ -20,6 +20,12 @@ bumps the minor version, anything else the patch.
 
 ### Changed
 
+- `pack` and `go` keep going past a project that fails to clean, restore or pack: what doesn't depend on it is still
+  packed, and the projects depending on it, directly or not, are `skipped` (with `--json`, `skippedFor` names the failed
+  ones). The command still fails (exit code 4), naming every failed project with its step, then the way past them: `To
+  pack the others: add '--exclude <failed>' to your 'lrun build', then run 'lrun pack' again.` It stopped at the first
+  failing depth. The plan records what each project depends on (`DependsOn`); a plan written before stops at the first
+  failing depth, as before.
 - `up --exclude` logs `Not running <names> (excluded)`: it said "start them yourself (e.g. from your IDE to debug
   them)", though a project may be excluded because it can't build.
 
