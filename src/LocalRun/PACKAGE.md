@@ -29,7 +29,7 @@ lrun up                                                                        #
 
 When something doesn't work, `lrun doctor` checks the setup (SDK, local feed, NuGet sources, git) and says what to fix.
 `lrun list --users-of X` shows what uses X without writing anything, and `lrun verify` whether the local feed holds an
-up-to-date package of every library. `lrun status` shows what the config holds and whether `up` is running; `lrun down`
+up-to-date package of every library it packs. `lrun status` shows what the config holds and whether `up` is running; `lrun down`
 stops it from another shell.
 
 `lrun build --git-changes` picks the projects you changed (uncommitted, or commits not on origin's default

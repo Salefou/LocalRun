@@ -263,12 +263,12 @@ Decided (user feedback, 2026-11-21):
 - ~~**After each pack, compare the package produced with the plan.** When they differ, a warning with a new code, not
   strict: an override may be intended (packing an older version to benchmark it against the current one). The
   version actually packed is written back into `repack.config.json` and reported in `to`, so `verify` and `status`
-  see the truth. Covers every tool, known or not.~~ Done after 0.6.0 (user feedback, 2026-11-21): each project packs
+  see the truth. Covers every tool, known or not.~~ Done in 0.7.0 (user feedback, 2026-11-21): each project packs
   into a temporary folder, the package's own version is read before it moves into the feed; code
   `packed-version-differs`.
 - ~~**MinVer obeys the plan**: the generated props file also sets `MinVerVersionOverride` (MinVer's own override) to
   the planned version, per project. Other tools rely on the check above: Nerdbank.GitVersioning has no clean override.~~
-  Done after 0.6.0 (user feedback, 2026-11-21).
+  Done in 0.7.0 (user feedback, 2026-11-21).
 
 Open:
 - The SDK default `1.0.0` is all the evaluation sees of such a project's version (set in a target). Where the latest
@@ -278,7 +278,7 @@ Open:
 - `package-version-override` (a `<PackageVersion>` in the csproj, seen before packing) is strict; this check isn't, for
   the reason above. Keep both, or make the first one non-strict too?
 
-### 11. Plan only what produces a package **(user, 2026-11-21)**: shipped after 0.6.0
+### 11. Plan only what produces a package **(user, 2026-11-21)**: shipped in 0.7.0
 
 What happens: `pack` plans every library, and since #63 no executable. A library with `<IsPackable>false</IsPackable>`
 (a helper next to examples, `Utils` in OpenTelemetry) is planned, the SDK packs nothing, `go` still counts it as
@@ -288,14 +288,14 @@ too, and the SDK refuses to pack it.
 Decided (user feedback, 2026-11-21):
 - ~~**Plan the libraries that produce a package**: not those with `IsPackable` false, never test projects. Read from the
   csproj, like the version. A library left out of the plan stays in the graph: its users reference it as a project and
-  build it from source.~~ Done after 0.6.0, `Packable` in the config. Settled on the way (user feedback, 2026-11-22):
+  build it from source.~~ Done in 0.7.0, `Packable` in the config. Settled on the way (user feedback, 2026-11-22):
   MSBuild is asked for `IsPackable` where the csproj can't tell, like the version, so one set in a `Directory.Build.props`
   is seen (no evaluation gap there, unlike first thought); a test project whose own csproj sets `IsPackable` true is
   planned (an explicit opt-in, the way to force one into the feed for a dev run); non-packable libraries still order
   the plan's depths.
 - ~~**Safety net**, with item 10's check: a project the SDK packed nothing for gets a new status, `not-packed`, instead
   of `packed`, a warning (not strict) suggesting `<IsPackable>false</IsPackable>`, and `verify` no longer expects it.
-  The warning comes back on every `go` until the csproj changes: being reminded is fine.~~ Done after 0.6.0: `go` marks
+  The warning comes back on every `go` until the csproj changes: being reminded is fine.~~ Done in 0.7.0: `go` marks
   it `NotPacked` in the plan, `verify` reads the plan (`--repack-config`). Rejected: `go` writing it into
   `localrun.config.json` (user feedback, 2026-11-22: a step writes its own output only).
 - **Not now**: executables with `PackAsTool` (`dotnet` tools). Nothing in the graph depends on a tool, and testing one
@@ -473,7 +473,7 @@ leftovers, `settings` checking the file, and the agent instructions. Left, each 
 - **Depth numbering**: `depth` is 0-based in JSON, the text says `Depth 1/3`, `status` says `d0`. Changing the JSON is
   breaking: a 1.0 question.
 - ~~**`planned-below-base` on executables**: they are packed too, so the warning fires on a service nobody consumes as a
-  package. Skip it for executables, or stop packing them (a bigger question).~~ Done after 0.6.0 (user feedback,
+  package. Skip it for executables, or stop packing them (a bigger question).~~ Done in 0.7.0 (user feedback,
   2026-11-21): `pack` plans libraries only, so executables are never packed nor warned about.
 - **`--with-services added: nothing`** reads oddly when the services were kept already as users: reword.
 - **`result.projects` differs** between `build` (counts) and `list` (an array). Renaming is breaking: a 1.0 question.
