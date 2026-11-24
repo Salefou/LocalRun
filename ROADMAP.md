@@ -240,17 +240,24 @@ project's own build tricks, which the tool can't foresee.
   started too: the failing service is most likely the one just edited, so the hint is to run it on the side (from the
   IDE, under the debugger) and the others with `--exclude`.~~ Done after 0.7.0: the hint keeps the run's options, and
   is left out when nothing else would run; `--exclude` no longer assumes why (`Not running <names> (excluded)`).
-- **`build --exclude <names…>`**: leaves the named projects out of the selection, after the other filters; unknown
+- ~~**`build --exclude <names…>`**: leaves the named projects out of the selection, after the other filters; unknown
   names exit `2`, like the other filters. Not the `SkipRepack` / `SkipRun` fields removed on 2026-10-24 (`build`
   rewrote them away, see `docs/agents/history.md`): a flag is given again with each `build`. A new `build` flag, so
-  the ripple checklist applies (`list` too, `BuildRecord` and its schema, `CommandCatalog`, README, CHANGELOG).
+  the ripple checklist applies (`list` too, `BuildRecord` and its schema, `CommandCatalog`, README, CHANGELOG).~~
+  Done after 0.7.0: the `kept-without-dependency` warning names the whole branch to exclude.
 - **`go`**: when a project fails to pack, the hint is the `build` command the config came from (its flags are in
   `BuildRecord`) plus `--exclude <the failed one>`, then `pack` and `go` again.
 
-To decide when building it: the users of an excluded library are kept without that dependency (they restore the
-published package), as for collisions and cycles. Is `kept-without-dependency` then still strict, though the user asked
-for the exclusion? And `go` stops at the first failing depth (finding of the same run): keep packing what doesn't depend
-on the failure, then fail, as `up` builds every service before reporting?
+Decided (user feedback, 2026-11-24), the two points left open:
+- The users of an excluded library are kept without that dependency (they restore the published package), as for
+  collisions and cycles, and `kept-without-dependency` **stays strict** though the user asked for the exclusion: exclude
+  the whole branch or not. A human with `--strict` is checking that the rest builds without it, an agent finds its way,
+  and a pipeline shouldn't use `--exclude` at all (narrow the selection instead). The usual case, an end-of-line sample,
+  keeps nobody without it.
+- **`go` keeps packing past a failure** (dev convenience: a rogue dependency being removed, every error of a POC in one
+  run), as `up` builds every service before reporting. Whatever depends on a failed project, transitively, is
+  `skipped`, never packed: its package would declare the planned version of one that never reached the feed. `go` still
+  fails (exit `4`) with every failure in the result. Not done yet, with `go`'s hint.
 
 ### 10. Packages packed under another version than planned **(user, 2026-11-21)**
 

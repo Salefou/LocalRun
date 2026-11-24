@@ -42,6 +42,7 @@
         "GitChanges": { "type": "boolean" },
         "Union": { "type": "boolean" },
         "WithServices": { "type": "boolean" },
+        "Exclude": { "description": "The names given to --exclude; absent without it.", "type": "array", "items": { "type": "string" } },
         "IncludeExternal": { "type": "boolean" },
         "Tests": { "type": "boolean" },
         "Csproj": { "type": "boolean" },
@@ -68,7 +69,7 @@
     "LeftOutProjects": {
       "type": "object",
       "properties": {
-        "Reason": { "enum": ["test", "filter", "name-collision", "cycle"] },
+        "Reason": { "enum": ["test", "filter", "excluded", "name-collision", "cycle"] },
         "Projects": { "type": "array", "items": { "type": "string" } },
         "Paths": {
           "description": "For a name collision: the paths of the projects sharing the name, relative to the root.",
@@ -76,7 +77,7 @@
           "items": { "type": "string" }
         },
         "Dependents": {
-          "description": "For a name collision or a cycle: the projects kept without their dependency on these.",
+          "description": "For a name collision, a cycle or an exclusion: the projects kept without their dependency on these.",
           "type": ["array", "null"],
           "items": { "type": "string" }
         }

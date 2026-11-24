@@ -69,6 +69,8 @@ internal static class CommandCatalog
             "--users-of (compares with your last fetch)."),
         OptionInfo.Flag("--union", "With --users-of and --deps-of: users of one OR deps of the other."),
         OptionInfo.Flag("--with-services", "Also keep the executables using any kept project, with the libraries in between."),
+        OptionInfo.Many("--exclude", "<names>", "Leave the given projects out, after the other filters. Their users are kept without " +
+            "them, with a warning naming the whole branch to exclude."),
         OptionInfo.Flag("--include-external", "Keep dependencies on projects that no solution references."),
         OptionInfo.Flag("--tests", "Keep the test projects (left out by default)."),
         OptionInfo.Flag("--csproj", "Read the csproj files as they are: don't ask MSBuild for versions and package ids set elsewhere " +

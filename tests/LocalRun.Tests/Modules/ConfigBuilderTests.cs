@@ -55,6 +55,28 @@ public class ConfigBuilderTests
     private static BuildConfigOptions Options(params string[] argv) => BuildConfigOptionsParser.Parse(new CommandLineArgs(argv));
 
     [Fact]
+    public void Exclude_IsToldAsTyped_AndRecorded()
+    {
+        var options = Options("--deps-of", "WebApp", "--exclude", "AotTestApp", "TestApp");
+
+        var record = ConfigBuilder.Record("root", options, new BuildSummary(5, [], null, []), "0.7.1-local", DateTimeOffset.Now);
+
+        Assert.Equal("--deps-of WebApp, --exclude AotTestApp TestApp", record.Filters);
+        Assert.Equal(["AotTestApp", "TestApp"], record.Exclude);
+        Assert.Null(ConfigBuilder.Record("root", Options(), new BuildSummary(5, [], null, []), "0.7.1-local", DateTimeOffset.Now).Exclude);
+    }
+
+    [Fact]
+    public void UnknownExcludedName_IsAUsageError_NamingTheFlag()
+    {
+        var ex = Assert.Throws<UsageException>(() =>
+            ConfigBuilder.ValidateFilterNames(Graph("Core", "Api"), Options("--exclude", "Typo")));
+
+        Assert.Contains("'--exclude'", ex.Message);
+        Assert.Contains("Typo", ex.Message);
+    }
+
+    [Fact]
     public void UnknownFilterName_IsAUsageError_NamingTheFlag()
     {
         var ex = Assert.Throws<UsageException>(() =>

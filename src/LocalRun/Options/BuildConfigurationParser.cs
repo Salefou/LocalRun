@@ -13,6 +13,7 @@ public static class BuildConfigOptionsParser
             IncludeTests = args.Flag("--tests"),
             Union = args.Flag("--union"),
             WithServices = args.Flag("--with-services"),
+            Exclude = args.Values("--exclude"),
             CsprojVersionsOnly = args.Flag("--csproj"),
         };
         // --git-changes adds to the --users-of side

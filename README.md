@@ -280,6 +280,7 @@ Next: lrun pack
 | `--union` | off | With both filters: keep the users of `--users-of` **or** the dependencies of `--deps-of`, instead of the projects between them. |
 | `--git-changes` | off | Add the projects with pending git changes to the `--users-of` names (see below), so they're kept with everything that uses them. |
 | `--with-services` | off | After filtering, also keep every executable that has a kept project in its dependency tree, with the libraries in between. Needs `--users-of`, `--git-changes` and/or `--deps-of`. |
+| `--exclude <names…>` | — | Leave the given projects out, after the other filters (see below). |
 | `--include-external` | off | Keep dependencies on projects that no solution references. |
 | `--tests` | off | Keep the test projects. By default `build` leaves them out (and lists them): projects referencing `Microsoft.NET.Test.Sdk`, setting `<IsTestProject>true</IsTestProject>`, or using the `MSTest.Sdk` project SDK. |
 | `--csproj` | off | Read the csproj files as they are: skip the MSBuild evaluation of versions, package ids and `IsPackable` (below), and don't query the NuGet sources: `pack` starts from the csproj versions. By default `build` reads each csproj's version, package id and `IsPackable` from its XML, and asks MSBuild (`dotnet msbuild -getProperty`, about a second per project, 8 at a time) only for the projects whose XML can't tell: a `$(…)` value, an `<Import>`, or a `Directory.Build.props` / `.targets` above it that sets `Version`, `VersionPrefix`, `VersionSuffix`, `PackageId`, `AssemblyName` or `IsPackable` or imports other files. If MSBuild fails on a project, its csproj is read as is, with a warning. `build` also records each library's highest version (prerelease included) across the NuGet sources that apply to its folder and the local feed (`--local-nuget`, queried even when no `NuGet.Config` lists it, since `go` restores with it), as `LatestVersion`; `pack` starts from it, and `plot` shows it when it differs. When a csproj version is higher than that latest (a `11.0.0-preview` in development while `10.7.0` is released), `pack` starts from the csproj version and warns once. That csproj already is the version in development, so a bump flag is ignored for it and only the suffix applies (`11.0.0-local.1`, with or without `--patch`). Projects not found keep the csproj version. To leave a source out, disable it in your `NuGet.Config` (`dotnet nuget disable source <name>`). |
@@ -305,6 +306,17 @@ any kept project, **and the libraries between them**, so `pack` repacks those li
 added services really run the change. (A service getting a library as a package would otherwise keep
 the old build.) Libraries that use the kept projects but lead to no service stay out. `build` logs
 what the flag added.
+
+**`--exclude`** leaves out what you don't want to pack or run, typically a sample or a test harness that doesn't build
+on your machine. It applies after the other filters, so `--deps-of OrderGateway --exclude AotTestApp` keeps what
+OrderGateway needs, less AotTestApp. Excluding a project that others use (a library in the middle of a chain) keeps its
+users without it: they'd pack or build against the published package. `build` warns `kept-without-dependency`
+(refused by `--strict`) and names the whole branch to exclude instead:
+
+```
+Excluded Shared.Pricing.Models
+[WRN]   Kept without their dependency on the excluded projects (packing or running them may fail): Shared.Pricing. To leave out the whole branch: --exclude Shared.Pricing.Models OrderGateway Shared.Pricing
+```
 
 Names are matched case-insensitively against the scanned projects. An unknown name fails with exit code `2`.
 
@@ -354,7 +366,7 @@ Depth 3/3:
   LrSample.ReportCli       executable  1.1.0           Reporting.sln
 ```
 
-Options: `--root`, `--users-of`, `--deps-of`, `--union`, `--git-changes`, `--with-services`, `--include-external`,
+Options: `--root`, `--users-of`, `--deps-of`, `--union`, `--git-changes`, `--with-services`, `--exclude`, `--include-external`,
 `--tests` and `--csproj`, as for [`build`](#build); unknown names fail the same way (exit code `2`). The options about
 the files `build` writes (`--local-nuget`, `--config`, `--plot`) are rejected. `list` never queries the NuGet sources, so
 the versions are the csproj ones (evaluated by MSBuild where needed, unless `--csproj`); depths count within the listed
@@ -894,7 +906,8 @@ libraries producing a package. `pack`, `go` and `up` don't read `Build`.
 
 `build` rewrites this file from scratch, so hand edits last until the next `build`. To leave a project
 out of a repack, run `build` again with a narrower selection (`--deps-of` the services you need,
-`--users-of` the library you changed), then `pack`. To leave an executable out of `up`, use `up --exclude`. (Configs from before 2026-10-24 may still hold `SkipRepack` / `SkipRun` fields:
+`--users-of` the library you changed, or `--exclude` the project), then `pack`. To leave an executable out of `up`
+only, use `up --exclude`. (Configs from before 2026-10-24 may still hold `SkipRepack` / `SkipRun` fields:
 they are ignored, with an `unknown-config-field` warning.)
 
 ### `repack.config.json` — written by `pack`
@@ -1062,9 +1075,9 @@ Results:
 | `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C or `down`, `killed` after the grace period), `exitCode`, `log`, and `failure` when its build failed (as `pack`'s, step `build`). |
 | `down` | `state` (the `up.json` looked at), `stopped`, `up` (`null` when none was running): `pid`, `started`, `config`, `logs`, `stopTimeout` (seconds), `services` started so far (`project`, `pid` of `dotnet run`, `log`, `exitCode` once it exited). |
 
-`leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" |
+`leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" | "excluded" |
 "name-collision" | "cycle", "projects": [...], "paths": [...], "dependents": [...] }`. `paths` (relative to the root) is
-set for a name collision; `dependents`, the projects kept without their dependency on these, for a collision or a cycle.
+set for a name collision; `dependents`, the projects kept without their dependency on these, for a collision, a cycle or an exclusion.
 
 ```powershell
 $build = lrun build --deps-of OrderGateway --json | ConvertFrom-Json
@@ -1080,7 +1093,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 |---|---|---|
 | `name-collision` | Several projects share a name: all left out of the config. | fails |
 | `cycle-removed` | A dependency cycle left out of the config. | fails |
-| `kept-without-dependency` | Projects kept without their dependency on a collision or a cycle (packing them may fail). | fails |
+| `kept-without-dependency` | Projects kept without their dependency on a collision, a cycle or an excluded project (packing them may fail). | fails |
 | `evaluation-failed` | MSBuild could not evaluate a project: its version and package id may be wrong. | fails |
 | `unevaluated-package-id`, `unevaluated-version` | A package id or version set through MSBuild, read without it (`--csproj`, or it failed). | fails |
 | `source-query-failed` | A NuGet source could not be queried (unreachable, or a local folder that doesn't exist): some latest versions may be missing. | fails |

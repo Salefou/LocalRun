@@ -139,6 +139,9 @@ Rebuild the config with each line and check the `Name`s in `localrun.config.json
 | `… --users-of LrSample.Orphan` | Orphan only (the edge from Reports is dropped) |
 | `… --include-external --users-of LrSample.Orphan` | Orphan, Reports, ReportCli |
 | `… --users-of Nope` | rejected, exit code 2: `Unknown project(s) for '--users-of': Nope` |
+| `… --exclude LrSample.Pricing.Models` | all but Pricing.Models (`Excluded LrSample.Pricing.Models`, `Kept 10 of 11 (--exclude LrSample.Pricing.Models)`), with a `[WRN]` naming Pricing, Reports, RiskService as kept without it and ending `To leave out the whole branch: --exclude LrSample.Pricing.Models LrSample.OrderGateway LrSample.Pricing LrSample.ReportCli LrSample.Reports LrSample.RiskService`; with `--strict`, exit code 5. `lrun status` then shows `Built with: --exclude LrSample.Pricing.Models` and `Left out (excluded): LrSample.Pricing.Models; kept without it: …` |
+| `… --exclude` and that branch | Primitives, Logging, Island.Core, Island.App, Orphan (`Kept 5 of 11`), no warning; exit code 0 with `--strict` |
+| `… --exclude Nope` | rejected, exit code 2: `Unknown project(s) for '--exclude': Nope` |
 | `… --retain-depends-on LrSample.Logging` | rejected, exit code 2 (old flag name) |
 
 `lrun list` takes the same filters and prints what `build` would keep, writing nothing (`.lrun/` stays as it was):

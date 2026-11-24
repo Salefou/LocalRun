@@ -15,7 +15,7 @@ public sealed record LeftOutProjects(string Reason, IReadOnlyList<string> Projec
     /// <summary>For a name collision: the paths of the projects sharing the name, relative to the root.</summary>
     public IReadOnlyList<string>? Paths { get; init; }
 
-    /// <summary>For a name collision or a cycle: the projects kept in the config without their dependency on these.</summary>
+    /// <summary>For a name collision, a cycle or an exclusion: the projects kept in the config without their dependency on these.</summary>
     public IReadOnlyList<string>? Dependents { get; init; }
 }
 
@@ -101,6 +101,23 @@ public class ConfigBuilder
                 string.Join(", ", usersOf), string.Join(", ", options.RetainIsDependencyOf));
         }
 
+        // After the other filters (they see the full graph), before the cycles (excluding a project may break one)
+        DependencyGraph.ExcludedProjects? excluded = null;
+        if (options.Exclude != null)
+        {
+            excluded = graph.Exclude(options.Exclude);
+            if (excluded.Projects.Count != 0)
+                logger.LogInformation("Excluded {Projects}", Text.Abbreviate(excluded.Projects));
+            if (excluded.Dependents.Count != 0)
+            {
+                // Strict all the same (user feedback, 2026-11-24): exclude the whole branch, or check the rest builds without it
+                logger.LogWarning(DiagnosticEvents.KeptWithoutDependency,
+                    "  Kept without their dependency on the excluded projects (packing or running them may fail): {Dependents}. " +
+                    "To leave out the whole branch: --exclude {Branch}",
+                    Text.Abbreviate(excluded.Dependents), string.Join(" ", excluded.Projects.Concat(excluded.Users)));
+            }
+        }
+
         // After the filters, so they still see the real graph; a cycle cannot be ordered, so it is left out
         var cycles = graph.RemoveCycles();
         foreach (var cycle in cycles)
@@ -124,11 +141,11 @@ public class ConfigBuilder
                 logger.LogWarning(DiagnosticEvents.EmptySelection, "Nothing kept: the config holds no project");
         }
         return new ProjectSelection(projects, graph.ComputeNameToDepth(),
-            new BuildSummary(scanned.Count, LeftOut(graph, scanned, projects, cycles), gitChanges, csprojs));
+            new BuildSummary(scanned.Count, LeftOut(graph, scanned, projects, excluded, cycles), gitChanges, csprojs));
     }
 
     private static List<LeftOutProjects> LeftOut(DependencyGraph graph, List<ProjectNode> scanned, List<ProjectNode> projects,
-        List<DependencyGraph.DependencyCycle> cycles)
+        DependencyGraph.ExcludedProjects? excluded, List<DependencyGraph.DependencyCycle> cycles)
     {
         List<LeftOutProjects> leftOut = [];
         if (graph.LeftOutTests.Count != 0)
@@ -138,12 +155,15 @@ public class ConfigBuilder
 
         var kept = projects.Select(proj => proj.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var inCycles = cycles.SelectMany(cycle => cycle.Projects).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var wasExcluded = (excluded?.Projects ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var filtered = scanned.Select(proj => proj.Name)
-            .Where(name => !kept.Contains(name) && !inCycles.Contains(name))
+            .Where(name => !kept.Contains(name) && !inCycles.Contains(name) && !wasExcluded.Contains(name))
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
         if (filtered.Count != 0)
             leftOut.Add(new("filter", filtered));
+        if (excluded is { Projects.Count: > 0 })
+            leftOut.Add(new("excluded", excluded.Projects) { Dependents = excluded.Dependents });
 
         leftOut.AddRange(cycles.Select(cycle => new LeftOutProjects("cycle", cycle.Projects) { Dependents = cycle.Dependents }));
         return leftOut;
@@ -160,6 +180,7 @@ public class ConfigBuilder
         GitChanges = options.RetainGitChanges,
         Union = options.Union,
         WithServices = options.WithServices,
+        Exclude = options.Exclude,
         IncludeExternal = options.IncludeExternal,
         Tests = options.IncludeTests,
         Csproj = options.CsprojVersionsOnly,
@@ -178,6 +199,7 @@ public class ConfigBuilder
         if (options.RetainIsDependencyOf != null) filters.Add($"--deps-of {string.Join(" ", options.RetainIsDependencyOf)}");
         if (options.Union) filters.Add("--union");
         if (options.WithServices) filters.Add("--with-services");
+        if (options.Exclude != null) filters.Add($"--exclude {string.Join(" ", options.Exclude)}");
         return filters.Count == 0 ? null : string.Join(", ", filters);
     }
 
@@ -251,7 +273,8 @@ public class ConfigBuilder
     /// <summary>A misspelt name would silently filter everything out: reject it, checked against the full graph.</summary>
     internal static void ValidateFilterNames(DependencyGraph graph, BuildConfigOptions options)
     {
-        foreach (var (flag, names) in new[] { ("--users-of", options.RetainDependsOn), ("--deps-of", options.RetainIsDependencyOf) })
+        foreach (var (flag, names) in new[] { ("--users-of", options.RetainDependsOn), ("--deps-of", options.RetainIsDependencyOf),
+            ("--exclude", options.Exclude) })
         {
             if (names == null) continue;
             var collided = graph.FindCollided(names);

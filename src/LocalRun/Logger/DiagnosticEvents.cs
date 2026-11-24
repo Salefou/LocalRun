@@ -29,7 +29,7 @@ public static class DiagnosticEvents
         "A dependency cycle left out of the config.");
 
     public static readonly EventId KeptWithoutDependency = Code(102, "kept-without-dependency", strict: true,
-        "Projects kept in the config without their dependency on a collision or a cycle: packing them may fail.");
+        "Projects kept in the config without their dependency on a collision, a cycle or an excluded project: packing them may fail.");
 
     public static readonly EventId EvaluationFailed = Code(103, "evaluation-failed", strict: true,
         "MSBuild could not evaluate a project: its version and package id may be wrong.");

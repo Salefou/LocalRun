@@ -28,6 +28,10 @@ public class BuildRecord
 
     public bool WithServices { get; init; }
 
+    /// <summary>The names given to <c>--exclude</c>; absent without it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Exclude { get; init; }
+
     public bool IncludeExternal { get; init; }
 
     public bool Tests { get; init; }

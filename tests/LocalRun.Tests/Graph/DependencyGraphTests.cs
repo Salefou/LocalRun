@@ -226,6 +226,45 @@ public class DependencyGraphTests
     private static IEnumerable<string> Names(DependencyGraph graph) => graph.AllProjects.Select(p => p.Name).Order();
 
     [Fact]
+    public void Exclude_RemovesTheProjects_AndKeepsTheirUsersWithoutThem()
+    {
+        var graph = FilterGraph();
+
+        var excluded = graph.Exclude(["x"]);
+
+        Assert.Equal(["X"], excluded.Projects);
+        Assert.Equal(["Mid", "Side"], excluded.Dependents);
+        Assert.Equal(["Mid", "Side", "Y"], excluded.Users); // the whole branch, Y through Mid
+        Assert.Equal(["Base", "Mid", "Other", "Side", "Y"], Names(graph));
+        Assert.Equal(0, graph.ComputeNameToDepth()["Mid"]);
+    }
+
+    [Fact]
+    public void Exclude_IgnoresWhatAFilterLeftOutAlready()
+    {
+        var graph = FilterGraph();
+        graph.Retain(usersOf: null, depsOf: ["Other"], union: false);
+
+        var excluded = graph.Exclude(["Side", "Other"]);
+
+        Assert.Equal(["Other"], excluded.Projects);
+        Assert.Empty(excluded.Dependents);
+        Assert.Equal(["Base"], Names(graph));
+    }
+
+    [Fact]
+    public void Exclude_OfAnEndOfLineProject_KeepsNobodyWithoutIt()
+    {
+        var graph = FilterGraph();
+
+        var excluded = graph.Exclude(["Y", "Side"]);
+
+        Assert.Equal(["Side", "Y"], excluded.Projects);
+        Assert.Empty(excluded.Dependents);
+        Assert.Empty(excluded.Users);
+    }
+
+    [Fact]
     public void Retain_BothFlags_KeepsOnlyTheProjectsBetweenThem()
     {
         var graph = FilterGraph();
