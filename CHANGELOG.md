@@ -7,6 +7,13 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-24
+
+`go` checks every package against the plan: one packed under another version (MinVer, Nerdbank.GitVersioning) warns,
+one never produced is `not-packed`. `pack` plans only the libraries that produce a package, and `build` now reads
+ASP.NET Core and worker services as executables and no longer crashes on `<PackageReference Remove="…" />`.
+Breaking: `pack` no longer plans executables (`up` builds them from source).
+
 ### Added
 
 - `go` checks the version of every package it produced against the plan. A project whose build sets the version in a
@@ -23,16 +30,15 @@ bumps the minor version, anything else the patch.
 
 ### Changed
 
+- **Breaking:** `pack` plans libraries only: executables are left out of `repack.config.json`, as nothing consumes
+  them as packages and `up` builds them from source. Packing them could stop the whole chain (a native AOT app, a test harness) and
+  filled the feed with packages nobody uses; `go` no longer counts the Web projects the SDK refused to pack. `build`
+  no longer looks up the latest version of executables, which found strangers' packages of the same name on nuget.org.
 - `pack` plans only the libraries that produce a package: not those with `<IsPackable>false</IsPackable>` (helpers next
   to samples), nor test projects kept with `--tests` unless their csproj sets `IsPackable` true. They stay in the
   graph, their users building them from source, and still order the plan. `build` records it as `"Packable"` in
   `localrun.config.json` (only when not the default), asks MSBuild for `IsPackable` where the csproj can't tell (a
   `Directory.Build.props` setting it), and no longer looks up their latest version; `verify` no longer expects them.
-
-- `pack` plans libraries only: executables are left out of `repack.config.json`, as nothing consumes them as packages
-  and `up` builds them from source. Packing them could stop the whole chain (a native AOT app, a test harness) and
-  filled the feed with packages nobody uses; `go` no longer counts the Web projects the SDK refused to pack. `build`
-  no longer looks up the latest version of executables, which found strangers' packages of the same name on nuget.org.
 
 ### Fixed
 
@@ -353,7 +359,8 @@ The tool was used from source before 0.1.0, under other names: the tool `localru
 fields were removed (configs holding them still load). Local builds installed before 0.1.0 are versioned
 `1.0.0-local-…`, which sorts above 0.1.0: run `dotnet tool uninstall -g LocalRun` once before installing a release.
 
-[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Salefou/LocalRun/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Salefou/LocalRun/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Salefou/LocalRun/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Salefou/LocalRun/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Salefou/LocalRun/compare/v0.4.0...v0.5.0
