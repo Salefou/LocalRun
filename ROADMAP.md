@@ -236,9 +236,10 @@ from `repack.config.json` by hand; `up` then stopped on a sample whose build nee
 Decided (user feedback, 2026-11-21): a failure suggests the command that gets past it, where the user meets the need,
 with the exact names. Warning before running was turned down: those failures come from the machine or from a
 project's own build tricks, which the tool can't foresee.
-- **`up`**: after a build failure, `lrun up --exclude <the failed ones>`. After a service exits with an error once
+- ~~**`up`**: after a build failure, `lrun up --exclude <the failed ones>`. After a service exits with an error once
   started too: the failing service is most likely the one just edited, so the hint is to run it on the side (from the
-  IDE, under the debugger) and the others with `--exclude`.
+  IDE, under the debugger) and the others with `--exclude`.~~ Done after 0.7.0: the hint keeps the run's options, and
+  is left out when nothing else would run; `--exclude` no longer assumes why (`Not running <names> (excluded)`).
 - **`build --exclude <names…>`**: leaves the named projects out of the selection, after the other filters; unknown
   names exit `2`, like the other filters. Not the `SkipRepack` / `SkipRun` fields removed on 2026-10-24 (`build`
   rewrote them away, see `docs/agents/history.md`): a flag is given again with each `build`. A new `build` flag, so

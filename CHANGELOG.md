@@ -7,6 +7,18 @@ bumps the minor version, anything else the patch.
 
 ## [Unreleased]
 
+### Added
+
+- `up` suggests the command that gets past a failure, with the exact names and the options of the run. When an
+  executable fails to build, it still starts nothing, and ends with `To start the others: lrun up --exclude <failed>`
+  (also in the JSON `error.message`). When a service exits with an error once started, `up` says to run it from the IDE
+  and the others with `lrun up --exclude <it>`, there and again in its final failure.
+
+### Changed
+
+- `up --exclude` logs `Not running <names> (excluded)`: it said "start them yourself (e.g. from your IDE to debug
+  them)", though a project may be excluded because it can't build.
+
 ## [0.7.0] - 2026-11-24
 
 `go` checks every package against the plan: one packed under another version (MinVer, Nerdbank.GitVersioning) warns,

@@ -537,12 +537,16 @@ public static class LocalRunCli
 
     private static async Task RunExecutablesAsync(CommandLineArgs args, CommandOutput output)
     {
-        string configPath = args.Value("--config") ?? DefaultConfigPath;
+        string? configOption = args.Value("--config");
+        string configPath = configOption ?? DefaultConfigPath;
         List<string>? exclude = args.Values("--exclude");
         List<string>? only = args.Values("--only");
-        string logsFolder = Path.GetFullPath(args.Value("--logs") ?? DefaultLogsFolder);
+        string? logsOption = args.Value("--logs");
+        string logsFolder = Path.GetFullPath(logsOption ?? DefaultLogsFolder);
         string? stopTimeoutOption = args.Value("--stop-timeout");
         args.EnsureAllConsumed();
+        string CommandExcluding(IReadOnlyCollection<string> failed) =>
+            UpCommandLine(configOption, only, [.. exclude ?? [], .. failed], logsOption, stopTimeoutOption);
         int? stopTimeout = stopTimeoutOption == null ? null
             : int.TryParse(stopTimeoutOption, NumberStyles.None, CultureInfo.InvariantCulture, out int seconds) ? seconds
             : throw new UsageException($"'--stop-timeout' must be a number of seconds, 0 or more (got '{stopTimeoutOption}').");
@@ -584,7 +588,8 @@ public static class LocalRunCli
             else if (upEvent is { Event: UpEvents.Exited, Project: { } exited, ExitCode: { } exitCode })
                 Record(services => [.. services.Select(service => service.Project == exited ? service with { ExitCode = exitCode } : service)]);
         }
-        var processor = new RunProcessor(logsFolder, OnEvent, stopTimeout == null ? null : TimeSpan.FromSeconds(stopTimeout.Value));
+        var processor = new RunProcessor(logsFolder, OnEvent, stopTimeout == null ? null : TimeSpan.FromSeconds(stopTimeout.Value),
+            CommandExcluding);
         state.Write(statePath);
         // lrun down sets it: the same stop as Ctrl+C
         using var stopEvent = OperatingSystem.IsWindows()
@@ -610,6 +615,32 @@ public static class LocalRunCli
             output.Result = new UpResult(logsFolder, services);
             output.Written.AddRange(services.Select(service => service.Log).OfType<string>());
         }
+    }
+
+    /// <summary>
+    /// An <c>up</c> command line with these options, as a failure suggests it: the options of the run (global ones aside),
+    /// each excluded name once. A value holding a space or a quote is quoted.
+    /// </summary>
+    internal static string UpCommandLine(string? config, IReadOnlyCollection<string>? only, IReadOnlyCollection<string> exclude,
+        string? logs, string? stopTimeout)
+    {
+        static string Quote(string value) => value.Length != 0 && !value.Any(c => char.IsWhiteSpace(c) || c == '"')
+            ? value
+            : $"\"{value.Replace("\"", "\\\"")}\"";
+
+        var line = new List<string> { CommandName, "up" };
+        if (config != null)
+            line.AddRange(["--config", Quote(config)]);
+        if (only is { Count: > 0 })
+            line.AddRange(["--only", .. only.Select(Quote)]);
+        var excluded = exclude.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (excluded.Count != 0)
+            line.AddRange(["--exclude", .. excluded.Select(Quote)]);
+        if (logs != null)
+            line.AddRange(["--logs", Quote(logs)]);
+        if (stopTimeout != null)
+            line.AddRange(["--stop-timeout", stopTimeout]);
+        return string.Join(' ', line);
     }
 
     /// <summary>How long <c>down</c> waits beyond <c>up</c>'s grace period: the kills, the last output lines, the result.</summary>
