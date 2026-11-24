@@ -184,8 +184,9 @@ public class ConfigBuilder
     /// <summary>
     /// Records each project's highest version across the NuGet sources that apply to its folder, as a restore from
     /// there would see them: the local feed included when a NuGet.Config lists it, so your own builds count.
-    /// Skipped with <c>--csproj</c>, and for executables: <c>pack</c> leaves them out, and a lookup by their name would only
-    /// find strangers' packages (<c>TestApp</c>, <c>ConsoleDemo</c> on nuget.org).
+    /// Skipped with <c>--csproj</c>, and for projects producing no package (executables, <c>IsPackable</c> false, tests):
+    /// <c>pack</c> leaves them out, and a lookup by their name would only find strangers' packages (<c>TestApp</c>,
+    /// <c>ConsoleDemo</c> on nuget.org).
     /// </summary>
     public async Task FetchLatestVersionsAsync(LocalRunConfig config)
     {
@@ -196,7 +197,7 @@ public class ConfigBuilder
         // missing (nothing packed yet), so a NuGet.Config listing it doesn't warn about it
         string? localFeed = string.IsNullOrEmpty(config.LocalNugetPath) ? null : config.LocalNugetPath;
         // Several projects at once (each querying its sources at once); logged afterwards, in config order
-        var libraries = config.Projects.Where(proj => proj.Type != "executable").ToList();
+        var libraries = config.Projects.Where(proj => proj.ProducesPackage).ToList();
         var latestPerProject = new NuGetVersion?[libraries.Count];
         await Parallel.ForEachAsync(Enumerable.Range(0, libraries.Count), new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentLookups },
             async (i, _) =>

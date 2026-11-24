@@ -60,6 +60,50 @@ public sealed class FeedVerifierTests : IDisposable
     }
 
     [Fact]
+    public void LibrariesProducingNoPackage_AreNotExpected()
+    {
+        var utils = Project("Utils");
+        var tests = Project("Lib.Tests");
+        var config = new LocalRunConfig
+        {
+            RootPath = root, LocalNugetPath = Feed,
+            Projects = [Project("Lib"), new ProjectNode { Name = utils.Name, Path = utils.Path, Type = "library", Packable = false,
+                Version = utils.Version, Dependencies = [] },
+                new ProjectNode { Name = tests.Name, Path = tests.Path, Type = "library", Test = true, Version = tests.Version, Dependencies = [] }],
+        };
+
+        var check = Assert.Single(FeedVerifier.Verify(config));
+
+        Assert.Equal("Lib", check.Project);
+    }
+
+    [Fact]
+    public void AProjectGoFoundProducedNoPackage_IsNotExpected()
+    {
+        var config = new LocalRunConfig { RootPath = root, LocalNugetPath = Feed, Projects = [Project("Lib"), Project("Helpers")] };
+        var plan = new RepackConfig
+        {
+            LocalNugetPath = Feed,
+            Clean = false,
+            RepackTrees = [new RepackTree { Projects = [Planned("Lib"), Planned("Helpers", notPacked: true)] }],
+        };
+
+        var check = Assert.Single(FeedVerifier.Verify(config, plan));
+
+        Assert.Equal("Lib", check.Project);
+    }
+
+    private ProjectRepack Planned(string name, bool notPacked = false) => new()
+    {
+        Name = name,
+        PathToCsproj = Path.Combine(root, "src", name, $"{name}.csproj"),
+        Depth = 0,
+        FromVersion = ProjectVersion.Parse("1.0.0"),
+        ToVersion = ProjectVersion.Parse("1.0.0-local.1"),
+        NotPacked = notPacked,
+    };
+
+    [Fact]
     public void APackageWrittenAfterTheFiles_IsOk()
     {
         var lib = Project("Lib");

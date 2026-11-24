@@ -66,6 +66,10 @@
         "ToVersion": {
           "description": "The version it is packed as.",
           "$ref": "#/$defs/ProjectVersion"
+        },
+        "NotPacked": {
+          "description": "Set by go when dotnet pack produced no package for it (warning not-packed): verify no longer expects it. The next go packs it again and warns again. Absent when false.",
+          "type": "boolean"
         }
       },
       "required": ["PathToCsproj", "Name", "Depth", "FromVersion", "ToVersion"],

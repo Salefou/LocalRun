@@ -47,6 +47,7 @@ public class MsBuildEvaluatorTests : IDisposable
     [InlineData("Directory.Build.props", "<PropertyGroup><VersionPrefix>9.0.0</VersionPrefix></PropertyGroup>", true)]
     [InlineData("Directory.Build.targets", "<PropertyGroup><AssemblyName>Acme.$(MSBuildProjectName)</AssemblyName></PropertyGroup>", true)]
     [InlineData("Directory.Build.props", """<Import Project="common.props" />""", true)]
+    [InlineData("Directory.Build.props", "<PropertyGroup><IsPackable>false</IsPackable></PropertyGroup>", true)]
     [InlineData("Directory.Build.props", "<PropertyGroup><LangVersion>latest</LangVersion></PropertyGroup>", false)]
     public void ADirectoryBuildFileAbove_MattersOnlyWhenItSetsIdentityOrImports(string file, string body, bool expected)
     {
@@ -70,12 +71,21 @@ public class MsBuildEvaluatorTests : IDisposable
             {
               "Properties": {
                 "Version": "10.0.0-preview.1",
-                "PackageId": "Acme.Lib"
+                "PackageId": "Acme.Lib",
+                "IsPackable": "false"
               }
             }
             """);
 
-        Assert.Equal(new EvaluatedProject("10.0.0-preview.1", "Acme.Lib"), parsed);
+        Assert.Equal(new EvaluatedProject("10.0.0-preview.1", "Acme.Lib", IsPackable: false), parsed);
+    }
+
+    [Fact]
+    public void Parse_LeavesIsPackableUnknown_WhenItIsNotABoolean()
+    {
+        var parsed = MsBuildEvaluator.Parse("""{ "Properties": { "Version": "1.0.0", "PackageId": "Lib", "IsPackable": "" } }""");
+
+        Assert.Null(parsed!.IsPackable);
     }
 
     [Theory]
@@ -106,6 +116,20 @@ public class MsBuildEvaluatorTests : IDisposable
         Assert.Equal("5.1.0", shared.Version.AsVersionString());
         Assert.Equal("Acme.Shared", shared.PackageId);
         Assert.Equal("1.2.3", graph.AllProjects.Single(p => p.Name == "Plain").Version.AsVersionString());
+    }
+
+    [Fact]
+    public void FromSource_RecordsANonPackableLibrary_FromWhatMsBuildSays()
+    {
+        Csproj("Utils", "Utils", "<PropertyGroup><PackageId>$(Prefix).Utils</PackageId></PropertyGroup>");
+        string[] csprojs = Directory.GetFiles(root, "*.csproj", SearchOption.AllDirectories);
+
+        var graph = DependencyGraph.FromSource(root, csprojs, includeProjectsWithoutSolutions: true,
+            evaluate: _ => new EvaluatedProject("1.0.0", "Acme.Utils", IsPackable: false));
+
+        var utils = graph.AllProjects.Single();
+        Assert.False(utils.Packable);
+        Assert.False(utils.ProducesPackage);
     }
 
     [Fact]
@@ -141,6 +165,16 @@ public class MsBuildEvaluatorTests : IDisposable
         string csproj = Csproj("Lib", "Lib", "<PropertyGroup><AssemblyName>Acme.Lib</AssemblyName></PropertyGroup>");
 
         Assert.True(Needs(csproj));
-        Assert.Equal(new EvaluatedProject("7.8.9", "Acme.Lib"), MsBuildEvaluator.Evaluate(csproj));
+        Assert.Equal(new EvaluatedProject("7.8.9", "Acme.Lib", IsPackable: true), MsBuildEvaluator.Evaluate(csproj));
+    }
+
+    [Fact]
+    public void Evaluate_SeesAnIsPackableSetAboveTheProject()
+    {
+        Props("", "Directory.Build.props", "<PropertyGroup><IsPackable>false</IsPackable></PropertyGroup>");
+        string csproj = Csproj("Utils", "Utils");
+
+        Assert.True(Needs(csproj));
+        Assert.False(MsBuildEvaluator.Evaluate(csproj)!.IsPackable);
     }
 }

@@ -16,7 +16,9 @@ Read before changing `StatusText` / `StatusResult`, `BuildRecord` / `ConfigBuild
   Check names (`dotnet`, `settings`, `root`, `local-feed`, `source`, `git-base`, `git-fetch`) are a contract like codes.
   `fail` = a command will fail (exit 1, `doctor-failed`); `warn` = works but may surprise (exit 0). Never fixes anything.
 - **`verify`** (`FeedVerifier`, ROADMAP item 5, user feedback, 2026-11-07): libraries only (`up` builds executables from
-  source). Stale = csproj version ahead of the feed's newest by the number alone (as `BaseVersion`), or a file of the
+  source), and since item 11 only those producing a package (`ProjectNode.ProducesPackage`, `docs/agents/versioning.md`)
+  less those the plan marks `NotPacked` (`verify --repack-config`, read when the file exists; `build --verify` reads no
+  plan: a fresh `build` calls for a new one anyway). Stale = csproj version ahead of the feed's newest by the number alone (as `BaseVersion`), or a file of the
   project's folder (without `bin`, `obj`, dot-folders, nested projects) newer than that package. `verify` reads the config,
   `build --verify` checks the one just written; same result object. `package-missing` / `package-stale` are not strict:
   `verify` fails on them itself.

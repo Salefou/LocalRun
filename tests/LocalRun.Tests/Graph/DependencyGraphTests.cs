@@ -434,9 +434,48 @@ public class DependencyGraphTests
     [InlineData("""<Project><Sdk Name="Microsoft.NET.Sdk.Web" /></Project>""", true)]
     [InlineData("""<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><OutputType>Library</OutputType></PropertyGroup></Project>""", false)]
     [InlineData("""<Project Sdk="Microsoft.NET.Sdk.Razor"></Project>""", false)]
+    [InlineData("""<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly"></Project>""", true)]
     public void IsExecutable_FollowsOutputType_ElseTheSdkDefault(string csproj, bool expected)
     {
         Assert.Equal(expected, DependencyGraph.IsExecutable(XDocument.Parse(csproj)));
+    }
+
+    [Theory]
+    // A library: produces a package unless IsPackable is false (MSBuild's value first, else the csproj's last one)
+    [InlineData("", false, null, null)]
+    [InlineData("<IsPackable>false</IsPackable>", false, null, false)]
+    [InlineData("<IsPackable>true</IsPackable><IsPackable>false</IsPackable>", false, null, false)]
+    [InlineData("<IsPackable>$(Pack)</IsPackable>", false, null, null)]
+    [InlineData("", false, false, false)]
+    [InlineData("<IsPackable>false</IsPackable>", false, true, null)]
+    // A test project: produces none unless its own csproj sets IsPackable true (the test SDK's default comes from a package)
+    [InlineData("", true, null, null)]
+    [InlineData("", true, true, null)]
+    [InlineData("<IsPackable>true</IsPackable>", true, null, true)]
+    [InlineData("<IsPackable>false</IsPackable>", true, null, null)]
+    public void ReadPackable_IsNull_WhenItIsTheDefault(string properties, bool test, bool? evaluated, bool? expected)
+    {
+        var csproj = XDocument.Parse($"""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>{properties}</PropertyGroup></Project>""");
+
+        Assert.Equal(expected, DependencyGraph.ReadPackable(csproj, test, evaluated));
+    }
+
+    [Theory]
+    [InlineData("library", false, null, true)]
+    [InlineData("library", false, false, false)]
+    [InlineData("library", true, null, false)]
+    [InlineData("library", true, true, true)]
+    [InlineData("executable", false, null, false)]
+    [InlineData("executable", false, true, false)]
+    public void ProducesPackage_LibrariesOnly_AsPackableSays(string type, bool test, bool? packable, bool expected)
+    {
+        var project = new ProjectNode
+        {
+            Name = "P", Path = "P/P.csproj", Type = type, Test = test, Packable = packable,
+            Version = ProjectVersion.Parse("1.0.0"), Dependencies = [],
+        };
+
+        Assert.Equal(expected, project.ProducesPackage);
     }
 
     [Fact]

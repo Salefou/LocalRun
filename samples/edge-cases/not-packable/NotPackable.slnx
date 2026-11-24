@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="LrEdge.Helpers/LrEdge.Helpers.csproj" />
+  <Project Path="LrEdge.Packed/LrEdge.Packed.csproj" />
+</Solution>

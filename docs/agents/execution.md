@@ -17,6 +17,12 @@ why.
   and `ExecutePlanAsync` writes it back into `repack.config.json` (after a failure too), so the result's `to`, `status`
   and a second `go` see what the feed holds. Covers any tool (Nerdbank.GitVersioning has no clean override). Seen on
   OpenTelemetry: planned `1.21.1-dev.1`, packed `1.21.1-alpha.0.38` by MinVer, silently.
+- **No package produced** (ROADMAP item 11, user feedback, 2026-11-21/22): a pack that succeeds but leaves no `.nupkg`
+  (`MoveToFeed` returns null: `IsPackable` false where `build` couldn't read it) is `not-packed`, not `packed`, warns
+  `not-packed` (**not strict**: nothing is wrong with the project), and `RecordPackedVersions` sets `NotPacked` on its plan
+  entry (cleared once it packs). It stays in the plan: the next `go` tries it and warns again until the csproj says
+  `IsPackable` false (being reminded is fine). The mark goes into the plan, `go`'s own output, never into
+  `localrun.config.json`: a step writes its own output only (user feedback, 2026-11-22). `verify` reads it from there.
 - **Solution properties**: every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments` (`SolutionDir`
   etc. of the project's solution, `ProjectRepack.SolutionPath` / `ProjectNode.SolutionPath`), since projects are built
   alone: an `OutputPath` of `$(SolutionDir)\bin\…` otherwise lands at the drive root (`C:\bin`). Reported 2026-10-26.

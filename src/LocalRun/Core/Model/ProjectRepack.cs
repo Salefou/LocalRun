@@ -25,6 +25,12 @@ public class ProjectRepack
     /// <summary>The planned version; after <c>go</c>, the version actually packed when its build set another one.</summary>
     public required ProjectVersion ToVersion { get; set; }
 
+    /// <summary>
+    /// Set by <c>go</c> when <c>dotnet pack</c> produced no package for it (written only when true): <c>verify</c> no longer
+    /// expects it. Still packed by the next <c>go</c>, which warns again until the csproj says <c>IsPackable</c> false.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool NotPacked { get; set; }
 
     public override string ToString()
     {

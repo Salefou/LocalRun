@@ -114,11 +114,15 @@
           "type": ["string", "null"]
         },
         "Type": {
-          "description": "executable when <OutputType> is Exe or WinExe, or, without an <OutputType>, the project SDK is Microsoft.NET.Sdk.Web or Microsoft.NET.Sdk.Worker; else library.",
+          "description": "executable when <OutputType> is Exe or WinExe, or, without an <OutputType>, the project SDK is Microsoft.NET.Sdk.Web, Microsoft.NET.Sdk.Worker or Microsoft.NET.Sdk.BlazorWebAssembly; else library.",
           "enum": ["library", "executable"]
         },
         "Test": {
           "description": "A test project, kept with build --tests. Absent when false.",
+          "type": "boolean"
+        },
+        "Packable": {
+          "description": "Whether the project produces a package, only when it isn't the default: false for a library with <IsPackable> false (as MSBuild evaluates it, else the csproj), true for a test project whose csproj sets <IsPackable> true. pack plans the libraries producing a package, never an executable; verify expects only those.",
           "type": "boolean"
         },
         "Version": {
@@ -126,7 +130,7 @@
           "$ref": "#/$defs/ProjectVersion"
         },
         "LatestVersion": {
-          "description": "The highest version on the project's NuGet sources and the local feed; pack starts from it. Absent with build --csproj, for an executable (never packed), or when none was found.",
+          "description": "The highest version on the project's NuGet sources and the local feed; pack starts from it. Absent with build --csproj, for a project producing no package (an executable, Packable false, a test project), or when none was found.",
           "$ref": "#/$defs/ProjectVersion"
         },
         "Dependencies": {

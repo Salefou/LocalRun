@@ -170,9 +170,13 @@
           "description": "status: the highest version build found on the NuGet sources and the local feed; null when none was found, with build --csproj, and always in list (it never queries them).",
           "type": ["string", "null"]
         },
-        "test": { "description": "A test project, kept with --tests.", "type": "boolean" }
+        "test": { "description": "A test project, kept with --tests.", "type": "boolean" },
+        "packable": {
+          "description": "Whether it produces a package, so pack plans it: a library unless IsPackable is false, a test project only when its csproj sets IsPackable true, never an executable.",
+          "type": "boolean"
+        }
       },
-      "required": ["name", "packageId", "type", "depth", "version", "path", "solution", "dependencies", "latestVersion", "test"],
+      "required": ["name", "packageId", "type", "depth", "version", "path", "solution", "dependencies", "latestVersion", "test", "packable"],
       "additionalProperties": false
     },
     "StatusResult": {
@@ -339,8 +343,8 @@
         "from": { "type": "string" },
         "to": { "type": "string" },
         "status": {
-          "description": "planned (dry run), packed, failed, or skipped (not reached: a depth starts once the previous one is packed).",
-          "enum": ["planned", "packed", "failed", "skipped"]
+          "description": "planned (dry run), packed, not-packed (the pack succeeded but produced no package: warning not-packed), failed, or skipped (not reached: a depth starts once the previous one is packed).",
+          "enum": ["planned", "packed", "not-packed", "failed", "skipped"]
         },
         "durationMs": { "description": "Time in its dotnet commands, or null when none ran.", "type": ["integer", "null"] },
         "failure": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/DotnetFailure" }] }

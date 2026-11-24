@@ -55,6 +55,54 @@ public sealed class RepackConfigBuilderTests : IDisposable
     }
 
     [Fact]
+    public async Task LibrariesProducingNoPackage_AreLeftOut_ButStillOrderTheOthers()
+    {
+        // Core <- Utils (IsPackable false) <- Api: Api still packs after Core, as it does through Utils
+        var utils = new ProjectNode
+        {
+            Name = "Utils", Path = "Utils/Utils.csproj", Type = "library", Packable = false,
+            Version = ProjectVersion.Parse("1.0.0"), Dependencies = ["Core"],
+        };
+        var tests = new ProjectNode
+        {
+            Name = "Core.Tests", Path = "Core.Tests/Core.Tests.csproj", Type = "library", Test = true,
+            Version = ProjectVersion.Parse("1.0.0"), Dependencies = ["Core"],
+        };
+        var packedTests = new ProjectNode
+        {
+            Name = "Core.Testing", Path = "Core.Testing/Core.Testing.csproj", Type = "library", Test = true, Packable = true,
+            Version = ProjectVersion.Parse("1.0.0"), Dependencies = ["Core"],
+        };
+
+        var plan = await Plan(new BumpOptions { Suffix = "local" },
+            Project("Core", "1.0.0"), utils, Project("Api", "1.0.0", null, "Utils"), tests, packedTests);
+
+        Assert.Equal(["Api", "Core", "Core.Testing"], plan.Keys.Order());
+        Assert.Equal(0, plan["Core"].Depth);
+        Assert.Equal(2, plan["Api"].Depth);
+    }
+
+    [Fact]
+    public async Task ATreeOfNonPackableLibrariesOnly_IsNoTree()
+    {
+        var config = new LocalRunConfig
+        {
+            RootPath = root, LocalNugetPath = Feed,
+            Projects = [Project("Lib", "1.0.0"), new ProjectNode
+            {
+                Name = "Samples", Path = "Samples/Samples.csproj", Type = "library", Packable = false,
+                Version = ProjectVersion.Parse("1.0.0"), Dependencies = [],
+            }],
+        };
+
+        var repackConfig = await new RepackConfigBuilder(_ => Cache)
+            .BuildRepackConfig(config, new RepackOptions { BumpOptions = new BumpOptions { Suffix = "local" }, CleanBeforeRestore = false });
+
+        var tree = Assert.Single(repackConfig.RepackTrees);
+        Assert.Equal("Lib", Assert.Single(tree.Projects).Name);
+    }
+
+    [Fact]
     public async Task LatestVersion_IsTheBase_WhenRecorded()
     {
         var plan = await Plan(new BumpOptions { BumpType = BumpType.Minor, Suffix = "alpha" },

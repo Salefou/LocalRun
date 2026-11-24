@@ -6,8 +6,8 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
 
-/// <summary>What MSBuild makes of a project: its version and package id, after every props file and <c>$(…)</c>.</summary>
-public sealed record EvaluatedProject(string? Version, string? PackageId);
+/// <summary>What MSBuild makes of a project: its version, package id and <c>IsPackable</c>, after every props file and <c>$(…)</c>.</summary>
+public sealed record EvaluatedProject(string? Version, string? PackageId, bool? IsPackable = null);
 
 /// <summary>
 /// Asks MSBuild (<c>dotnet msbuild -getProperty</c>, about a second per project) for what the csproj XML alone cannot
@@ -23,11 +23,11 @@ public static class MsBuildEvaluator
     /// <summary>Properties the graph reads from a project; an imported file setting any of them changes the result.</summary>
     private static readonly HashSet<string> IdentityProperties = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Version", "VersionPrefix", "VersionSuffix", "PackageId", "AssemblyName",
+        "Version", "VersionPrefix", "VersionSuffix", "PackageId", "AssemblyName", "IsPackable",
     };
 
     /// <summary>
-    /// Whether the csproj XML alone cannot give the project's version and package id: they hold a <c>$(…)</c>, the project
+    /// Whether the csproj XML alone cannot give the project's version, package id and <c>IsPackable</c>: they hold a <c>$(…)</c>, the project
     /// imports other files, or a <c>Directory.Build.props/targets</c> above it sets them or imports other files.
     /// </summary>
     /// <param name="folderCache">Whether the files of a folder (and above) matter, to read each only once; share it across projects.</param>
@@ -83,7 +83,7 @@ public static class MsBuildEvaluator
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var arg in new[] { "msbuild", csproj, "-getProperty:Version,PackageId", "-nologo" })
+        foreach (var arg in new[] { "msbuild", csproj, "-getProperty:Version,PackageId,IsPackable", "-nologo" })
             psi.ArgumentList.Add(arg);
 
         try
@@ -124,7 +124,8 @@ public static class MsBuildEvaluator
             string? Value(string name) => properties.TryGetProperty(name, out var value) && value.GetString() is { Length: > 0 } text
                 ? text.Trim()
                 : null;
-            return new EvaluatedProject(Value("Version"), Value("PackageId"));
+            bool? isPackable = bool.TryParse(Value("IsPackable"), out bool packable) ? packable : null;
+            return new EvaluatedProject(Value("Version"), Value("PackageId"), isPackable);
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
         {

@@ -270,12 +270,13 @@ internal sealed record ListResult(
 /// <param name="Dependencies">As in the config: projects and packages it references, kept or not.</param>
 /// <param name="LatestVersion">The highest version <c>build</c> found on the NuGet sources (<c>status</c>); null in <c>list</c>, which never queries them.</param>
 /// <param name="Test">A test project, kept with <c>--tests</c>.</param>
+/// <param name="Packable">Whether it produces a package, so <c>pack</c> plans it (<see cref="ProjectNode.ProducesPackage"/>).</param>
 internal sealed record ListedProject(string Name, string PackageId, string Type, int Depth, string Version, string Path,
-    string? Solution, IReadOnlyList<string> Dependencies, string? LatestVersion, bool Test)
+    string? Solution, IReadOnlyList<string> Dependencies, string? LatestVersion, bool Test, bool Packable)
 {
     public static ListedProject Of(ProjectNode proj, int depth) =>
         new(proj.Name, proj.PackageIdOrName, proj.Type, depth, proj.Version.AsVersionString(), proj.Path, proj.SolutionPath,
-            proj.Dependencies, proj.LatestVersion?.AsVersionString(), proj.Test);
+            proj.Dependencies, proj.LatestVersion?.AsVersionString(), proj.Test, proj.ProducesPackage);
 }
 
 /// <summary>The result of <c>status</c>: what a config holds and the plan made from it, read from the files alone.</summary>
@@ -340,7 +341,7 @@ internal sealed record PackResult(string Plan, bool Packed, IReadOnlyList<Packag
         })]);
 }
 
-/// <param name="Status"><see cref="PackStatus"/>: <c>planned</c>, <c>packed</c>, <c>failed</c> or <c>skipped</c>.</param>
+/// <param name="Status"><see cref="PackStatus"/>: <c>planned</c>, <c>packed</c>, <c>not-packed</c>, <c>failed</c> or <c>skipped</c>.</param>
 /// <param name="DurationMs">Time in its <c>dotnet</c> commands, or null when none ran.</param>
 /// <param name="Failure">For a failed project: the failing step, its exit code and its error lines.</param>
 internal sealed record PackageReport(string Project, string PackageId, int Depth, string From, string To,

@@ -385,6 +385,47 @@ public sealed class JsonOutputTests : IDisposable
     }
 
     [Fact]
+    public async Task Go_ReportsAProjectThatProducedNoPackage_AndVerifyNoLongerExpectsIt()
+    {
+        string root = Path.Combine(workDir, "repos");
+        WriteCsproj(root, "Lib", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        WriteCsproj(root, "Helpers", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        // Where build --csproj can't see it: planned, then dotnet pack produces nothing
+        File.WriteAllText(Path.Combine(root, "Helpers", "Directory.Build.props"),
+            "<Project><PropertyGroup><IsPackable>false</IsPackable></PropertyGroup></Project>");
+        string feed = Path.Combine(workDir, "feed");
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", root, "--local-nuget", feed, "--include-external", "--csproj", "--json")).ExitCode);
+        Assert.Equal(LocalRunCli.ExitSuccess, (await LrunAsync("pack", "--dry-run", "--json")).ExitCode);
+
+        var go = await LrunAsync("go", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, go.ExitCode);
+        var packages = go.Json.GetProperty("result").GetProperty("packages").EnumerateArray()
+            .ToDictionary(package => package.GetProperty("project").GetString()!, package => package.GetProperty("status").GetString());
+        Assert.Equal("packed", packages["Lib"]);
+        Assert.Equal("not-packed", packages["Helpers"]);
+        var warning = Assert.Single(go.Json.GetProperty("diagnostics").EnumerateArray(),
+            diagnostic => diagnostic.GetProperty("code").GetString() == "not-packed");
+        Assert.Contains("Helpers", warning.GetProperty("message").GetString());
+        Assert.Contains("\"NotPacked\": true", File.ReadAllText(Path.Combine(workDir, ".lrun", "repack.config.json")));
+
+        var verify = await LrunAsync("verify", "--json");
+
+        Assert.Equal(LocalRunCli.ExitSuccess, verify.ExitCode);
+        Assert.Equal("Lib", Assert.Single(verify.Json.GetProperty("result").GetProperty("packages").EnumerateArray())
+            .GetProperty("project").GetString());
+    }
+
+    [Fact]
     public async Task Go_GivesACompileError_AsData()
     {
         string root = Path.Combine(workDir, "repos");
