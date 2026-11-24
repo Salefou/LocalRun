@@ -90,7 +90,8 @@ internal sealed class EventStream(TextWriter writer)
 }
 
 /// <param name="Code">A short stable string to branch on (<see cref="ErrorCodes"/>); the message is for people.</param>
-internal sealed record ReportError(string Code, string Message);
+/// <param name="Hint">The way past the failure (a command to run, an option to add), or null (<see cref="ErrorHint"/>).</param>
+internal sealed record ReportError(string Code, string Message, string? Hint = null);
 
 /// <summary>The error codes of the JSON output. Several codes share an exit code: the number is coarse, the name precise.</summary>
 internal static class ErrorCodes

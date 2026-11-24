@@ -31,8 +31,9 @@ why.
   skipped one is `skipped`, with `SkippedFor` the failed ones (`RepackExecutor.SkippedFor`): never packed, its package
   would declare the planned version of one that never reached the feed. A plan without `DependsOn` (before 0.7.1) skips
   everything after a failing depth. The run then throws one `DotnetFailedException` (exit 4): the failed projects with
-  their step, those skipped, and the hint from the CLI (`LocalRunCli.PackExcludeHint`: `To pack the others: add
-  '--exclude <failed>' to your 'lrun build', then run 'lrun pack' again.`), left out when every project failed. The
+  their step, those skipped, and attached (`ErrorHint`, printed on a `HINT` line and in `error.hint`) the hint from the
+  CLI (`LocalRunCli.PackExcludeHint`: `To pack the others: add '--exclude <failed>' to your 'lrun build', then run
+  'lrun pack' again.`), left out when every project failed (`RepackExecutor.HintFor`). The
   hint names the option, not a command line: the plan doesn't record which `build` made the config, by design ("files
   say what is, not how it was reached", CLAUDE.md; recording the command lines in the plan was rejected for it). The
   plan is written back as after any failure.
@@ -56,11 +57,13 @@ why.
   ends with the result (services `not-started`, exit 0). Each service's output also goes to `--logs`
   (`.lrun/logs/<name>.log`); with `--json`, `UpEvent`s stream through `EventStream`, closed before the one-line document
   so a late `exited` can't follow it.
-- **Failures suggest the way out** (ROADMAP item 9, user feedback, 2026-11-21): a failed build ends `up`'s error with
+- **Failures suggest the way out** (ROADMAP item 9, user feedback, 2026-11-21): a failed build's error gets the hint
   `To start the others: lrun up --exclude <failed>` (warning ahead was turned down: those failures come from the machine
   or a project's own build, which the tool can't foresee). A service exiting with an error before any stop logs, right
-  then, `To debug <it>: run it from your IDE, and the others with: lrun up --exclude <it>` (the failing one is most
-  likely the one just edited), and the final failure repeats it. The command line comes from the CLI
+  then, the hint `To debug <it>, run it from your IDE, and the others with: lrun up --exclude <it>` (the failing one is
+  most likely the one just edited), and the final failure carries it again. Hints are never in the message (user
+  feedback, 2026-11-25: on a line of their own, marked, easy to pick up): attached with `ErrorHint.With`, printed as a
+  `LogEvents.Hint` line (`»` / `HINT`) after the `FAILED` one, and in `error.hint`. The command line comes from the CLI
   (`LocalRunCli.UpCommandLine`, passed to `RunProcessor` as `commandExcluding`): the run's own `--config`, `--only`,
   `--exclude` (merged, each name once), `--logs`, `--stop-timeout`, global options left out. No hint when nothing else
   would run (`RunProcessor.ExcludeHint`). `--exclude` itself logs `Not running <names> (excluded)`, with no reason

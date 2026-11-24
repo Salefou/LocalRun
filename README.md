@@ -507,15 +507,14 @@ the warnings and errors are printed, verbatim and all of them: a project targeti
 warning once per framework. A failing `dotnet` command doesn't stop the others: what doesn't depend on the failed
 project goes on being packed, and every project depending on it, directly or not, is `skipped` (its package would
 declare a version of the failed one that never reached the feed). Then the command fails (exit code `4`), naming each
-failed project with the step that failed, those skipped, and the way past them:
+failed project with the step that failed and those skipped, then the way past them, on a line of its own:
 
 ```
-FAILED go failed: dotnet failed on LrSample.Primitives (pack); skipped, as they depend on it: LrSample.Logging,
-LrSample.Pricing.Models, LrSample.Pricing, LrSample.Reports. To pack the others: add '--exclude LrSample.Primitives'
-to your 'lrun build', then run 'lrun pack' again.
+FAILED go failed: dotnet failed on LrSample.Primitives (pack); skipped, as they depend on it: LrSample.Logging, LrSample.Pricing.Models, LrSample.Pricing, LrSample.Reports.
+HINT To pack the others: add '--exclude LrSample.Primitives' to your 'lrun build', then run 'lrun pack' again.
 ```
 
-The hint names the option to add, not a whole command: the plan doesn't record which `build` made the config. When
+(`×` and `»` on a terminal; with `--json`, the hint is `error.hint`.) The hint names the option to add, not a whole command: the plan doesn't record which `build` made the config. When
 nothing else would be packed, there is no hint. A `dotnet` command that printed no error line has its whole output
 printed. A plan written before 0.7.1 has no `DependsOn`: everything after a failing depth is skipped.
 
@@ -669,9 +668,11 @@ Processes are started in dependency order, but `up` doesn't wait for one to be *
 starting the next: by design, each service is expected to wait for (or retry) the ones it needs.
 
 When an executable fails to build (often a tool missing on the machine, or a project's own build step), `up` starts
-nothing and says how to start the others: `To start the others: lrun up --exclude AotTestApp`. When a service exits
-with an error once started, it is most likely the one you just changed: `up` says to run it from your IDE, and the
-others with `lrun up --exclude <it>`. The suggested command keeps the options of the run (`--config`, `--only`, …).
+nothing and says how to start the others, on a hint line of its own (`»`, `HINT` when redirected; `error.hint` with
+`--json`): `HINT To start the others: lrun up --exclude AotTestApp`. When a service exits with an error once started, it
+is most likely the one you just changed: `up` hints right then to run it from your IDE, and the others with `lrun up
+--exclude <it>`, and again after its final failure. The suggested command keeps the options of the run (`--config`,
+`--only`, …).
 
 | Option | Default | Description |
 |---|---|---|
@@ -1070,7 +1071,7 @@ no progress lines) even on a terminal, and `build --plot` doesn't open the page.
 | `result` | The command's own result (below), or `null`. |
 | `diagnostics` | Every warning and error logged, in order: `code` (see [Diagnostic codes](#diagnostic-codes)), `level` (`warning` / `error`), `message`. |
 | `written` | Full paths of the files written. |
-| `error` | `null`, or `code` and `message`. Codes, with their exit code: `usage` (`2`); `config-not-found` (run the command that writes it), `config-invalid`, `root-not-found`, `settings-invalid` (`3`); `dotnet-failed` (`4`); `strict` (`5`); `verify-failed` (`6`); `doctor-failed`, `up-running` (another `up` runs with this config: `lrun down` stops it), `command-failed` (`1`, anything else). Branch on the code, not on the message. |
+| `error` | `null`, or `code`, `message` and `hint`: the way past the failure when there is one (`up`: the run's command with `--exclude <failed>`; `pack`, `go`: the `--exclude` to add to `build`), else `null`. Codes, with their exit code: `usage` (`2`); `config-not-found` (run the command that writes it), `config-invalid`, `root-not-found`, `settings-invalid` (`3`); `dotnet-failed` (`4`); `strict` (`5`); `verify-failed` (`6`); `doctor-failed`, `up-running` (another `up` runs with this config: `lrun down` stops it), `command-failed` (`1`, anything else). Branch on the code, not on the message. |
 
 Results:
 
@@ -1197,7 +1198,8 @@ your workspace (`AGENTS.md`, `CLAUDE.md`, ...). For this version:
   `lrun status --json`. It reads the files only: fast, and safe to run any time.
 - Then: `lrun build --users-of <Library> --with-services --json`, `lrun pack --json`, and before starting services,
   `lrun verify --json` (exit code 6: pack again).
-- Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
+- Branch on `exitCode` and `error.code`, never on the messages; `error.hint`, when set, is the way past the failure
+  (an `--exclude` to add). Exit codes: 2 usage, 3 missing input (run the previous step),
   4 a dotnet command failed: `failure.errors` in `result.packages[]` (`pack`, `go`) or `result.services[]` (`up`)
   has each file, line and code. A `CS` code is in the code; `NU1101` (package not found) means a dependency is
   neither in the config nor on a source: add it with `--deps-of`. 5 refused by `--strict`.
@@ -1236,9 +1238,10 @@ decided, the paths of the files it wrote), its **diagnostics** (warnings and err
 terminal only, **progress** for the slow steps (scanning, MSBuild evaluation, querying the NuGet sources).
 
 On a terminal, colour says the level (yellow warnings, red errors, grey debug) and a few marks say how a step
-went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped, `→` a change. When
-output is redirected (a pipe, a file, CI), the output is plain: no colours, `[DBG]` / `[WRN]` / `[ERR]` prefixes,
-and the marks become `>`, `+`, `ok`, `FAILED`, `-` and `->`. `NO_COLOR` turns the colours off on a terminal too (the prefixes come back).
+went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped, `»` a hint (the way
+past a failure: a command to run, an option to add), `→` a change. When output is redirected (a pipe, a file, CI), the
+output is plain: no colours, `[DBG]` / `[WRN]` / `[ERR]` prefixes, and the marks become `>`, `+`, `ok`, `FAILED`, `-`,
+`HINT` and `->`. `NO_COLOR` turns the colours off on a terminal too (the prefixes come back).
 
 The minimum level is `Information`. Every command takes `--log-level <level>` (`Trace`, `Debug`, `Information`,
 `Warning`, `Error`, `Critical`, `None`, in any case), and `logLevel` in your [settings](#settings) sets your default.

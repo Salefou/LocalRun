@@ -62,15 +62,15 @@ public class RunProcessor : IRunProcessor
     }
 
     /// <summary>
-    /// " {lead}: {command}", the command line that runs the others without <paramref name="failed"/>; empty when there
+    /// "{lead}: {command}", the command line that runs the others without <paramref name="failed"/>; null when there
     /// would be no other to run, or no command line to suggest.
     /// </summary>
-    internal static string ExcludeHint(Func<IReadOnlyCollection<string>, string>? commandExcluding,
+    internal static string? ExcludeHint(Func<IReadOnlyCollection<string>, string>? commandExcluding,
         IReadOnlyCollection<string> failed, int executableCount, string lead)
     {
         return commandExcluding == null || failed.Count == 0 || failed.Count >= executableCount
-            ? string.Empty
-            : $" {lead}: {commandExcluding(failed)}";
+            ? null
+            : $"{lead}: {commandExcluding(failed)}";
     }
 
     /// <summary>Each executable of the last run, by name, dependencies first; complete after a failure too.</summary>
@@ -147,7 +147,7 @@ public class RunProcessor : IRunProcessor
             if (buildFailures.Count != 0)
             {
                 // The failure often comes from the machine (a missing tool) or a project's own build, not from the change
-                throw new DotnetFailedException($"dotnet build failed on {string.Join(", ", buildFailures)}: nothing was started." +
+                throw ErrorHint.With(new DotnetFailedException($"dotnet build failed on {string.Join(", ", buildFailures)}: nothing was started."),
                     ExcludeHint(commandExcluding, buildFailures, executables.Count, "To start the others"));
             }
 
@@ -178,9 +178,8 @@ public class RunProcessor : IRunProcessor
                     // Most likely the service just edited: debugging it on the side is the way on
                     if (outcome.Status == ServiceStatus.Failed)
                     {
-                        string hint = ExcludeHint(commandExcluding, [exe.Name], executables.Count, "run it from your IDE, and the others with");
-                        if (hint.Length != 0)
-                            logger.LogInformation("To debug {Project}:{Hint}", exe.Name, hint);
+                        if (ExcludeHint(commandExcluding, [exe.Name], executables.Count, $"To debug {exe.Name}, run it from your IDE, and the others with") is { } hint)
+                            logger.LogInformation(LogEvents.Hint, "{Hint}", hint);
                     }
                 }, TaskScheduler.Default));
             }
@@ -214,8 +213,8 @@ public class RunProcessor : IRunProcessor
 
         if (failed.Count != 0)
         {
-            throw new InvalidOperationException(
-                $"{string.Join(", ", failed.Select(process => $"{process.Name.Trim()} (exit code {process.Exited.Result})"))} failed." +
+            throw ErrorHint.With(new InvalidOperationException(
+                $"{string.Join(", ", failed.Select(process => $"{process.Name.Trim()} (exit code {process.Exited.Result})"))} failed."),
                 ExcludeHint(commandExcluding, [.. failed.Select(process => process.Name.Trim())], executables.Count,
                     $"To debug, run {(failed.Count == 1 ? "it" : "them")} from your IDE, and the others with"));
         }

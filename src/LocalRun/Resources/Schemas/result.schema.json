@@ -73,9 +73,13 @@
           "description": "A short stable string to branch on (help --json lists the codes with their exit code).",
           "type": "string"
         },
-        "message": { "description": "For people: may change.", "type": "string" }
+        "message": { "description": "For people: may change.", "type": "string" },
+        "hint": {
+          "description": "The way past the failure, or null: a command to run (up: the same run with --exclude) or an option to add (pack, go: --exclude to the build). For people and agents to act on: may change.",
+          "type": ["string", "null"]
+        }
       },
-      "required": ["code", "message"],
+      "required": ["code", "message", "hint"],
       "additionalProperties": false
     },
     "BuildResult": {

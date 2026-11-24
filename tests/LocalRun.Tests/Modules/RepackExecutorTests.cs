@@ -154,7 +154,7 @@ public class RepackExecutorTests
     }
 
     [Fact]
-    public void FailureMessage_NamesTheFailedAndSkipped_ThenTheHint()
+    public void FailureMessage_NamesTheFailedWithTheirStep_ThenTheSkipped()
     {
         var plan = new[] { WithDependencies("Core", 0), WithDependencies("Side", 0), WithDependencies("Mid", 1, "Core"), WithDependencies("Top", 2, "Mid") };
         var outcomes = new Dictionary<string, PackOutcome>
@@ -165,20 +165,18 @@ public class RepackExecutorTests
             ["Top"] = new() { Status = PackStatus.Skipped, SkippedFor = ["Core"] },
         };
 
-        Assert.Equal("dotnet failed on Core (restore); skipped, as they depend on it: Mid, Top. Exclude Core",
-            RepackExecutor.FailureMessage(plan, outcomes, failed => $"Exclude {string.Join(' ', failed)}"));
+        Assert.Equal("dotnet failed on Core (restore); skipped, as they depend on it: Mid, Top.",
+            RepackExecutor.FailureMessage(plan, outcomes));
     }
 
     [Fact]
-    public void FailureMessage_NoHint_WhenEveryProjectFailed()
+    public void HintFor_ExcludesTheFailed_UnlessNothingElseWouldPack()
     {
-        var plan = new[] { WithDependencies("Core", 0) };
-        var outcomes = new Dictionary<string, PackOutcome>
-        {
-            ["Core"] = new() { Status = PackStatus.Failed, Failure = DotnetFailure.Of("pack", 1, []) },
-        };
+        static string Exclude(IReadOnlyCollection<string> failed) => $"Exclude {string.Join(' ', failed)}";
 
-        Assert.Equal("dotnet failed on Core (pack).", RepackExecutor.FailureMessage(plan, outcomes, _ => "Exclude"));
+        Assert.Equal("Exclude Core Island", RepackExecutor.HintFor(["Core", "Island"], planned: 4, Exclude));
+        Assert.Null(RepackExecutor.HintFor(["Core"], planned: 1, Exclude));
+        Assert.Null(RepackExecutor.HintFor(["Core"], planned: 4, excludeHint: null));
     }
 
     [Fact]

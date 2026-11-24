@@ -286,9 +286,9 @@ Variations worth trying:
   `lrun pack`. Depth 1 prints the `warning CS0168` line once (`[WRN] …`, yellow on a terminal) and the pack succeeds.
   Add `TmpErr.cs` holding `namespace X; public class E { public void M() { int x = "s"; } }` and run `lrun go`: the
   warning, the `error CS0029` line, then `FAILED go failed: dotnet failed on LrSample.Primitives (pack); skipped, as they
-  depend on it: LrSample.Logging, LrSample.Pricing.Models, LrSample.Pricing, LrSample.Reports. To pack the others: add
-  '--exclude LrSample.Primitives' to your 'lrun build', then run 'lrun pack' again.`, exit code 4 (a `dotnet` command
-  failed). Island.Core and Orphan, which don't use Primitives, are packed all the same; depths 2 and 3 print no line,
+  depend on it: LrSample.Logging, LrSample.Pricing.Models, LrSample.Pricing, LrSample.Reports.` and on the next line
+  `HINT To pack the others: add '--exclude LrSample.Primitives' to your 'lrun build', then run 'lrun pack' again.`
+  (`»` on a terminal), exit code 4 (a `dotnet` command failed). Island.Core and Orphan, which don't use Primitives, are packed all the same; depths 2 and 3 print no line,
   having nothing left to run. With `--json`, the four skipped ones have `"skippedFor": ["LrSample.Primitives"]`. Delete
   both files afterwards.
 - After a reset, `lrun pack --patch --suffix dev --clean` runs `dotnet clean` first (nothing more is printed).
@@ -299,15 +299,16 @@ Variations worth trying:
   ```
 
   Then `lrun up`: RiskService logs `cannot listen on http://localhost:5102/ … (port already in use?)`
-  and exits with code 1, followed by `To debug LrSample.RiskService: run it from your IDE, and the others with: lrun up
-  --exclude LrSample.RiskService`, while the others keep running. After Ctrl+C (or `lrun down`), `up` fails with
-  `LrSample.RiskService (exit code 1) failed. To debug, run it from your IDE, and the others with: lrun up --exclude
-  LrSample.RiskService` (exit code 1). Running `lrun up` twice doesn't show this:
+  and exits with code 1, followed by `HINT To debug LrSample.RiskService, run it from your IDE, and the others with:
+  lrun up --exclude LrSample.RiskService`, while the others keep running. After Ctrl+C (or `lrun down`), `up` fails with
+  `FAILED up failed: LrSample.RiskService (exit code 1) failed.`, then `HINT To debug, run it from your IDE, and the
+  others with: lrun up --exclude LrSample.RiskService` (exit code 1). Running `lrun up` twice doesn't show this:
   the second one is refused (`up-running`) before it builds anything.
 - **A service that doesn't build**: after step 4, add `TmpErr.cs` holding
   `namespace X; public class E { public void M() { int x = "s"; } }` to `workspace/trading/LrSample.RiskService`, then
   `lrun up`: the `error CS0029` line, the other executables still built, then `FAILED up failed: dotnet build failed on
-  LrSample.RiskService: nothing was started. To start the others: lrun up --exclude LrSample.RiskService`, exit code 4.
+  LrSample.RiskService: nothing was started.`, then `HINT To start the others: lrun up --exclude LrSample.RiskService`,
+  exit code 4.
   `lrun up --exclude LrSample.ReportCli` suggests `lrun up --exclude LrSample.ReportCli LrSample.RiskService`. Delete
   the file afterwards.
 - **Another port**: `$env:LRSAMPLE_ORDERGATEWAY_PORT = 6101` (or `LRSAMPLE_RISKSERVICE_PORT`) before `lrun up`.
@@ -414,9 +415,8 @@ lrun pack
   `packed-version-differs`, as in step 6), nothing depending on the three. It ends with:
 
   ```
-  FAILED pack failed: dotnet failed on LrEdge.BrokenImport (pack), LrEdge.Offline (restore), LrEdge.Top (restore). To pack
-  the others: add '--exclude LrEdge.BrokenImport LrEdge.Offline LrEdge.Top' to your 'lrun build', then run 'lrun pack'
-  again.
+  FAILED pack failed: dotnet failed on LrEdge.BrokenImport (pack), LrEdge.Offline (restore), LrEdge.Top (restore).
+  HINT To pack the others: add '--exclude LrEdge.BrokenImport LrEdge.Offline LrEdge.Top' to your 'lrun build', then run 'lrun pack' again.
   ```
 
   exit code 4. The hint names the option, not the `build` command: the plan doesn't record how the config was made.

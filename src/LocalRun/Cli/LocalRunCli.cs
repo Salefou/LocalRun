@@ -121,7 +121,8 @@ public static class LocalRunCli
         catch (Exception ex)
         {
             (string code, exitCode) = ErrorCodes.Of(ex);
-            error = new(code, ex.Message);
+            string? hint = ErrorHint.Of(ex);
+            error = new(code, ex.Message, hint);
             diagnostics = DiagnosticsOfThisRun();
             if (ex is UsageException)
             {
@@ -130,6 +131,9 @@ public static class LocalRunCli
             else
             {
                 logger.LogError(LogEvents.Failed, "{Command} failed: {Error}", cmd, ex.Message);
+                // On a line of its own, marked, after the failure: the next thing to do
+                if (hint != null)
+                    logger.LogInformation(LogEvents.Hint, "{Hint}", hint);
                 logger.LogDebug(ex, "Command '{Command}' failure details", cmd);
             }
         }

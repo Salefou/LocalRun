@@ -52,8 +52,8 @@ public class RepackExecutor
     private readonly ConcurrentDictionary<string, PackOutcome> outcomes = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The way past failed projects, appended to the run's failure (the CLI writes it: the core doesn't name commands).
-    /// Null for no suggestion.
+    /// The way past failed projects, attached to the run's failure (<see cref="ErrorHint"/>; the CLI writes it: the core
+    /// doesn't name commands). Null for no suggestion.
     /// </summary>
     private readonly Func<IReadOnlyCollection<string>, string>? excludeHint;
 
@@ -129,7 +129,7 @@ public class RepackExecutor
         var all = depths.SelectMany(depth => depth).ToList();
         var failedProjects = all.Where(proj => outcomes[proj.Name].Status == PackStatus.Failed).Select(proj => proj.Name).ToList();
         if (failedProjects.Count != 0)
-            throw new DotnetFailedException(FailureMessage(all, outcomes, excludeHint));
+            throw ErrorHint.With(new DotnetFailedException(FailureMessage(all, outcomes)), HintFor(failedProjects, all.Count, excludeHint));
         int notPacked = outcomes.Values.Count(outcome => outcome.Status == PackStatus.NotPacked);
         logger.LogInformation(LogEvents.Done, "Packed {Projects} in {Duration}{NotPacked}",
             Text.Count(all.Count - notPacked, "project"), Text.Duration(stopwatch.Elapsed),
@@ -152,12 +152,12 @@ public class RepackExecutor
         return failed.Count == 0 ? null : failed;
     }
 
-    /// <summary>
-    /// The failure of a run: the failed projects with the step that failed, those skipped for them, then the way past
-    /// them, unless nothing else would be packed.
-    /// </summary>
-    internal static string FailureMessage(IReadOnlyList<ProjectRepack> plan, IReadOnlyDictionary<string, PackOutcome> outcomes,
-        Func<IReadOnlyCollection<string>, string>? excludeHint)
+    /// <summary>The way past the failed projects, or null when excluding them would leave nothing to pack.</summary>
+    internal static string? HintFor(IReadOnlyCollection<string> failed, int planned, Func<IReadOnlyCollection<string>, string>? excludeHint) =>
+        failed.Count < planned ? excludeHint?.Invoke(failed) : null;
+
+    /// <summary>The failure of a run: the failed projects with the step that failed, then those skipped for them.</summary>
+    internal static string FailureMessage(IReadOnlyList<ProjectRepack> plan, IReadOnlyDictionary<string, PackOutcome> outcomes)
     {
         var failed = plan.Where(proj => outcomes[proj.Name].Status == PackStatus.Failed).Select(proj => proj.Name).ToList();
         var skipped = plan.Where(proj => outcomes[proj.Name].SkippedFor != null).Select(proj => proj.Name).ToList();
@@ -166,8 +166,6 @@ public class RepackExecutor
         if (skipped.Count != 0)
             message.Append($"; skipped, as {(skipped.Count == 1 ? "it depends" : "they depend")} on {(failed.Count == 1 ? "it" : "them")}: {Text.Abbreviate(skipped)}");
         message.Append('.');
-        if (excludeHint != null && failed.Count < plan.Count)
-            message.Append(' ').Append(excludeHint(failed));
         return message.ToString();
     }
 

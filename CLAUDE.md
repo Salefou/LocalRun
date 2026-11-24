@@ -187,9 +187,11 @@ What a change of each kind must also touch (each line restates rules above or in
   `Log.Shutdown()` must run once at process exit to flush the background console queue.
 - **Output** (user feedback, 2026-11-04, 0.4.0): a command prints its result (including the paths it wrote), its
   diagnostics (never dropped) and progress for slow steps only (`LogEvents.Progress`, shown on a terminal only). No
-  narration (one line per step or per project). Marks are event ids (`LogEvents.Start/Launched/Done/Failed/Stopped`;
-  Launched = a process `up` started, Start = any other step about to run), which the formatter renders as `› ▸ ✓ × ■` on a terminal and `> + ok FAILED -` when redirected (`Terminal.IsAttached`); a change is
-  `Terminal.Arrow`. Glyphs must have no emoji variant (`✔ ✖ ▶` don't qualify). On a terminal the colour says the
+  narration (one line per step or per project). Marks are event ids (`LogEvents.Start/Launched/Done/Failed/Stopped/Hint`;
+  Launched = a process `up` started, Start = any other step about to run), which the formatter renders as `› ▸ ✓ × ■ »` on a terminal and `> + ok FAILED - HINT` when redirected (`Terminal.IsAttached`); a change is
+  `Terminal.Arrow`. A hint (the way past a failure, user feedback, 2026-11-25) is never part of an error message: the
+  exception carries it (`ErrorHint.With`), the CLI logs it as a `Hint` line after the `FAILED` one and puts it in
+  `error.hint`; a hint while running (`up`'s crashed service) is a `Hint` line too. Glyphs must have no emoji variant (`✔ ✖ ▶` don't qualify). On a terminal the colour says the
   level; redirected, `[WRN]` / `[ERR]` prefixes do. Long lists go through `Text.Abbreviate` ("and N more"), and `go`
   prints one line per depth, never per project. Of `dotnet` output, only warning and error lines, verbatim, not deduplicated
   (in the logs; `failure.errors` is the parsed form, each error once).

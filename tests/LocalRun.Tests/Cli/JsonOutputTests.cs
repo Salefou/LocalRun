@@ -127,6 +127,7 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal("failed", run.Json.GetProperty("status").GetString());
         Assert.Equal(LocalRunCli.ExitUsage, run.Json.GetProperty("exitCode").GetInt32());
         Assert.Equal("usage", run.Json.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(JsonValueKind.Null, run.Json.GetProperty("error").GetProperty("hint").ValueKind);
         // The logs say it too, on stderr; the document doesn't repeat the error as a diagnostic
         Assert.NotEqual(string.Empty, run.Stderr);
         Assert.Equal(0, run.Json.GetProperty("diagnostics").GetArrayLength());
@@ -375,8 +376,10 @@ public sealed class JsonOutputTests : IDisposable
         AssertPlain(go);
         var error = go.Json.GetProperty("error");
         Assert.Equal("dotnet-failed", error.GetProperty("code").GetString());
-        Assert.Equal("dotnet failed on Mid (restore); skipped, as it depends on it: Top. " + LocalRunCli.PackExcludeHint(["Mid"]),
-            error.GetProperty("message").GetString());
+        Assert.Equal("dotnet failed on Mid (restore); skipped, as it depends on it: Top.", error.GetProperty("message").GetString());
+        Assert.Equal(LocalRunCli.PackExcludeHint(["Mid"]), error.GetProperty("hint").GetString());
+        // In the logs too, on a line of its own, marked
+        Assert.Contains($"HINT {LocalRunCli.PackExcludeHint(["Mid"])}", go.Stderr);
         var result = go.Json.GetProperty("result");
         Assert.False(result.GetProperty("packed").GetBoolean());
         var packages = result.GetProperty("packages").EnumerateArray().ToDictionary(package => package.GetProperty("project").GetString()!);
