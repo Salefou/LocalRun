@@ -33,7 +33,7 @@ everyone is "Before 1.0".
 | A9, Run from a copy | Rebuilding a service while `up` runs it (no file lock) | Postponed. Builds on A3 |
 | A10, Agent test run follow-ups | What an agent tripped on, driving `lrun` from `help --agent` alone | Related: A1, A2, 3, 5 |
 | 8, Project identity | Projects sharing a file name (samples in open-source repos): kept, named by path | Decided, additive form |
-| 9, Failures suggest the way out | Getting past a project that can't build: `up` / `go` hints, `build --exclude` | Decided. Related: `up --exclude`, A2 |
+| 9, Failures suggest the way out | Getting past a project that can't build: `up` / `go` hints, `build --exclude` | Shipped (after 0.7.0). Related: `up --exclude`, A2 |
 | 10, Packed under another version | Repositories versioned from git tags (MinVer): the plan's version kept, or the real one reported | Shipped core (check, MinVer override); the csproj `1.0.0` of such projects open. Related: 5 (`verify`) |
 | 11, Plan only what produces a package | Non-packable libraries and test projects no longer planned, counted or expected by `verify` | Shipped (`Packable`, `not-packed`); `PackAsTool` not now |
 | 12, First-run trial leftovers | `--git-changes` without git, "latest" of a stranger's package, pinned consumers, test detection | Each open. Related: A10 |
@@ -226,7 +226,7 @@ So the item is additive (see "Before 1.0"): every run that works today gives the
 keep more. A script that names a project by its unique file name starts exiting `2` once a second project of that name
 appears under the root: it says so, with the paths, and scripts wanting stability name the path.
 
-### 9. Failures that suggest the way out **(user, 2026-11-21)**
+### 9. Failures that suggest the way out **(user, 2026-11-21)**: shipped after 0.7.0
 
 What happens: when part of a selection can't build, the user has to find the way around it alone. On a first run on
 cloned Serilog repositories, `go` stopped twice on executables (packed before #63) and the README offered deleting them
@@ -245,8 +245,12 @@ project's own build tricks, which the tool can't foresee.
   rewrote them away, see `docs/agents/history.md`): a flag is given again with each `build`. A new `build` flag, so
   the ripple checklist applies (`list` too, `BuildRecord` and its schema, `CommandCatalog`, README, CHANGELOG).~~
   Done after 0.7.0: the `kept-without-dependency` warning names the whole branch to exclude.
-- **`go`**: when a project fails to pack, the hint is the `build` command the config came from (its flags are in
-  `BuildRecord`) plus `--exclude <the failed one>`, then `pack` and `go` again.
+- ~~**`go`**: when a project fails to pack, the hint is the `build` command the config came from (its flags are in
+  `BuildRecord`) plus `--exclude <the failed one>`, then `pack` and `go` again.~~ Done after 0.7.0 (user feedback,
+  2026-11-24), in another form: the hint names the option to add, `To pack the others: add '--exclude <failed>' to your
+  'lrun build', then run 'lrun pack' again.`, never a command line. The plan doesn't say which `build` made the config,
+  and must not: files say what is, not how it was reached (two paths to the same state write the same files), so
+  recording `build`'s and `pack`'s command lines in the plan was turned down. No hint when every project failed.
 
 Decided (user feedback, 2026-11-24), the two points left open:
 - The users of an excluded library are kept without that dependency (they restore the published package), as for
@@ -257,7 +261,10 @@ Decided (user feedback, 2026-11-24), the two points left open:
 - **`go` keeps packing past a failure** (dev convenience: a rogue dependency being removed, every error of a POC in one
   run), as `up` builds every service before reporting. Whatever depends on a failed project, transitively, is
   `skipped`, never packed: its package would declare the planned version of one that never reached the feed. `go` still
-  fails (exit `4`) with every failure in the result. Not done yet, with `go`'s hint.
+  fails (exit `4`) with every failure in the result. ~~Not done yet, with `go`'s hint.~~ Done after 0.7.0 (user feedback,
+  2026-11-24), `pack` included: `pack` writes each project's `DependsOn` into the plan (the planned projects it depends
+  on, directly or through libraries producing no package), so `go` needs the plan alone; a plan without it skips
+  everything after a failing depth. A skipped project's `skippedFor` names the failed ones in the result.
 
 ### 10. Packages packed under another version than planned **(user, 2026-11-21)**
 

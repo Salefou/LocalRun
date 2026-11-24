@@ -133,6 +133,13 @@ public class LocalRunCliTests
     }
 
     [Fact]
+    public void PackExcludeHint_NamesTheOptionToAdd_NotACommandLine()
+    {
+        Assert.Equal("To pack the others: add '--exclude Mid \"My Lib\"' to your 'lrun build', then run 'lrun pack' again.",
+            LocalRunCli.PackExcludeHint(["Mid", "My Lib"]));
+    }
+
+    [Fact]
     public void UpCommandLine_KeepsTheRunsOptions_AndEachExcludedNameOnce()
     {
         Assert.Equal("lrun up --config \"my configs/a.json\" --only A B --exclude C B --logs logs --stop-timeout 5",

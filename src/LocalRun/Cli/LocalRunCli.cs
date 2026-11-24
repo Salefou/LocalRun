@@ -121,7 +121,8 @@ public static class LocalRunCli
         catch (Exception ex)
         {
             (string code, exitCode) = ErrorCodes.Of(ex);
-            error = new(code, ex.Message);
+            string? hint = ErrorHint.Of(ex);
+            error = new(code, ex.Message, hint);
             diagnostics = DiagnosticsOfThisRun();
             if (ex is UsageException)
             {
@@ -130,6 +131,9 @@ public static class LocalRunCli
             else
             {
                 logger.LogError(LogEvents.Failed, "{Command} failed: {Error}", cmd, ex.Message);
+                // On a line of its own, marked, after the failure: the next thing to do
+                if (hint != null)
+                    logger.LogInformation(LogEvents.Hint, "{Hint}", hint);
                 logger.LogDebug(ex, "Command '{Command}' failure details", cmd);
             }
         }
@@ -515,7 +519,7 @@ public static class LocalRunCli
     /// </summary>
     private static async Task ExecutePlanAsync(RepackConfig repackConfig, string repackConfigPath, CommandOutput output)
     {
-        var executor = new RepackExecutor();
+        var executor = new RepackExecutor(PackExcludeHint);
         bool packed = false;
         try
         {
@@ -624,9 +628,6 @@ public static class LocalRunCli
     internal static string UpCommandLine(string? config, IReadOnlyCollection<string>? only, IReadOnlyCollection<string> exclude,
         string? logs, string? stopTimeout)
     {
-        static string Quote(string value) => value.Length != 0 && !value.Any(c => char.IsWhiteSpace(c) || c == '"')
-            ? value
-            : $"\"{value.Replace("\"", "\\\"")}\"";
 
         var line = new List<string> { CommandName, "up" };
         if (config != null)
@@ -642,6 +643,19 @@ public static class LocalRunCli
             line.AddRange(["--stop-timeout", stopTimeout]);
         return string.Join(' ', line);
     }
+
+    /// <summary>A command-line value as typed in a shell: quoted when it holds a space or a quote.</summary>
+    private static string Quote(string value) => value.Length != 0 && !value.Any(c => char.IsWhiteSpace(c) || c == '"')
+        ? value
+        : $"\"{value.Replace("\"", "\\\"")}\"";
+
+    /// <summary>
+    /// The way past projects <c>pack</c> / <c>go</c> failed on: leave them out of the config, then plan again. The plan
+    /// doesn't say which <c>build</c> made the config, by design (files say what is, not how it was reached), so the hint
+    /// names the option to add, not a whole command line.
+    /// </summary>
+    internal static string PackExcludeHint(IReadOnlyCollection<string> failed) =>
+        $"To pack the others: add '--exclude {string.Join(' ', failed.Select(Quote))}' to your '{CommandName} build', then run '{CommandName} pack' again.";
 
     /// <summary>How long <c>down</c> waits beyond <c>up</c>'s grace period: the kills, the last output lines, the result.</summary>
     private static readonly TimeSpan DownMargin = TimeSpan.FromSeconds(30);

@@ -45,6 +45,7 @@ public sealed class LocalRunConsoleFormatter : ConsoleFormatter
             var id when id == LogEvents.Failed.Id => (onTerminal ? "×" : "FAILED", "\x1B[31m"),
             var id when id == LogEvents.Launched.Id => (onTerminal ? "▸" : "+", "\x1B[36m"),
             var id when id == LogEvents.Stopped.Id => (onTerminal ? "■" : "-", "\x1B[90m"),
+            var id when id == LogEvents.Hint.Id => (onTerminal ? "»" : "HINT", "\x1B[35m"),
             _ => (null, string.Empty),
         };
         var (prefix, lineColor) = logEntry.LogLevel switch

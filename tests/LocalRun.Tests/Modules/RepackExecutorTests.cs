@@ -117,6 +117,68 @@ public class RepackExecutorTests
             """);
     }
 
+    private static ProjectRepack WithDependencies(string name, int depth, params string[] dependsOn) => new()
+    {
+        Name = name,
+        PathToCsproj = $"{name}.csproj",
+        Depth = depth,
+        DependsOn = [.. dependsOn],
+        FromVersion = ProjectVersion.Parse("1.0.0"),
+        ToVersion = ProjectVersion.Parse("1.0.1"),
+    };
+
+    [Fact]
+    public void SkippedFor_NamesTheFailedProjectsBehind_TransitivelyAndOnce()
+    {
+        // Core and Island failed, Mid was skipped for Core
+        var failedBehind = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Core"] = ["Core"],
+            ["Island"] = ["Island"],
+            ["Mid"] = ["Core"],
+        };
+
+        Assert.Equal(["Core", "Island"], RepackExecutor.SkippedFor(WithDependencies("Top", 2, "mid", "Island", "Core"), failedBehind));
+        Assert.Null(RepackExecutor.SkippedFor(WithDependencies("Other", 1, "Lib"), failedBehind));
+        Assert.Null(RepackExecutor.SkippedFor(WithDependencies("Root", 0), failedBehind));
+    }
+
+    [Fact]
+    public void SkippedFor_APlanWithoutDependencies_SkipsEverythingAfterAFailure()
+    {
+        var failedBehind = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase) { ["Core"] = ["Core"] };
+        var unrelated = Repack("Unrelated", "Unrelated.csproj", "1.0.1", 1);
+
+        Assert.Equal(["Core"], RepackExecutor.SkippedFor(unrelated, failedBehind));
+        Assert.Null(RepackExecutor.SkippedFor(unrelated, new Dictionary<string, IReadOnlyList<string>>()));
+    }
+
+    [Fact]
+    public void FailureMessage_NamesTheFailedWithTheirStep_ThenTheSkipped()
+    {
+        var plan = new[] { WithDependencies("Core", 0), WithDependencies("Side", 0), WithDependencies("Mid", 1, "Core"), WithDependencies("Top", 2, "Mid") };
+        var outcomes = new Dictionary<string, PackOutcome>
+        {
+            ["Core"] = new() { Status = PackStatus.Failed, Failure = DotnetFailure.Of("restore", 1, []) },
+            ["Side"] = new() { Status = PackStatus.Packed },
+            ["Mid"] = new() { Status = PackStatus.Skipped, SkippedFor = ["Core"] },
+            ["Top"] = new() { Status = PackStatus.Skipped, SkippedFor = ["Core"] },
+        };
+
+        Assert.Equal("dotnet failed on Core (restore); skipped, as they depend on it: Mid, Top.",
+            RepackExecutor.FailureMessage(plan, outcomes));
+    }
+
+    [Fact]
+    public void HintFor_ExcludesTheFailed_UnlessNothingElseWouldPack()
+    {
+        static string Exclude(IReadOnlyCollection<string> failed) => $"Exclude {string.Join(' ', failed)}";
+
+        Assert.Equal("Exclude Core Island", RepackExecutor.HintFor(["Core", "Island"], planned: 4, Exclude));
+        Assert.Null(RepackExecutor.HintFor(["Core"], planned: 1, Exclude));
+        Assert.Null(RepackExecutor.HintFor(["Core"], planned: 4, excludeHint: null));
+    }
+
     [Fact]
     public void VersionsProps_EscapesXmlCharactersInPaths()
     {

@@ -109,6 +109,11 @@ changes, update its file and its summary here together.
   `go` write `repack.config.json`, `up` its state and logs. What a later step learns goes into its own file, and the
   commands that need it read that file (`go`'s `NotPacked` marks, read by `verify`); never write back into an earlier
   step's file.
+- **Files say what is, not how it was reached** (user feedback, 2026-11-24): a config or a plan describes a state
+  (projects, versions, dependencies, outcomes); two command paths reaching the same state write the same file, and no
+  command behaves differently by how an earlier file was made. Never record command lines in them to replay. `BuildRecord`
+  is there for `status` to show, not for a command to rebuild `build`'s line: a hint names the option to add (`pack`'s
+  `add '--exclude <failed>' to your 'lrun build'`). `up`'s hint repeats `up`'s own options, from the same run, not a file.
 - `ProjectNode.Path` is relative to `LocalRunConfig.RootPath`; always `Path.Combine` them.
 - **Hand testing**: `samples/README.md` is a walkthrough with observed results. When behaviour changes,
   rerun it (from `samples/`, `.\reset.cmd` first) and update the expected results.
@@ -140,6 +145,9 @@ changes, update its file and its summary here together.
     `packed-version-differs` (not strict) and is written back into the plan; no package at all is `not-packed` (warning,
     not strict), marked `NotPacked` in the plan.
   - Every `dotnet` command of `go` and `up` gets `SolutionProperties.Arguments`.
+  - `go` (and `pack`) keep going past a failed project; what depends on it (`DependsOn` in the plan, transitively) is
+    `skipped` with `skippedFor`, never packed. Exit 4, then `add '--exclude <failed>' to your 'lrun build'`, none when
+    nothing else would pack. A plan without `DependsOn` skips everything after a failing depth.
   - `up`: builds sequentially (every one even after a failure, each with `--force` so floating versions take the
     feed's latest), runs side by side, no readiness checks by design, `dotnet run` processes in a
     kill-on-close job. The Ctrl+C rules and how to test them from automation are in the file.
@@ -179,9 +187,11 @@ What a change of each kind must also touch (each line restates rules above or in
   `Log.Shutdown()` must run once at process exit to flush the background console queue.
 - **Output** (user feedback, 2026-11-04, 0.4.0): a command prints its result (including the paths it wrote), its
   diagnostics (never dropped) and progress for slow steps only (`LogEvents.Progress`, shown on a terminal only). No
-  narration (one line per step or per project). Marks are event ids (`LogEvents.Start/Launched/Done/Failed/Stopped`;
-  Launched = a process `up` started, Start = any other step about to run), which the formatter renders as `› ▸ ✓ × ■` on a terminal and `> + ok FAILED -` when redirected (`Terminal.IsAttached`); a change is
-  `Terminal.Arrow`. Glyphs must have no emoji variant (`✔ ✖ ▶` don't qualify). On a terminal the colour says the
+  narration (one line per step or per project). Marks are event ids (`LogEvents.Start/Launched/Done/Failed/Stopped/Hint`;
+  Launched = a process `up` started, Start = any other step about to run), which the formatter renders as `› ▸ ✓ × ■ »` on a terminal and `> + ok FAILED - HINT` when redirected (`Terminal.IsAttached`); a change is
+  `Terminal.Arrow`. A hint (the way past a failure, user feedback, 2026-11-25) is never part of an error message: the
+  exception carries it (`ErrorHint.With`), the CLI logs it as a `Hint` line after the `FAILED` one and puts it in
+  `error.hint`; a hint while running (`up`'s crashed service) is a `Hint` line too. Glyphs must have no emoji variant (`✔ ✖ ▶` don't qualify). On a terminal the colour says the
   level; redirected, `[WRN]` / `[ERR]` prefixes do. Long lists go through `Text.Abbreviate` ("and N more"), and `go`
   prints one line per depth, never per project. Of `dotnet` output, only warning and error lines, verbatim, not deduplicated
   (in the logs; `failure.errors` is the parsed form, each error once).

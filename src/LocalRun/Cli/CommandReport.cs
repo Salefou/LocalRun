@@ -90,7 +90,8 @@ internal sealed class EventStream(TextWriter writer)
 }
 
 /// <param name="Code">A short stable string to branch on (<see cref="ErrorCodes"/>); the message is for people.</param>
-internal sealed record ReportError(string Code, string Message);
+/// <param name="Hint">The way past the failure (a command to run, an option to add), or null (<see cref="ErrorHint"/>).</param>
+internal sealed record ReportError(string Code, string Message, string? Hint = null);
 
 /// <summary>The error codes of the JSON output. Several codes share an exit code: the number is coarse, the name precise.</summary>
 internal static class ErrorCodes
@@ -337,15 +338,16 @@ internal sealed record PackResult(string Plan, bool Packed, IReadOnlyList<Packag
         {
             var outcome = outcomes?.GetValueOrDefault(proj.Name) ?? new PackOutcome();
             return new PackageReport(proj.Name, proj.PackageIdOrName, proj.Depth, proj.FromVersion.AsVersionString(),
-                proj.ToVersion.AsVersionString(), outcome.Status, outcome.DurationMs, outcome.Failure);
+                proj.ToVersion.AsVersionString(), outcome.Status, outcome.DurationMs, outcome.Failure, outcome.SkippedFor);
         })]);
 }
 
-/// <param name="Status"><see cref="PackStatus"/>: <c>planned</c>, <c>packed</c>, <c>not-packed</c>, <c>failed</c> or <c>skipped</c>.</param>
+/// <param name="Status"><see cref="PackStatus"/>: <c>planned</c>, <c>packed</c>, <c>not-packed</c>, <c>failed</c> or <c>skipped</c> (it depends on a failed project).</param>
 /// <param name="DurationMs">Time in its <c>dotnet</c> commands, or null when none ran.</param>
 /// <param name="Failure">For a failed project: the failing step, its exit code and its error lines.</param>
+/// <param name="SkippedFor">For a skipped project: the failed projects it depends on, directly or not.</param>
 internal sealed record PackageReport(string Project, string PackageId, int Depth, string From, string To,
-    string Status, long? DurationMs, DotnetFailure? Failure);
+    string Status, long? DurationMs, DotnetFailure? Failure, IReadOnlyList<string>? SkippedFor);
 
 /// <param name="Valid">Whether the commands that read the file can use it (true when there is none).</param>
 /// <param name="Problem">Why not, when <paramref name="Valid"/> is false (warned <c>settings-invalid</c>).</param>
