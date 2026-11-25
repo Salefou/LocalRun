@@ -14,12 +14,23 @@ bumps the minor version, anything else the patch.
   `kept-without-dependency` warning (refused by `--strict`) naming the whole branch to exclude instead. The config
   records the names (`Build.Exclude`, shown by `status`), and lists them as left out with the reason `excluded`.
 - `up` suggests the command that gets past a failure, with the exact names and the options of the run. When an
-  executable fails to build, it still starts nothing, and ends with `To start the others: lrun up --exclude <failed>`
-  (also in the JSON `error.message`). When a service exits with an error once started, `up` says to run it from the IDE
-  and the others with `lrun up --exclude <it>`, there and again in its final failure.
+  executable fails to build, it still starts nothing, and ends with `To start the others: lrun up --exclude <failed>`.
+  When a service exits with an error once started, `up` says to run it from the IDE and the others with
+  `lrun up --exclude <it>`, there and again in its final failure.
+- A second Ctrl+C while `up` stops its services, or `lrun down --force`, kills what still runs right away, without
+  waiting for the end of the grace period (`--stop-timeout`, `stopTimeout`): set a long one, and cut it short at will.
+- Hints, the way past a failure, get a line of their own after it, with a mark of their own: `»` on a terminal, `HINT`
+  when redirected (`up`'s, and `pack` / `go`'s below). With `--json`, the error's `hint` holds it (null without one),
+  apart from `message`.
 
 ### Changed
 
+- `pack` and `go` keep going past a project that fails to clean, restore or pack: what doesn't depend on it is still
+  packed, and the projects depending on it, directly or not, are `skipped` (with `--json`, `skippedFor` names the failed
+  ones). The command still fails (exit code 4), naming every failed project with its step, then hints the way past them:
+  `To pack the others: add '--exclude <failed>' to your 'lrun build', then run 'lrun pack' again.` It stopped at the first
+  failing depth. The plan records what each project depends on (`DependsOn`); a plan written before stops at the first
+  failing depth, as before.
 - `up --exclude` logs `Not running <names> (excluded)`: it said "start them yourself (e.g. from your IDE to debug
   them)", though a project may be excluded because it can't build.
 

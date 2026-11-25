@@ -59,6 +59,11 @@
           "type": "integer",
           "minimum": 0
         },
+        "DependsOn": {
+          "description": "The projects of the plan it depends on, directly or through libraries the plan leaves out: when one fails, go skips this one. Absent from plans written before 0.7.1 (go then skips every project after a failing depth).",
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "FromVersion": {
           "description": "The base version the plan started from.",
           "$ref": "#/$defs/ProjectVersion"

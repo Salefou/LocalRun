@@ -80,6 +80,20 @@ public sealed class RepackConfigBuilderTests : IDisposable
         Assert.Equal(["Api", "Core", "Core.Testing"], plan.Keys.Order());
         Assert.Equal(0, plan["Core"].Depth);
         Assert.Equal(2, plan["Api"].Depth);
+        // Through Utils, so that go skips Api when Core fails
+        Assert.Equal(["Core"], plan["Api"].DependsOn!);
+        Assert.Empty(plan["Core"].DependsOn!);
+    }
+
+    [Fact]
+    public async Task DependsOn_NamesTheNearestPlannedProjects_NotThoseBehindThem()
+    {
+        // Core <- Mid <- Top, Top <- Core too, plus a package from outside the config
+        var plan = await Plan(new BumpOptions { Suffix = "local" },
+            Project("Core", "1.0.0"), Project("Mid", "1.0.0", null, "Core"), Project("Top", "1.0.0", null, "Mid", "Core", "Newtonsoft.Json"));
+
+        Assert.Equal(["Core", "Mid"], plan["Top"].DependsOn!);
+        Assert.Equal(["Core"], plan["Mid"].DependsOn!);
     }
 
     [Fact]

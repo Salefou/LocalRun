@@ -20,6 +20,13 @@ public class ProjectRepack
 
     public required int Depth { get; init; }
 
+    /// <summary>
+    /// The projects of the plan it depends on, directly or through libraries the plan leaves out: when one fails, <c>go</c>
+    /// skips it. Absent from plans written before 0.7.1, which <c>go</c> stops at the first failing depth instead.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? DependsOn { get; init; }
+
     public required ProjectVersion FromVersion { get; init; }
 
     /// <summary>The planned version; after <c>go</c>, the version actually packed when its build set another one.</summary>

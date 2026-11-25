@@ -24,6 +24,9 @@ public static class LogEvents
     /// <summary><c>■</c> / <c>-</c>: a process stopped.</summary>
     public static readonly EventId Stopped = new(4, "stopped");
 
+    /// <summary><c>»</c> / <c>HINT</c>: the way past a failure (a command to run, an option to add), on a line of its own.</summary>
+    public static readonly EventId Hint = new(7, "hint");
+
     /// <summary>A slow step going on: printed on a terminal only, unmarked.</summary>
     public static readonly EventId Progress = new(5, "progress");
 }

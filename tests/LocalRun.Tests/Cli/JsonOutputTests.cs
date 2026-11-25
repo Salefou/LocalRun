@@ -127,6 +127,7 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal("failed", run.Json.GetProperty("status").GetString());
         Assert.Equal(LocalRunCli.ExitUsage, run.Json.GetProperty("exitCode").GetInt32());
         Assert.Equal("usage", run.Json.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(JsonValueKind.Null, run.Json.GetProperty("error").GetProperty("hint").ValueKind);
         // The logs say it too, on stderr; the document doesn't repeat the error as a diagnostic
         Assert.NotEqual(string.Empty, run.Stderr);
         Assert.Equal(0, run.Json.GetProperty("diagnostics").GetArrayLength());
@@ -357,6 +358,13 @@ public sealed class JsonOutputTests : IDisposable
               <ItemGroup><ProjectReference Include="..\Mid\Mid.csproj" /></ItemGroup>
             </Project>
             """);
+        // At Mid's depth, not depending on it: packed all the same
+        WriteCsproj(root, "Side", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+              <ItemGroup><ProjectReference Include="..\Lib\Lib.csproj" /></ItemGroup>
+            </Project>
+            """);
         string feed = Path.Combine(workDir, "feed");
         Assert.Equal(LocalRunCli.ExitSuccess,
             (await LrunAsync("build", "--root", root, "--local-nuget", feed, "--include-external", "--csproj", "--json")).ExitCode);
@@ -366,7 +374,12 @@ public sealed class JsonOutputTests : IDisposable
 
         Assert.Equal(LocalRunCli.ExitDotnetFailed, go.ExitCode);
         AssertPlain(go);
-        Assert.Equal("dotnet-failed", go.Json.GetProperty("error").GetProperty("code").GetString());
+        var error = go.Json.GetProperty("error");
+        Assert.Equal("dotnet-failed", error.GetProperty("code").GetString());
+        Assert.Equal("dotnet failed on Mid (restore); skipped, as it depends on it: Top.", error.GetProperty("message").GetString());
+        Assert.Equal(LocalRunCli.PackExcludeHint(["Mid"]), error.GetProperty("hint").GetString());
+        // In the logs too, on a line of its own, marked
+        Assert.Contains($"HINT {LocalRunCli.PackExcludeHint(["Mid"])}", go.Stderr);
         var result = go.Json.GetProperty("result");
         Assert.False(result.GetProperty("packed").GetBoolean());
         var packages = result.GetProperty("packages").EnumerateArray().ToDictionary(package => package.GetProperty("project").GetString()!);
@@ -382,6 +395,10 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Contains(failure.GetProperty("errors").EnumerateArray(), error => error.GetProperty("code").GetString()?.StartsWith("NETSDK") == true);
         Assert.Equal("skipped", packages["Top"].GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, packages["Top"].GetProperty("durationMs").ValueKind);
+        Assert.Equal(["Mid"], packages["Top"].GetProperty("skippedFor").EnumerateArray().Select(name => name.GetString()));
+        Assert.Equal(JsonValueKind.Null, packages["Mid"].GetProperty("skippedFor").ValueKind);
+        Assert.Equal("packed", packages["Side"].GetProperty("status").GetString());
+        Assert.True(File.Exists(Path.Combine(feed, "Side.1.0.0-local.1.nupkg")));
     }
 
     [Fact]
@@ -1012,6 +1029,54 @@ public sealed class JsonOutputTests : IDisposable
         Assert.Equal("stopped", service.GetProperty("status").GetString());
         Assert.Equal(0, service.GetProperty("exitCode").GetInt32());
         Assert.Contains("graceful", File.ReadAllText(log));
+        Assert.False(File.Exists(Path.Combine(workDir, ".lrun", UpState.FileName)));
+    }
+
+    [Fact]
+    public async Task DownForce_KillsWithoutWaitingForTheGracePeriod_EvenDuringAStop()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        string root = Path.Combine(workDir, "repos");
+        // Takes Ctrl+C, and never stops
+        WriteApp(root, "Stubborn", """
+            System.Console.CancelKeyPress += (_, e) => { e.Cancel = true; System.Console.WriteLine("ignored"); };
+            System.Console.WriteLine("ready");
+            System.Threading.Thread.Sleep(System.Threading.Timeout.Infinite);
+            """);
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", root, "--include-external", "--csproj", "--json")).ExitCode);
+
+        var upRun = LrunAsync("up", "--stop-timeout", "600", "--json");
+        string log = Path.Combine(workDir, ".lrun", "logs", "Stubborn.log");
+        var deadline = DateTime.UtcNow.AddMinutes(2);
+        while (!ReadShared(log).Contains("ready"))
+        {
+            Assert.False(upRun.IsCompleted, "up exited before its service was ready");
+            Assert.True(DateTime.UtcNow < deadline, "the service never got ready");
+            await Task.Delay(200);
+        }
+
+        // A plain down starts the stop, then waits for the grace period: it must not force anything itself
+        var plainDown = LrunAsync("down", "--json");
+        while (!ReadShared(log).Contains("ignored"))
+        {
+            Assert.True(DateTime.UtcNow < deadline, "the service never got the stop's Ctrl+C");
+            await Task.Delay(200);
+        }
+        await Task.Delay(2000);
+        Assert.False(upRun.IsCompleted, "a plain down killed the service without waiting for the grace period");
+
+        var forced = await LrunAsync("down", "--force", "--json");
+        var up = await upRun.WaitAsync(TimeSpan.FromSeconds(30));
+        var down = await plainDown.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(LocalRunCli.ExitSuccess, forced.ExitCode);
+        Assert.True(forced.Json.GetProperty("result").GetProperty("stopped").GetBoolean());
+        Assert.Equal(LocalRunCli.ExitSuccess, down.ExitCode);
+        Assert.Equal(LocalRunCli.ExitSuccess, up.ExitCode);
+        var lines = Encoding.UTF8.GetString(up.Stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => JsonDocument.Parse(line).RootElement).ToArray();
+        var service = lines[^1].GetProperty("result").GetProperty("services")[0];
+        Assert.Equal("killed", service.GetProperty("status").GetString());
         Assert.False(File.Exists(Path.Combine(workDir, ".lrun", UpState.FileName)));
     }
 

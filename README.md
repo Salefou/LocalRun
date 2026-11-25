@@ -504,8 +504,19 @@ ok Packed 7 projects in 10 s
 
 A line per depth says what is about to run (a long list ends with `and N more`). Of the `dotnet` output, only
 the warnings and errors are printed, verbatim and all of them: a project targeting several frameworks prints a
-warning once per framework. The first failing `dotnet` command fails the whole command (exit code `1`); if it
-printed no error line, its whole output is printed before the failure.
+warning once per framework. A failing `dotnet` command doesn't stop the others: what doesn't depend on the failed
+project goes on being packed, and every project depending on it, directly or not, is `skipped` (its package would
+declare a version of the failed one that never reached the feed). Then the command fails (exit code `4`), naming each
+failed project with the step that failed and those skipped, then the way past them, on a line of its own:
+
+```
+FAILED go failed: dotnet failed on LrSample.Primitives (pack); skipped, as they depend on it: LrSample.Logging, LrSample.Pricing.Models, LrSample.Pricing, LrSample.Reports.
+HINT To pack the others: add '--exclude LrSample.Primitives' to your 'lrun build', then run 'lrun pack' again.
+```
+
+(`×` and `»` on a terminal; with `--json`, the hint is `error.hint`.) The hint names the option to add, not a whole command: the plan doesn't record which `build` made the config. When
+nothing else would be packed, there is no hint. A `dotnet` command that printed no error line has its whole output
+printed. A plan written before 0.7.1 has no `DependsOn`: everything after a failing depth is skipped.
 
 ### `verify`
 
@@ -623,7 +634,8 @@ the services, as `docker compose up` does for containers:
    **Ctrl+C**, or run [`lrun down`](#down) from another shell. `up` passes the Ctrl+C on to each process (on
    Windows each runs on a hidden console of its own, so the signal reaches them and nothing else sharing `up`'s
    console). Whatever is still running 10 seconds later (`--stop-timeout`) is killed, with its child processes.
-   Ctrl+C during the builds stops `up` before anything starts.
+   Press Ctrl+C again (or run `lrun down --force`) not to wait that long: what still runs is killed right away. So a long
+   grace period costs nothing when you'd rather not wait. Ctrl+C during the builds stops `up` before anything starts.
 
 A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
@@ -645,7 +657,7 @@ Windows ends them too, so they don't keep holding their ports and build output.
 ```
 ▸ Starting LrSample.RiskService
 ▸ Starting LrSample.OrderGateway
-✓ 2 processes started. Press Ctrl+C (or run 'lrun down') to stop them all.
+✓ 2 processes started. Press Ctrl+C (or run 'lrun down') to stop them all, again to kill them.
 [LrSample.RiskService ] RiskService listening on http://localhost:5102/
 [LrSample.OrderGateway] OrderGateway listening on http://localhost:5101/
 ■ Stopping all processes
@@ -657,9 +669,11 @@ Processes are started in dependency order, but `up` doesn't wait for one to be *
 starting the next: by design, each service is expected to wait for (or retry) the ones it needs.
 
 When an executable fails to build (often a tool missing on the machine, or a project's own build step), `up` starts
-nothing and says how to start the others: `To start the others: lrun up --exclude AotTestApp`. When a service exits
-with an error once started, it is most likely the one you just changed: `up` says to run it from your IDE, and the
-others with `lrun up --exclude <it>`. The suggested command keeps the options of the run (`--config`, `--only`, …).
+nothing and says how to start the others, on a hint line of its own (`»`, `HINT` when redirected; `error.hint` with
+`--json`): `HINT To start the others: lrun up --exclude AotTestApp`. When a service exits with an error once started, it
+is most likely the one you just changed: `up` hints right then to run it from your IDE, and the others with `lrun up
+--exclude <it>`, and again after its final failure. The suggested command keeps the options of the run (`--config`,
+`--only`, …).
 
 | Option | Default | Description |
 |---|---|---|
@@ -701,7 +715,9 @@ With `--json`, `up` writes one line of JSON per event on stdout as it happens, t
 
 Stop the `up` started with a config, from another shell or process, as Ctrl+C in its console would: each service gets
 Ctrl+C, whatever still runs after the grace period is killed, and `up` ends with its result as usual. `down` waits
-until `up` has exited (at most its grace period plus 30 seconds, else exit code `1`).
+until `up` has exited (at most its grace period plus 30 seconds, else exit code `1`). With `--force`, as a second
+Ctrl+C would, nothing waits for the grace period: what still runs is killed right away, even when a stop is already
+under way (a `down` still waiting, a Ctrl+C), and `down` waits 30 seconds at most.
 
 ```
 > lrun down
@@ -717,6 +733,7 @@ listens for the request through a named event; elsewhere, stop `up` with Ctrl+C 
 | Option | Default | Description |
 |---|---|---|
 | `--config <file>` | `.lrun/localrun.config.json` | Config the `up` was started with. |
+| `--force` | | Kill what still runs right away, without the grace period. |
 
 ### `settings`
 
@@ -925,6 +942,7 @@ they are ignored, with an `unknown-config-field` warning.)
           "PackageId": "Acme.Shared.Pricing",       // only when it isn't the name; reported by --json
           "SolutionPath": "C:\\work\\repos\\pricing\\Pricing.sln",   // gives the dotnet commands $(SolutionDir)
           "Depth": 0,
+          "DependsOn": [],                       // projects of the plan it depends on: go skips it when one fails
           "FromVersion": { "Major": 1, "Minor": 4, "PatchAndSuffix": "2" },
           "ToVersion":   { "Major": 1, "Minor": 4, "PatchAndSuffix": "3-dev.1" }
         }
@@ -935,7 +953,8 @@ they are ignored, with an `unknown-config-field` warning.)
 }
 ```
 
-Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`. After `go`, a project that
+Useful hand edits: tweak a `ToVersion`, or delete a project from a tree before `go`. `DependsOn` lists the projects
+of the plan it depends on, directly or through libraries producing no package (built from source). After `go`, a project that
 produced no package also has `"NotPacked": true` (see [`go`](#go)).
 
 ### `plots/dependencies-<date-time>.html` — written by `plot` (or `build --plot`)
@@ -1056,7 +1075,7 @@ no progress lines) even on a terminal, and `build --plot` doesn't open the page.
 | `result` | The command's own result (below), or `null`. |
 | `diagnostics` | Every warning and error logged, in order: `code` (see [Diagnostic codes](#diagnostic-codes)), `level` (`warning` / `error`), `message`. |
 | `written` | Full paths of the files written. |
-| `error` | `null`, or `code` and `message`. Codes, with their exit code: `usage` (`2`); `config-not-found` (run the command that writes it), `config-invalid`, `root-not-found`, `settings-invalid` (`3`); `dotnet-failed` (`4`); `strict` (`5`); `verify-failed` (`6`); `doctor-failed`, `up-running` (another `up` runs with this config: `lrun down` stops it), `command-failed` (`1`, anything else). Branch on the code, not on the message. |
+| `error` | `null`, or `code`, `message` and `hint`: the way past the failure when there is one (`up`: the run's command with `--exclude <failed>`; `pack`, `go`: the `--exclude` to add to `build`), else `null`. Codes, with their exit code: `usage` (`2`); `config-not-found` (run the command that writes it), `config-invalid`, `root-not-found`, `settings-invalid` (`3`); `dotnet-failed` (`4`); `strict` (`5`); `verify-failed` (`6`); `doctor-failed`, `up-running` (another `up` runs with this config: `lrun down` stops it), `command-failed` (`1`, anything else). Branch on the code, not on the message. |
 
 Results:
 
@@ -1066,13 +1085,13 @@ Results:
 | `list` | `root`, `filters`, `scanned`, `counts` (`total`, `libraries`, `executables`), `projects` in dependency order: `name`, `packageId`, `type` (`library` / `executable`), `depth` (from 0), `version` (the csproj's), `path` (relative to the root), `solution` (full path, or `null`), `dependencies` (as in the config: listed or not), `latestVersion` (always `null`: `list` never queries the sources), `test` (a test project, with `--tests`), `packable` (whether it produces a package, so `pack` plans it); then `leftOut` and `gitChanges`, as for `build`. `written` is empty. |
 | `status` | `config`, `written` (when the file was last written), `root`, `localNuget`, `build` (the config's `Build` in camelCase, or `null` for an older config), `counts`, `projects` as in `list` (with `latestVersion`), `plan` (`null` without one): `path`, `written`, `olderThanConfig`, `clean`, `packages` in packing order (`project`, `packageId`, `depth`, `from`, `to`); `running`: the `up` running with this config, as in `down`'s `up`, or `null`. `written` (the envelope's) is empty. |
 | `verify` | `config`, `feed`, `libraries`, `ok`, `missing`, `stale` (counts), `packages` in config order: `project`, `packageId`, `status` (`ok`, `missing`, `stale`), `reason` (for `stale`: `csproj-ahead` or `edited`), `csprojVersion`, `feedVersion` (the newest in the feed), `packedAt`, `editedFile` (relative to the project's folder) and `editedAt` (times in UTC). `build --verify` puts the same object under `verify` in its result. |
-| `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`. `status` is `planned` (dry run), `packed`, `not-packed` (the pack succeeded but produced no package: warning `not-packed`), `failed`, or `skipped` (not reached: a depth starts once the previous one is packed). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
+| `pack`, `go` | `plan` (the repack config's path), `packed` (`false` with `--dry-run`, or when packing failed), `packages` in packing order: `project`, `packageId`, `depth`, `from`, `to`, `status`, `durationMs`, `failure`, `skippedFor`. `status` is `planned` (dry run), `packed`, `not-packed` (the pack succeeded but produced no package: warning `not-packed`), `failed`, or `skipped` (it depends on a failed project, directly or not: `skippedFor` names the failed ones, null otherwise). `durationMs` is the time in the project's `dotnet` commands. `failure` is `step` (`clean`, `restore`, `pack`), `exitCode`, `output`: the command's error lines, or its last lines when it printed none (at most 20), `errors`: those lines as data, each `code`, `message`, `file`, `line`, `column` and `project` (null when the line doesn't say; `project` is the one being built, maybe one the failing project references), at most 50, and `errorCount`, before that cap. MSBuild's summary repeats each error and a multi-targeted project reports it once per framework: `errors` holds it once. When no line is in MSBuild's format (a crash, a timeout), `errors` is empty: read `output`. |
 | `plot` | `plot`: the page's path. |
 | `settings` | `path`, `created`, `valid` (false when the commands reading the file would fail on it), `problem`. |
 | `version` | `version`. |
 | `help` | `help`: the help text; `globalOptions`, `commands`, `exitCodes`, `errorCodes`, `diagnosticCodes`: the same as data (see [`help`](#help)). |
 | `schema` | `name`, `schema`: the JSON Schema as an object. |
-| `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C or `down`, `killed` after the grace period), `exitCode`, `log`, and `failure` when its build failed (as `pack`'s, step `build`). |
+| `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C or `down`, `killed` after the grace period or on a second Ctrl+C or `down --force`), `exitCode`, `log`, and `failure` when its build failed (as `pack`'s, step `build`). |
 | `down` | `state` (the `up.json` looked at), `stopped`, `up` (`null` when none was running): `pid`, `started`, `config`, `logs`, `stopTimeout` (seconds), `services` started so far (`project`, `pid` of `dotnet run`, `log`, `exitCode` once it exited). |
 
 `leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" | "excluded" |
@@ -1109,7 +1128,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `open-failed` | A file or page could not be opened. | — |
 | `git-unavailable` | `build`: git could not be loaded (its native library), so the repositories' HEADs that `status` shows are not recorded. `build` succeeds. | — |
 | `package-missing`, `package-stale` | `verify`: a library with no package in the local feed, or an outdated one. `verify` fails on them itself (exit code `6`). | — |
-| `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
+| `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period (or on a second Ctrl+C, `down --force`); a service's stderr line. | — |
 | `stop-signal-failed` | `up`: Ctrl+C could not be passed on to its processes on a stop; those still running are killed after the grace period. | — |
 | `packed-version-differs` | `go`: a package was packed under another version than planned (its build sets the version in a target); the plan now records the version packed. | — |
 | `not-packed` | `go`: `dotnet pack` produced no package for a planned project (`IsPackable` false where `lrun` can't read it); the plan marks it `NotPacked`, `verify` no longer expects it. | — |
@@ -1183,7 +1202,8 @@ your workspace (`AGENTS.md`, `CLAUDE.md`, ...). For this version:
   `lrun status --json`. It reads the files only: fast, and safe to run any time.
 - Then: `lrun build --users-of <Library> --with-services --json`, `lrun pack --json`, and before starting services,
   `lrun verify --json` (exit code 6: pack again).
-- Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
+- Branch on `exitCode` and `error.code`, never on the messages; `error.hint`, when set, is the way past the failure
+  (an `--exclude` to add). Exit codes: 2 usage, 3 missing input (run the previous step),
   4 a dotnet command failed: `failure.errors` in `result.packages[]` (`pack`, `go`) or `result.services[]` (`up`)
   has each file, line and code. A `CS` code is in the code; `NU1101` (package not found) means a dependency is
   neither in the config nor on a source: add it with `--deps-of`. 5 refused by `--strict`.
@@ -1222,9 +1242,10 @@ decided, the paths of the files it wrote), its **diagnostics** (warnings and err
 terminal only, **progress** for the slow steps (scanning, MSBuild evaluation, querying the NuGet sources).
 
 On a terminal, colour says the level (yellow warnings, red errors, grey debug) and a few marks say how a step
-went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped, `→` a change. When
-output is redirected (a pipe, a file, CI), the output is plain: no colours, `[DBG]` / `[WRN]` / `[ERR]` prefixes,
-and the marks become `>`, `+`, `ok`, `FAILED`, `-` and `->`. `NO_COLOR` turns the colours off on a terminal too (the prefixes come back).
+went: `›` a step starting, `▸` a process started (`up`), `✓` done, `×` failed, `■` stopped, `»` a hint (the way
+past a failure: a command to run, an option to add), `→` a change. When output is redirected (a pipe, a file, CI), the
+output is plain: no colours, `[DBG]` / `[WRN]` / `[ERR]` prefixes, and the marks become `>`, `+`, `ok`, `FAILED`, `-`,
+`HINT` and `->`. `NO_COLOR` turns the colours off on a terminal too (the prefixes come back).
 
 The minimum level is `Information`. Every command takes `--log-level <level>` (`Trace`, `Debug`, `Information`,
 `Warning`, `Error`, `Critical`, `None`, in any case), and `logLevel` in your [settings](#settings) sets your default.

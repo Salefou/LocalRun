@@ -7,7 +7,8 @@
   `lrun status --json`. It reads the files only: fast, and safe to run any time.
 - Then: `lrun build --users-of <Library> --with-services --json`, `lrun pack --json`, and before starting services,
   `lrun verify --json` (exit code 6: pack again).
-- Branch on `exitCode` and `error.code`, never on the messages: 2 usage, 3 missing input (run the previous step),
+- Branch on `exitCode` and `error.code`, never on the messages; `error.hint`, when set, is the way past the failure
+  (an `--exclude` to add). Exit codes: 2 usage, 3 missing input (run the previous step),
   4 a dotnet command failed: `failure.errors` in `result.packages[]` (`pack`, `go`) or `result.services[]` (`up`)
   has each file, line and code. A `CS` code is in the code; `NU1101` (package not found) means a dependency is
   neither in the config nor on a source: add it with `--deps-of`. 5 refused by `--strict`.

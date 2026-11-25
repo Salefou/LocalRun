@@ -17,7 +17,7 @@ public sealed class PackOutcome
 {
     /// <summary>
     /// <c>planned</c> before anything runs (a dry run), else <c>packed</c>, <c>not-packed</c> (the pack succeeded but produced
-    /// no package), <c>failed</c>, or <c>skipped</c> (not reached).
+    /// no package), <c>failed</c>, or <c>skipped</c> (it depends on a failed project: <see cref="SkippedFor"/>).
     /// </summary>
     public string Status { get; internal set; } = PackStatus.Planned;
 
@@ -28,6 +28,9 @@ public sealed class PackOutcome
 
     /// <summary>The version of the package produced, when it isn't the planned one (written back into the plan).</summary>
     public string? PackedVersion { get; internal set; }
+
+    /// <summary>For a skipped project, the failed projects it depends on (directly or not), sorted by name.</summary>
+    public IReadOnlyList<string>? SkippedFor { get; internal set; }
 }
 
 public static class PackStatus
@@ -48,7 +51,18 @@ public class RepackExecutor
 
     private readonly ConcurrentDictionary<string, PackOutcome> outcomes = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Each project of the last run, by name; complete after a failure too (the rest is <c>skipped</c>).</summary>
+    /// <summary>
+    /// The way past failed projects, attached to the run's failure (<see cref="ErrorHint"/>; the CLI writes it: the core
+    /// doesn't name commands). Null for no suggestion.
+    /// </summary>
+    private readonly Func<IReadOnlyCollection<string>, string>? excludeHint;
+
+    public RepackExecutor(Func<IReadOnlyCollection<string>, string>? excludeHint = null)
+    {
+        this.excludeHint = excludeHint;
+    }
+
+    /// <summary>Each project of the last run, by name; complete after a failure too (its users are <c>skipped</c>).</summary>
     public IReadOnlyDictionary<string, PackOutcome> Outcomes => outcomes;
 
     /// <summary>Prints the depths a run would go through, as <see cref="RepackAndRebuildAsync"/> does, without running them.</summary>
@@ -59,6 +73,11 @@ public class RepackExecutor
             LogDepth(i, depths);
     }
 
+    /// <summary>
+    /// Packs the plan depth by depth. A project failing doesn't stop the run: the others go on, and whatever depends on it
+    /// is skipped (its package would declare the planned version of one that never reached the feed). The run then fails
+    /// with every failed project, and the hint to leave them out.
+    /// </summary>
     public async Task RepackAndRebuildAsync(RepackConfig repackConfig)
     {
         // Restore uses the feed as a source before the first pack creates it: NuGet rejects a missing local source
@@ -71,17 +90,34 @@ public class RepackExecutor
         outcomes.Clear();
         foreach (var proj in depths.SelectMany(depth => depth))
             outcomes[proj.Name] = new PackOutcome { Status = PackStatus.Skipped };
+        // For each project failed or skipped so far, the failed projects behind it
+        var failedBehind = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
         try
         {
             for (int i = 0; i < depths.Count; i++)
             {
-                LogDepth(i, depths);
-                if (repackConfig.Clean)
+                var runnable = new List<ProjectRepack>();
+                foreach (var proj in depths[i])
                 {
-                    await CleanAllAsync(depths[i]);
+                    if (SkippedFor(proj, failedBehind) is { } failed)
+                    {
+                        outcomes[proj.Name].SkippedFor = failed;
+                        failedBehind[proj.Name] = failed;
+                    }
+                    else
+                    {
+                        runnable.Add(proj);
+                    }
                 }
-                await RestoreAllAsync(depths[i], repackConfig.LocalNugetPath);
-                await PackAllAsync(depths[i], repackConfig.LocalNugetPath, versionsPropsPath, packFolder);
+                if (runnable.Count == 0)
+                    continue;
+                LogDepth(i, depths.Count, runnable, depths[i].Count - runnable.Count);
+                if (repackConfig.Clean)
+                    runnable = await CleanAllAsync(runnable);
+                runnable = await RestoreAllAsync(runnable, repackConfig.LocalNugetPath);
+                await PackAllAsync(runnable, repackConfig.LocalNugetPath, versionsPropsPath, packFolder);
+                foreach (var proj in depths[i].Where(proj => outcomes[proj.Name].Status == PackStatus.Failed))
+                    failedBehind[proj.Name] = [proj.Name];
             }
         }
         finally
@@ -90,10 +126,47 @@ public class RepackExecutor
             if (Directory.Exists(packFolder))
                 Directory.Delete(packFolder, recursive: true);
         }
+        var all = depths.SelectMany(depth => depth).ToList();
+        var failedProjects = all.Where(proj => outcomes[proj.Name].Status == PackStatus.Failed).Select(proj => proj.Name).ToList();
+        if (failedProjects.Count != 0)
+            throw ErrorHint.With(new DotnetFailedException(FailureMessage(all, outcomes)), HintFor(failedProjects, all.Count, excludeHint));
         int notPacked = outcomes.Values.Count(outcome => outcome.Status == PackStatus.NotPacked);
         logger.LogInformation(LogEvents.Done, "Packed {Projects} in {Duration}{NotPacked}",
-            Text.Count(depths.Sum(depth => depth.Count) - notPacked, "project"), Text.Duration(stopwatch.Elapsed),
+            Text.Count(all.Count - notPacked, "project"), Text.Duration(stopwatch.Elapsed),
             notPacked == 0 ? string.Empty : $" ({notPacked} produced no package)");
+    }
+
+    /// <summary>
+    /// The failed projects a project depends on, through <see cref="ProjectRepack.DependsOn"/>, or null when none failed.
+    /// A plan written before it (no <c>DependsOn</c>) can't tell: every project after a failing depth is skipped.
+    /// </summary>
+    /// <param name="failedBehind">For each project failed or skipped in the earlier depths, the failed projects behind it.</param>
+    internal static IReadOnlyList<string>? SkippedFor(ProjectRepack proj, IReadOnlyDictionary<string, IReadOnlyList<string>> failedBehind)
+    {
+        var dependencies = proj.DependsOn ?? (IEnumerable<string>)failedBehind.Keys;
+        var failed = dependencies
+            .SelectMany(name => failedBehind.GetValueOrDefault(name) ?? [])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return failed.Count == 0 ? null : failed;
+    }
+
+    /// <summary>The way past the failed projects, or null when excluding them would leave nothing to pack.</summary>
+    internal static string? HintFor(IReadOnlyCollection<string> failed, int planned, Func<IReadOnlyCollection<string>, string>? excludeHint) =>
+        failed.Count < planned ? excludeHint?.Invoke(failed) : null;
+
+    /// <summary>The failure of a run: the failed projects with the step that failed, then those skipped for them.</summary>
+    internal static string FailureMessage(IReadOnlyList<ProjectRepack> plan, IReadOnlyDictionary<string, PackOutcome> outcomes)
+    {
+        var failed = plan.Where(proj => outcomes[proj.Name].Status == PackStatus.Failed).Select(proj => proj.Name).ToList();
+        var skipped = plan.Where(proj => outcomes[proj.Name].SkippedFor != null).Select(proj => proj.Name).ToList();
+        string Step(string name) => outcomes[name].Failure?.Step is { } step ? $"{name} ({step})" : name;
+        var message = new StringBuilder($"dotnet failed on {Text.Abbreviate(failed.Select(Step))}");
+        if (skipped.Count != 0)
+            message.Append($"; skipped, as {(skipped.Count == 1 ? "it depends" : "they depend")} on {(failed.Count == 1 ? "it" : "them")}: {Text.Abbreviate(skipped)}");
+        message.Append('.');
+        return message.ToString();
     }
 
     /// <summary>
@@ -107,8 +180,12 @@ public class RepackExecutor
             .Select(group => group.OrderBy(proj => proj.Name, StringComparer.OrdinalIgnoreCase).ToList())];
 
     private static void LogDepth(int index, List<List<ProjectRepack>> depths) =>
-        logger.LogInformation(LogEvents.Start, "Depth {Depth}/{Depths}: {Projects}",
-            index + 1, depths.Count, Text.Abbreviate(depths[index].Select(proj => proj.Name), ShownPerDepth));
+        LogDepth(index, depths.Count, depths[index], skipped: 0);
+
+    private static void LogDepth(int index, int count, List<ProjectRepack> projects, int skipped) =>
+        logger.LogInformation(LogEvents.Start, "Depth {Depth}/{Depths}: {Projects}{Skipped}",
+            index + 1, count, Text.Abbreviate(projects.Select(proj => proj.Name), ShownPerDepth),
+            skipped == 0 ? string.Empty : $" ({skipped} skipped)");
 
     /// <summary>
     /// MSBuild props giving every project of the plan its planned PackageVersion, keyed by project path.
@@ -147,7 +224,8 @@ public class RepackExecutor
         await Task.WhenAll(projects.Select(async proj =>
         {
             string output = Path.Combine(packFolder, Guid.NewGuid().ToString("N"));
-            await RunDotnetAsync("pack", proj, $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{output}\" -p:CustomBeforeMicrosoftCommonProps=\"{versionsPropsPath}\"{NoSummary}{SolutionProperties.Arguments(proj.SolutionPath)}");
+            if (!await RunDotnetAsync("pack", proj, $"pack \"{proj.PathToCsproj}\" --no-restore -o \"{output}\" -p:CustomBeforeMicrosoftCommonProps=\"{versionsPropsPath}\"{NoSummary}{SolutionProperties.Arguments(proj.SolutionPath)}"))
+                return;
             var outcome = outcomes[proj.Name];
             var packed = MoveToFeed(output, nugetRepoPath);
             if (packed == null)
@@ -220,19 +298,25 @@ public class RepackExecutor
         return changed;
     }
 
-    private async Task CleanAllAsync(List<ProjectRepack> projects)
-    {
-        await Task.WhenAll(projects.Select(proj =>
-            RunDotnetAsync("clean", proj, $"clean \"{proj.PathToCsproj}\" --verbosity minimal{NoSummary}{SolutionProperties.Arguments(proj.SolutionPath)}")));
-    }
+    /// <returns>The projects cleaned; the others failed.</returns>
+    private Task<List<ProjectRepack>> CleanAllAsync(List<ProjectRepack> projects) =>
+        RunAllAsync(projects, proj =>
+            RunDotnetAsync("clean", proj, $"clean \"{proj.PathToCsproj}\" --verbosity minimal{NoSummary}{SolutionProperties.Arguments(proj.SolutionPath)}"));
 
-    private async Task RestoreAllAsync(List<ProjectRepack> projects, string nugetRepoPath)
-    {
+    /// <returns>The projects restored; the others failed.</returns>
+    private Task<List<ProjectRepack>> RestoreAllAsync(List<ProjectRepack> projects, string nugetRepoPath) =>
         // The local feed is added to the sources from NuGet.config (--source would replace them all,
         // breaking restore of any third-party package that isn't in the global packages folder yet).
         // --force: a no-op restore would keep floating *-* references on the previous iteration
-        await Task.WhenAll(projects.Select(proj =>
-            RunDotnetAsync("restore", proj, $"restore \"{proj.PathToCsproj}\" --force -p:RestoreAdditionalProjectSources=\"{nugetRepoPath}\" --verbosity minimal{NoSummary}{SolutionProperties.Arguments(proj.SolutionPath)}")));
+        RunAllAsync(projects, proj =>
+            RunDotnetAsync("restore", proj, $"restore \"{proj.PathToCsproj}\" --force -p:RestoreAdditionalProjectSources=\"{nugetRepoPath}\" --verbosity minimal{NoSummary}{SolutionProperties.Arguments(proj.SolutionPath)}"));
+
+    /// <summary>Runs a step on every project at once.</summary>
+    /// <returns>The projects it succeeded on, in their order.</returns>
+    private static async Task<List<ProjectRepack>> RunAllAsync(List<ProjectRepack> projects, Func<ProjectRepack, Task<bool>> step)
+    {
+        var succeeded = await Task.WhenAll(projects.Select(step));
+        return [.. projects.Where((_, i) => succeeded[i])];
     }
 
     /// <summary>
@@ -241,7 +325,8 @@ public class RepackExecutor
     /// fails without having printed an error, so a failure is never silent. Its duration and failure go into the
     /// project's <see cref="Outcomes"/>.
     /// </summary>
-    private async Task RunDotnetAsync(string step, ProjectRepack proj, string args)
+    /// <returns>Whether it succeeded; when not, the project is <c>failed</c>.</returns>
+    private async Task<bool> RunDotnetAsync(string step, ProjectRepack proj, string args)
     {
         var stopwatch = Stopwatch.StartNew();
         var psi = new ProcessStartInfo("dotnet", args)
@@ -289,7 +374,8 @@ public class RepackExecutor
             }
             outcome.Status = PackStatus.Failed;
             outcome.Failure = DotnetFailure.Of(step, proc.ExitCode, [.. output]);
-            throw new DotnetFailedException($"dotnet {step} failed on {proj.Name} with exit code {proc.ExitCode} ({proj.PathToCsproj})");
+            return false;
         }
+        return true;
     }
 }

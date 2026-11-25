@@ -28,6 +28,9 @@ public sealed record UpState(int Pid, DateTimeOffset Started, string Config, str
     /// <summary>The named event <c>down</c> sets to stop the <c>up</c> of this process id (Windows; per logon session).</summary>
     public static string StopEventName(int pid) => $@"Local\lrun-up-stop-{pid}";
 
+    /// <summary>The named event <c>down --force</c> sets: the stop, without the grace period (Windows; per logon session).</summary>
+    public static string KillEventName(int pid) => $@"Local\lrun-up-kill-{pid}";
+
     /// <summary>The <c>up</c> recorded in this file while its process still runs; null when there is none.</summary>
     public static UpState? ReadRunning(string path)
     {
