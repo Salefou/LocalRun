@@ -595,12 +595,17 @@ public static class LocalRunCli
         var processor = new RunProcessor(logsFolder, OnEvent, stopTimeout == null ? null : TimeSpan.FromSeconds(stopTimeout.Value),
             CommandExcluding);
         state.Write(statePath);
-        // lrun down sets it: the same stop as Ctrl+C
+        // lrun down sets the first: the same stop as Ctrl+C; down --force the second: the stop without the grace period
         using var stopEvent = OperatingSystem.IsWindows()
             ? new EventWaitHandle(false, EventResetMode.ManualReset, UpState.StopEventName(Environment.ProcessId))
             : null;
+        using var killEvent = OperatingSystem.IsWindows()
+            ? new EventWaitHandle(false, EventResetMode.ManualReset, UpState.KillEventName(Environment.ProcessId))
+            : null;
         var stopWait = stopEvent == null ? null
             : ThreadPool.RegisterWaitForSingleObject(stopEvent, (_, _) => processor.RequestStop(), null, Timeout.Infinite, executeOnlyOnce: true);
+        var killWait = killEvent == null ? null
+            : ThreadPool.RegisterWaitForSingleObject(killEvent, (_, _) => processor.RequestStop(force: true), null, Timeout.Infinite, executeOnlyOnce: true);
         try
         {
             await processor.RunAsync(config, exclude, only);
@@ -608,6 +613,7 @@ public static class LocalRunCli
         finally
         {
             stopWait?.Unregister(null);
+            killWait?.Unregister(null);
             lock (statePath)
             {
                 state.Delete(statePath);
@@ -667,6 +673,7 @@ public static class LocalRunCli
     private static async Task DownAsync(CommandLineArgs args, CommandOutput output)
     {
         string configPath = args.Value("--config") ?? DefaultConfigPath;
+        bool force = args.Flag("--force");
         args.EnsureAllConsumed();
 
         string statePath = UpState.PathFor(configPath);
@@ -681,14 +688,16 @@ public static class LocalRunCli
         }
         if (!OperatingSystem.IsWindows())
             throw new InvalidOperationException($"down is Windows only: stop {CommandName} up (pid {state.Pid}) with Ctrl+C or a signal.");
-        if (!EventWaitHandle.TryOpenExisting(UpState.StopEventName(state.Pid), out var stopEvent))
+        if (!EventWaitHandle.TryOpenExisting(force ? UpState.KillEventName(state.Pid) : UpState.StopEventName(state.Pid), out var stopEvent))
         {
-            throw new InvalidOperationException($"{CommandName} up (pid {state.Pid}) doesn't listen for a stop request " +
-                "(started by an older lrun?): stop it with Ctrl+C in its console.");
+            throw new InvalidOperationException($"{CommandName} up (pid {state.Pid}) doesn't listen for a{(force ? " forced" : "")} " +
+                $"stop request (started by an older lrun?): stop it with Ctrl+C in its console{(force ? ", twice" : "")}.");
         }
 
-        logger.LogInformation(LogEvents.Start, "Stopping {Command} up (pid {Pid})", CommandName, state.Pid);
-        var limit = TimeSpan.FromSeconds(state.StopTimeout) + DownMargin;
+        logger.LogInformation(LogEvents.Start, force ? "Killing the services of {Command} up (pid {Pid})" : "Stopping {Command} up (pid {Pid})",
+            CommandName, state.Pid);
+        // Forced: no grace period to wait for, only the kills and the result
+        var limit = (force ? TimeSpan.Zero : TimeSpan.FromSeconds(state.StopTimeout)) + DownMargin;
         try
         {
             using var up = Process.GetProcessById(state.Pid);

@@ -245,7 +245,7 @@ lrun up
   ```
 
   ReportCli shows `Reports 1.1.0`: it uses Reports through a project reference, so it builds it from source.
-  Right after `ok 4 processes started. Press Ctrl+C (or run 'lrun down') to stop them all.`, a `Logs: …\samples\.lrun\logs` line:
+  Right after `ok 4 processes started. Press Ctrl+C (or run 'lrun down') to stop them all, again to kill them.`, a `Logs: …\samples\.lrun\logs` line:
   each executable's output is also in `.lrun/logs/<name>.log`, without the prefix (e.g. `LrSample.OrderGateway.log`
   starts with `LrSample.OrderGateway 3.0.0 started`, and ends with `OrderGateway stopped` after Ctrl+C).
 - `lrun up --json` prints only JSON on stdout, one line each: `building` ×4, `started` ×4 (pid and log file),

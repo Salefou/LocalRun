@@ -1032,6 +1032,54 @@ public sealed class JsonOutputTests : IDisposable
         Assert.False(File.Exists(Path.Combine(workDir, ".lrun", UpState.FileName)));
     }
 
+    [Fact]
+    public async Task DownForce_KillsWithoutWaitingForTheGracePeriod_EvenDuringAStop()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        string root = Path.Combine(workDir, "repos");
+        // Takes Ctrl+C, and never stops
+        WriteApp(root, "Stubborn", """
+            System.Console.CancelKeyPress += (_, e) => { e.Cancel = true; System.Console.WriteLine("ignored"); };
+            System.Console.WriteLine("ready");
+            System.Threading.Thread.Sleep(System.Threading.Timeout.Infinite);
+            """);
+        Assert.Equal(LocalRunCli.ExitSuccess,
+            (await LrunAsync("build", "--root", root, "--include-external", "--csproj", "--json")).ExitCode);
+
+        var upRun = LrunAsync("up", "--stop-timeout", "600", "--json");
+        string log = Path.Combine(workDir, ".lrun", "logs", "Stubborn.log");
+        var deadline = DateTime.UtcNow.AddMinutes(2);
+        while (!ReadShared(log).Contains("ready"))
+        {
+            Assert.False(upRun.IsCompleted, "up exited before its service was ready");
+            Assert.True(DateTime.UtcNow < deadline, "the service never got ready");
+            await Task.Delay(200);
+        }
+
+        // A plain down starts the stop, then waits for the grace period: it must not force anything itself
+        var plainDown = LrunAsync("down", "--json");
+        while (!ReadShared(log).Contains("ignored"))
+        {
+            Assert.True(DateTime.UtcNow < deadline, "the service never got the stop's Ctrl+C");
+            await Task.Delay(200);
+        }
+        await Task.Delay(2000);
+        Assert.False(upRun.IsCompleted, "a plain down killed the service without waiting for the grace period");
+
+        var forced = await LrunAsync("down", "--force", "--json");
+        var up = await upRun.WaitAsync(TimeSpan.FromSeconds(30));
+        var down = await plainDown.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(LocalRunCli.ExitSuccess, forced.ExitCode);
+        Assert.True(forced.Json.GetProperty("result").GetProperty("stopped").GetBoolean());
+        Assert.Equal(LocalRunCli.ExitSuccess, down.ExitCode);
+        Assert.Equal(LocalRunCli.ExitSuccess, up.ExitCode);
+        var lines = Encoding.UTF8.GetString(up.Stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => JsonDocument.Parse(line).RootElement).ToArray();
+        var service = lines[^1].GetProperty("result").GetProperty("services")[0];
+        Assert.Equal("killed", service.GetProperty("status").GetString());
+        Assert.False(File.Exists(Path.Combine(workDir, ".lrun", UpState.FileName)));
+    }
+
     /// <summary>A file another process is writing, or empty when it doesn't exist yet.</summary>
     private static string ReadShared(string path)
     {

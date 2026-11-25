@@ -17,7 +17,7 @@ using System.Threading.Tasks;
 /// have all exited. Ctrl+C, or <see cref="RequestStop"/> (<c>lrun down</c>), stops them: on Windows each process runs on
 /// a hidden console of its own, to which Ctrl+C is sent (<see cref="ConsoleSignal"/>; elsewhere they get the terminal's
 /// themselves), and whatever is still running after the stop grace period (<see cref="DefaultStopGracePeriod"/> unless
-/// given) is killed with its child processes. On Windows they also run in a <see cref="ProcessJob"/>, so they are stopped
+/// given, cut short by a second Ctrl+C or <c>down --force</c>) is killed with its child processes. On Windows they also run in a <see cref="ProcessJob"/>, so they are stopped
 /// when LocalRun is killed. Each service's output also goes to its own file in the logs folder, and what happens is
 /// reported as <see cref="UpEvent"/>s and in <see cref="Services"/>. One run per instance.
 /// </summary>
@@ -41,6 +41,9 @@ public class RunProcessor : IRunProcessor
     private List<string> order = [];
 
     private readonly CancellationTokenSource stopping = new();
+
+    /// <summary>Cancelled by a forced stop: the grace period ends there, and what still runs is killed.</summary>
+    private readonly CancellationTokenSource forcing = new();
 
     /// <summary>Every process started, builds included: a stop sends Ctrl+C to those still running.</summary>
     private readonly ConcurrentQueue<RunningProcess> started = new();
@@ -99,7 +102,8 @@ public class RunProcessor : IRunProcessor
         ConsoleCancelEventHandler onCancel = (_, e) =>
         {
             e.Cancel = true; // keep LocalRun alive to stop the processes properly
-            RequestStop();
+            // Pressed again while stopping (by Ctrl+C or 'down'): no more waiting
+            RequestStop(force: stopping.IsCancellationRequested);
         };
         Console.CancelKeyPress += onCancel;
 
@@ -183,7 +187,7 @@ public class RunProcessor : IRunProcessor
                     }
                 }, TaskScheduler.Default));
             }
-            logger.LogInformation(LogEvents.Done, "{Processes} started. Press Ctrl+C (or run 'lrun down') to stop them all.",
+            logger.LogInformation(LogEvents.Done, "{Processes} started. Press Ctrl+C (or run 'lrun down') to stop them all, again to kill them.",
                 Text.Count(running.Count, "process", "processes"));
             if (logsFolder != null)
                 logger.LogInformation("Logs: {Folder}", logsFolder);
@@ -194,7 +198,8 @@ public class RunProcessor : IRunProcessor
             failed = [.. running.Where(process => process.Exited.IsCompletedSuccessfully && process.Exited.Result != 0)];
             if (stopping.IsCancellationRequested)
             {
-                await Task.WhenAny(allExited, Task.Delay(stopGracePeriod));
+                // A second Ctrl+C, or 'down --force', cuts it short
+                await Task.WhenAny(allExited, Task.Delay(stopGracePeriod, forcing.Token));
             }
         }
         finally
@@ -222,21 +227,33 @@ public class RunProcessor : IRunProcessor
 
     /// <summary>
     /// Stops the run as Ctrl+C does: tells the processes still running to stop, then kills them after the grace period.
-    /// Safe from any thread, before or during <see cref="RunAsync"/>; only the first call counts.
+    /// A <paramref name="force"/>d call (a Ctrl+C during a stop, <c>down --force</c>) ends the grace period, or skips it:
+    /// what still runs is killed right away (user feedback, 2026-11-25: a long grace period, cut short at will). Safe from
+    /// any thread, before or during <see cref="RunAsync"/>; a call adding nothing is ignored.
     /// </summary>
-    public void RequestStop()
+    public void RequestStop(bool force = false)
     {
+        bool first;
         lock (stopping)
         {
-            if (stopping.IsCancellationRequested)
+            first = !stopping.IsCancellationRequested;
+            bool forced = force && !forcing.IsCancellationRequested;
+            if (!first && !forced)
                 return;
             stopping.Cancel();
+            if (forced)
+                forcing.Cancel();
         }
-        logger.LogInformation(LogEvents.Stopped, "Stopping all processes");
-        Emit(new(UpEvents.Stopping));
-        // Elsewhere the processes share the terminal's foreground group, and got its Ctrl+C themselves
-        if (OperatingSystem.IsWindows())
-            _ = ConsoleSignal.SendCtrlCAsync([.. started.Where(process => !process.Exited.IsCompleted).Select(process => process.Id)]);
+        if (first)
+        {
+            logger.LogInformation(LogEvents.Stopped, "Stopping all processes");
+            Emit(new(UpEvents.Stopping));
+            // Elsewhere the processes share the terminal's foreground group, and got its Ctrl+C themselves
+            if (OperatingSystem.IsWindows())
+                _ = ConsoleSignal.SendCtrlCAsync([.. started.Where(process => !process.Exited.IsCompleted).Select(process => process.Id)]);
+        }
+        if (forcing.IsCancellationRequested)
+            logger.LogInformation(LogEvents.Stopped, "Not waiting any longer: killing what still runs");
     }
 
     /// <summary>

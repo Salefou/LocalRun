@@ -49,7 +49,10 @@ why.
   line); `error.message` names the projects, never the command line. `Services` keeps the run order.
   Then start all with `dotnet run --no-build` without awaiting, Ctrl+C →
   `e.Cancel = true` + `RequestStop()`: the children get Ctrl+C (below) + kill the process tree after
-  the stop grace period (10 s, `--stop-timeout`, else `stopTimeout` in the settings). On Windows the `dotnet run`
+  the stop grace period (10 s, `--stop-timeout`, else `stopTimeout` in the settings). A forced stop ends the grace
+  period at once (`RequestStop(force: true)`, user feedback, 2026-11-25: set a long grace period, watch the services
+  stop, kill them when tired of waiting): a Ctrl+C while a stop is under way (from a first Ctrl+C or `down`), or
+  `down --force`. A second plain `down` never forces: only the Ctrl+C handler escalates on a repeat. On Windows the `dotnet run`
   processes (not the builds: MSBuild nodes outlive them) go into a kill-on-close `ProcessJob`, so they die with `lrun`
   even when it is killed from outside; failing to create/assign it only warns. No readiness checks, by design (user
   feedback, 2026-10-24): services are expected to wait for/retry their dependencies. Exit code 1 only for processes that
@@ -85,7 +88,10 @@ why.
   started at another time (pid reuse), is ignored, so a killed `up` leaves nothing to clean. A second `up` with that
   file live fails `up-running` (exit 1) before reading the config. On Windows `up` waits on the named event
   `Local\lrun-up-stop-<pid>`; `down` sets it and waits for the process, at most the grace period + 30 s
-  (`command-failed` after). No `up` running = exit 0 with `stopped: false`. Left out on purpose: `--detach`, `ps`, `logs`.
+  (`command-failed` after). `down --force` sets `Local\lrun-up-kill-<pid>` instead (a second event, not a second `Set`
+  of the first: a manual-reset event can't count) and waits 30 s at most; an `up` without that event (older `lrun`) fails
+  it with a pointer to Ctrl+C. Killing `up`'s process from `down` was not chosen: `up` would neither report its result
+  nor delete `up.json`. No `up` running = exit 0 with `stopped: false`. Left out on purpose: `--detach`, `ps`, `logs`.
 - **Testing Ctrl+C from automation**: start `lrun up` in its own console and send a real `CTRL_C_EVENT`
   (AttachConsole + GenerateConsoleCtrlEvent from a separate process); a `cmd` wrapper reporting the exit
   code needs `/v:on` and `!ERRORLEVEL!`. Poll its redirected output with `FileShare.ReadWrite` (`Get-Content` can't

@@ -64,7 +64,7 @@ public static class ServiceStatus
     /// <summary>Exited after the stop was requested.</summary>
     public const string Stopped = "stopped";
 
-    /// <summary>Still running after the grace period, so killed.</summary>
+    /// <summary>Still running after the grace period, or on a forced stop (a second Ctrl+C, <c>down --force</c>), so killed.</summary>
     public const string Killed = "killed";
 }
 

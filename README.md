@@ -634,7 +634,8 @@ the services, as `docker compose up` does for containers:
    **Ctrl+C**, or run [`lrun down`](#down) from another shell. `up` passes the Ctrl+C on to each process (on
    Windows each runs on a hidden console of its own, so the signal reaches them and nothing else sharing `up`'s
    console). Whatever is still running 10 seconds later (`--stop-timeout`) is killed, with its child processes.
-   Ctrl+C during the builds stops `up` before anything starts.
+   Press Ctrl+C again (or run `lrun down --force`) not to wait that long: what still runs is killed right away. So a long
+   grace period costs nothing when you'd rather not wait. Ctrl+C during the builds stops `up` before anything starts.
 
 A process that fails *on its own* (non-zero
 exit code before Ctrl+C) doesn't stop the others, but makes `up` exit with code `1` once everything
@@ -656,7 +657,7 @@ Windows ends them too, so they don't keep holding their ports and build output.
 ```
 ▸ Starting LrSample.RiskService
 ▸ Starting LrSample.OrderGateway
-✓ 2 processes started. Press Ctrl+C (or run 'lrun down') to stop them all.
+✓ 2 processes started. Press Ctrl+C (or run 'lrun down') to stop them all, again to kill them.
 [LrSample.RiskService ] RiskService listening on http://localhost:5102/
 [LrSample.OrderGateway] OrderGateway listening on http://localhost:5101/
 ■ Stopping all processes
@@ -714,7 +715,9 @@ With `--json`, `up` writes one line of JSON per event on stdout as it happens, t
 
 Stop the `up` started with a config, from another shell or process, as Ctrl+C in its console would: each service gets
 Ctrl+C, whatever still runs after the grace period is killed, and `up` ends with its result as usual. `down` waits
-until `up` has exited (at most its grace period plus 30 seconds, else exit code `1`).
+until `up` has exited (at most its grace period plus 30 seconds, else exit code `1`). With `--force`, as a second
+Ctrl+C would, nothing waits for the grace period: what still runs is killed right away, even when a stop is already
+under way (a `down` still waiting, a Ctrl+C), and `down` waits 30 seconds at most.
 
 ```
 > lrun down
@@ -730,6 +733,7 @@ listens for the request through a named event; elsewhere, stop `up` with Ctrl+C 
 | Option | Default | Description |
 |---|---|---|
 | `--config <file>` | `.lrun/localrun.config.json` | Config the `up` was started with. |
+| `--force` | | Kill what still runs right away, without the grace period. |
 
 ### `settings`
 
@@ -1087,7 +1091,7 @@ Results:
 | `version` | `version`. |
 | `help` | `help`: the help text; `globalOptions`, `commands`, `exitCodes`, `errorCodes`, `diagnosticCodes`: the same as data (see [`help`](#help)). |
 | `schema` | `name`, `schema`: the JSON Schema as an object. |
-| `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C or `down`, `killed` after the grace period), `exitCode`, `log`, and `failure` when its build failed (as `pack`'s, step `build`). |
+| `up` | `logs` (the folder), `services` in dependency order: `project`, `status` (`not-started`, `exited` on its own with 0, `failed` on its own otherwise, `stopped` by Ctrl+C or `down`, `killed` after the grace period or on a second Ctrl+C or `down --force`), `exitCode`, `log`, and `failure` when its build failed (as `pack`'s, step `build`). |
 | `down` | `state` (the `up.json` looked at), `stopped`, `up` (`null` when none was running): `pid`, `started`, `config`, `logs`, `stopTimeout` (seconds), `services` started so far (`project`, `pid` of `dotnet run`, `log`, `exitCode` once it exited). |
 
 `leftOut` lists what `build` left out of the config, one entry per reason: `{ "reason": "test" | "filter" | "excluded" |
@@ -1124,7 +1128,7 @@ Each warning and error has a code, reported in the JSON `diagnostics`. Branch on
 | `open-failed` | A file or page could not be opened. | — |
 | `git-unavailable` | `build`: git could not be loaded (its native library), so the repositories' HEADs that `status` shows are not recorded. `build` succeeds. | — |
 | `package-missing`, `package-stale` | `verify`: a library with no package in the local feed, or an outdated one. `verify` fails on them itself (exit code `6`). | — |
-| `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period; a service's stderr line. | — |
+| `job-object-failed`, `process-killed`, `service-output` | `up`: processes may outlive `lrun` if it is killed; a process killed after the grace period (or on a second Ctrl+C, `down --force`); a service's stderr line. | — |
 | `stop-signal-failed` | `up`: Ctrl+C could not be passed on to its processes on a stop; those still running are killed after the grace period. | — |
 | `packed-version-differs` | `go`: a package was packed under another version than planned (its build sets the version in a target); the plan now records the version packed. | — |
 | `not-packed` | `go`: `dotnet pack` produced no package for a planned project (`IsPackable` false where `lrun` can't read it); the plan marks it `NotPacked`, `verify` no longer expects it. | — |

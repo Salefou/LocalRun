@@ -17,6 +17,8 @@ bumps the minor version, anything else the patch.
   executable fails to build, it still starts nothing, and ends with `To start the others: lrun up --exclude <failed>`.
   When a service exits with an error once started, `up` says to run it from the IDE and the others with
   `lrun up --exclude <it>`, there and again in its final failure.
+- A second Ctrl+C while `up` stops its services, or `lrun down --force`, kills what still runs right away, without
+  waiting for the end of the grace period (`--stop-timeout`, `stopTimeout`): set a long one, and cut it short at will.
 - Hints, the way past a failure, get a line of their own after it, with a mark of their own: `»` on a terminal, `HINT`
   when redirected (`up`'s, and `pack` / `go`'s below). With `--json`, the error's `hint` holds it (null without one),
   apart from `message`.

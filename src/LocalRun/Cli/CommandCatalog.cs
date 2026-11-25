@@ -138,7 +138,8 @@ internal static class CommandCatalog
             OptionInfo.One("--repack-config", "<file>", $"Repack config file to read (default: {LocalRunCli.DefaultRepackConfigPath})."),
         ]),
         Command("up", "Build the executables of a config file, then run them side by side; Ctrl+C (or 'down' from another shell) " +
-            "stops them all, killing what still runs after a grace period (--stop-timeout). Each one's output also goes to " +
+            "stops them all, killing what still runs after a grace period (--stop-timeout); Ctrl+C again (or 'down --force') " +
+            "kills it right away. Each one's output also goes to " +
             "<logs>/<name>.log. One up per config folder: a second one is refused (up-running). With --json, stdout gets one line " +
             "per event (building, started, running, stopping, exited), then the result on one line.",
         [
@@ -153,6 +154,8 @@ internal static class CommandCatalog
             "(grace period, then kills), and wait until it has exited. Without one running, there is nothing to stop. Windows only.",
         [
             OptionInfo.One("--config", "<file>", $"Config the up was started with: it records itself next to it (default: {LocalRunCli.DefaultConfigPath})."),
+            OptionInfo.Flag("--force", "Kill what still runs right away, as a second Ctrl+C would: no grace period, even during a stop " +
+                "already under way."),
         ]),
         Command("settings", "Create your settings file if missing (all commented out), check it (warning settings-invalid), " +
             "then open it. It holds what differs from " +

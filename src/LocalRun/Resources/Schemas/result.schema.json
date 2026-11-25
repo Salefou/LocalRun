@@ -466,7 +466,7 @@
       "properties": {
         "project": { "type": "string" },
         "status": {
-          "description": "exited: on its own with 0; failed: on its own otherwise; stopped: by Ctrl+C or lrun down; killed: after the grace period.",
+          "description": "exited: on its own with 0; failed: on its own otherwise; stopped: by Ctrl+C or lrun down; killed: after the grace period, or on a second Ctrl+C or lrun down --force.",
           "enum": ["not-started", "exited", "failed", "stopped", "killed"]
         },
         "exitCode": { "description": "Null when it never started, or was killed and didn't exit in time.", "type": ["integer", "null"] },
